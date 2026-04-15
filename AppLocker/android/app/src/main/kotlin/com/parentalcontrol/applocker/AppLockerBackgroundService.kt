@@ -220,6 +220,7 @@ class AppLockerBackgroundService : Service() {
                 "unlock" -> {
                     isLocked = false
                     localPrefs.edit().putBoolean(KEY_IS_LOCKED, false).apply()
+                    handler.removeCallbacks(bootRetryRunnable)
                     hideNativeOverlay()
                 }
                 // On boot: immediately restore lock state from local persistence
@@ -229,17 +230,7 @@ class AppLockerBackgroundService : Service() {
                     Log.d("AppLockerService", "Boot action: wasLocked=$wasLocked")
                     if (wasLocked) {
                         isLocked = true
-                        // Retry showing overlay at multiple delays because canDrawOverlays()
-                        // may return false immediately after boot while the system is still
-                        // initialising, then become true a few seconds later.
-                        for (delay in listOf(500L, 3000L, 6000L, 12000L)) {
-                            handler.postDelayed({
-                                if (isLocked) {
-                                    Log.d("AppLockerService", "Boot retry showNativeOverlay at delay=$delay")
-                                    showNativeOverlay()
-                                }
-                            }, delay)
-                        }
+                        startBootLockRetryLoop()
                     }
                 }
             }
@@ -356,8 +347,8 @@ class AppLockerBackgroundService : Service() {
                         showNativeOverlay()
                     } else if (!shouldLock && isLocked) {
                         isLocked = false
-                        // Clear the persisted locked state
                         localPrefs.edit().putBoolean(KEY_IS_LOCKED, false).apply()
+                        handler.removeCallbacks(bootRetryRunnable)
                         hideNativeOverlay()
                     }
 
@@ -432,6 +423,43 @@ class AppLockerBackgroundService : Service() {
             Log.e("AppLockerService", "isScheduleActive error: ${e.message}")
         }
         return false
+    }
+
+    /**
+     * On boot, the window system may not be ready immediately, so this loop
+     * retries every 5 seconds for up to 3 minutes until the overlay is shown.
+     */
+    private var bootRetryCount = 0
+    private val bootRetryRunnable = object : Runnable {
+        override fun run() {
+            if (!isLocked) {
+                Log.d("AppLockerService", "Boot retry: device unlocked, stopping")
+                bootRetryCount = 0
+                return
+            }
+            if (LockOverlayService.isShowing) {
+                Log.d("AppLockerService", "Boot retry: overlay confirmed showing, stopping")
+                bootRetryCount = 0
+                return
+            }
+            bootRetryCount++
+            // 36 attempts × 5 s = 3 minutes max
+            if (bootRetryCount > 36) {
+                Log.w("AppLockerService", "Boot retry: gave up after 3 minutes")
+                bootRetryCount = 0
+                return
+            }
+            Log.d("AppLockerService", "Boot retry #$bootRetryCount — attempting showNativeOverlay")
+            showNativeOverlay()
+            handler.postDelayed(this, 5_000L)
+        }
+    }
+
+    private fun startBootLockRetryLoop() {
+        handler.removeCallbacks(bootRetryRunnable)
+        bootRetryCount = 0
+        // First attempt almost immediately, then every 5 s via the runnable
+        handler.postDelayed(bootRetryRunnable, 500L)
     }
 
     /**
@@ -884,6 +912,7 @@ class AppLockerBackgroundService : Service() {
         handler.removeCallbacks(checkRunnable)
         handler.removeCallbacks(lockPollRunnable)
         handler.removeCallbacks(usageSyncRunnable)
+        handler.removeCallbacks(bootRetryRunnable)
         hideAppRestrictionOverlayIfNeeded()
         saveLocalSettings()
         if (screenReceiverRegistered) {
