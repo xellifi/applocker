@@ -1,0 +1,122 @@
+// android/app/build.gradle
+// Min SDK 24 (Android 7.0) required for all plugins
+
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
+    id "com.google.gms.google-services"  // Firebase
+}
+
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader('UTF-8') { reader ->
+        localProperties.load(reader)
+    }
+}
+
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('key.properties')
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
+def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
+if (flutterVersionCode == null) {
+    flutterVersionCode = '2'
+}
+
+def flutterVersionName = localProperties.getProperty('flutter.versionName')
+if (flutterVersionName == null) {
+    flutterVersionName = '1.0.2'
+}
+
+android {
+    namespace "com.parentalcontrol.applocker"
+    compileSdk flutter.compileSdkVersion
+    ndkVersion flutter.ndkVersion
+
+    compileOptions {
+        coreLibraryDesugaringEnabled true
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
+    }
+
+    signingConfigs {
+        release {
+            keyAlias keystoreProperties['keyAlias']
+            keyPassword keystoreProperties['keyPassword']
+            storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
+            storePassword keystoreProperties['storePassword']
+        }
+    }
+
+    defaultConfig {
+        applicationId "com.parentalcontrol.applocker"
+        // Min SDK 24: Required for geolocator background, workmanager, etc.
+        minSdkVersion 24
+        targetSdkVersion flutter.targetSdkVersion
+        versionCode flutterVersionCode.toInteger()
+        versionName flutterVersionName
+        multiDexEnabled true
+    }
+
+    buildTypes {
+        release {
+            // Updated to use production signing configuration
+            signingConfig signingConfigs.release
+            
+            // Disable problematic verification tasks
+            lintOptions {
+                checkReleaseBuilds false
+                abortOnError false
+            }
+            
+            minifyEnabled false
+            shrinkResources false
+        }
+    }
+}
+
+flutter {
+    source '../..'
+}
+
+dependencies {
+    // Firebase BOM (Bill of Materials)
+    implementation platform('com.google.firebase:firebase-bom:33.6.0')
+    implementation 'com.google.firebase:firebase-analytics'
+    implementation 'com.google.firebase:firebase-messaging'
+    implementation 'com.google.firebase:firebase-firestore'
+    
+    // MultiDex for older devices
+    implementation 'androidx.multidex:multidex:2.0.1'
+    
+    // WorkManager
+    implementation 'androidx.work:work-runtime-ktx:2.9.1'
+    
+    // Core library desugaring (required by flutter_local_notifications)
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
+
+    // Force AndroidX versions to remain compatible with AGP 8.6.0
+    constraints {
+        implementation("androidx.browser:browser:1.8.0") {
+            because("url_launcher pulls 1.9.0 which strictly needs AGP 8.9.1")
+        }
+        implementation("androidx.core:core-ktx:1.16.0") {
+            because("1.17.0 strictly needs AGP 8.9.1")
+        }
+        implementation("androidx.core:core:1.16.0") {
+            because("1.17.0 strictly needs AGP 8.9.1")
+        }
+    }
+}

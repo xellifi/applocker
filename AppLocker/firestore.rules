@@ -1,0 +1,43 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+  
+    // 1. RBAC Function
+    function isSuperAdmin() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "super_admin";
+    }
+
+    // 2. Pairing Sessions (Fixed 6-digit PIN)
+    match /pairing_sessions/{code} {
+      allow read, delete: if true;
+      allow create: if request.auth != null;
+    }
+    
+    // 3. Devices
+    match /devices/{deviceId} {
+      allow read, write: if true; 
+      
+      // NEW: Monitoring Activity Logs (under devices sub-collection)
+      match /activity/{activityId} {
+        allow read, write: if true; 
+      }
+    }
+    
+    // 4. Users (Includes Super Admin oversight)
+    match /users/{userId} {
+      allow read, write: if request.auth != null && (request.auth.uid == userId || isSuperAdmin());
+    }
+
+    // 5. Subscription Plans (NEW: Required for dynamic management)
+    match /plans/{planId} {
+      allow read: if true; // Everyone can see available plans to subscribe
+      allow write: if request.auth != null && isSuperAdmin(); // ONLY Super Admin can Add/Edit/Delete
+    }
+    
+    // 6. Config Docs
+    match /config/{document=**} {
+      allow read: if true;
+      allow write: if request.auth != null && isSuperAdmin();
+    }
+  }
+}

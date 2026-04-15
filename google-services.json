@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "216558855871",
+    "project_id": "applocker-c39cf",
+    "storage_bucket": "applocker-c39cf.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:216558855871:android:702d4d11c22ef0bcf9480a",
+        "android_client_info": {
+          "package_name": "com.parentalcontrol.applocker"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDabDMaetdGGieaZOgP7nMKW8UR43P7o6I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

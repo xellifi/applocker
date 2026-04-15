@@ -1,0 +1,49 @@
+# Flutter/Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+
+# Android
+android/local.properties
+android/key.properties
+android/app/src/main/res/values/strings.xml (if sensitive)
+*.keystore
+*.jks
+
+# iOS
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+ios/ServiceDefinitions.json
+ios/Runner/GeneratedPluginRegistrant.h
+ios/Runner/GeneratedPluginRegistrant.m
+**/doc/api/
+**/ios/Flutter/.last_build_id
+**/ios/Pods/
+**/ios/.symlinks/
+
+# Web (if applicable)
+web/index.html.patch
+web/manifest.json.patch
+
+# Firebase
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# VS Code
+.vscode/
+
+# Local logs and temp files
+*.log
+logcat.txt
+build_log.txt
+*.tmp
+*.bak
+
+# macOS
+.DS_Store

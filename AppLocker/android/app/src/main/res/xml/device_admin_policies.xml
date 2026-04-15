@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- android/app/src/main/res/xml/device_admin_policies.xml -->
+<!-- Device Admin policies: lock screen + set password minimum -->
+<!-- NOTE: Does NOT use device_owner (must stay removable via Settings) -->
+<device-admin>
+    <uses-policies>
+        <force-lock />
+        <limit-password />
+        <watch-login />
+    </uses-policies>
+</device-admin>

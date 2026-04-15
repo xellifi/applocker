@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#E91E63"
+    android:clickable="true"
+    android:focusable="true">
+
+    <!-- Main content container -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:padding="32dp">
+
+        <!-- Lock icon -->
+        <ImageView
+            android:id="@+id/lock_icon"
+            android:layout_width="120dp"
+            android:layout_height="120dp"
+            android:layout_marginBottom="24dp"
+            android:src="@android:drawable/ic_lock_lock"
+            android:tint="#FFFFFF" />
+
+        <!-- Title -->
+        <TextView
+            android:id="@+id/overlay_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:text="App Restricted"
+            android:textColor="#FFFFFF"
+            android:textSize="32sp"
+            android:textStyle="bold"
+            android:gravity="center" />
+
+        <!-- Message -->
+        <TextView
+            android:id="@+id/overlay_message"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="32dp"
+            android:text="This app is restricted!"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:gravity="center"
+            android:lineSpacingExtra="4dp" />
+
+        <!-- Restriction message (initially hidden) -->
+        <TextView
+            android:id="@+id/restriction_message"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="24dp"
+            android:text="This app is restricted. Ask for access."
+            android:textColor="#FFE082"
+            android:textSize="16sp"
+            android:gravity="center"
+            android:visibility="gone"
+            android:lineSpacingExtra="2dp" />
+
+        <!-- Close button (shows message instead of closing) -->
+        <Button
+            android:id="@+id/close_button"
+            android:layout_width="200dp"
+            android:layout_height="56dp"
+            android:text="Got it"
+            android:textColor="#E91E63"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:background="#FFFFFF" />
+
+    </LinearLayout>
+
+</FrameLayout>

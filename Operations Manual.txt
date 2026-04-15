@@ -1,0 +1,179 @@
+APK Path: C:\Users\User\Desktop\AppLockerV2\AppLocker\build\app\outputs\flutter-apk\
+File to use: app-arm64-v8a-release.apk
+Redistribution: This file is now fully signed and secure. You can safely send it to clients.
+🔐 Important Note on Path Security:
+I have saved your singing passwords in android/key.properties and the keystore file in android/app/applocker-release.jks.
+
+Keep these files safe! If you lose them, you won't be able to update your app in the future.
+The password I used is applocker123.
+Since this version is properly signed, your "Invalid Package" error should now be gone. Try installing it on your phone now!
+
+-------------------------
+-------------------------
+-------------------------
+
+Project Console: https://console.firebase.google.com/project/applocker-c39cf/overview
+Hosting URL: https://applocker-c39cf.web.app
+PS C:\Users\User\Desktop\AppLockerV2\AppLocker> 
+PS C:\Users\User\Desktop\AppLockerV2\AppLocker> 
+
+
+sha
+8C:88:02:BA:08:02:91:33:50:A2:ED:D8:27:AF:DA:47:EF:47:1B:83
+--------------------------
+--------------------------
+--------------------------
+BUYPASS RESTRICTIONS
+SETTINGS, APPS, APP MANAGEMENT, SELECT APPLOCKER, CLICK 3 DOTS, CLICK ALLOW RESTRICTED SETINGS
+
+AFTER ALLOWING ALL PERMISSIONS GOT TO DEVICE ADMIN APPS, ACTIVATE APPLOCKER
+
+-------------------------
+-------------------------
+
+
+Step 1: Deactivate the Admin status on your phone
+On your phone, go to Settings.
+Search for "Device Admin Apps" (usually under Security or Privacy).
+Find AppLocker and toggle it OFF (Deactivate).
+Now, Uninstall the AppLocker app completely from your phone.
+Step 2: Rebuild a "Clean" APK
+Run these commands in your terminal to ensure you have a perfectly compiled file:
+
+powershell
+flutter clean
+flutter build apk --release --target lib/child/main_child.dart --dart-define=APP_MODE=child
+Step 3: Find the file
+After it finishes, the APK will be at this exact path: C:\Users\User\Desktop\AppLockerV2\AppLocker\build\app\outputs\flutter-apk\app-release.apk
+
+Step 4: Transfer and Install
+Copy that app-release.apk to your phone and it should now install perfectly!
+
+(If it still says "Package appears to be invalid," please let me know which phone model you are using, as some phones require specific architecture builds).
+
+note: split build:
+flutter build apk --release --split-per-abi --target lib/child/main_child.dart --dart-define=APP_MODE=child
+
+open web dashboard: flutter run --target lib/dashboard/main_web.dart -d chrome	
+-------------------------
+-------------------------
+-------------------------
+
+
+
+# AppLocker Business Operations Manual
+
+Welcome to the AppLocker Administrative Guide. This document provides step-by-step instructions for business owners to distribute the app, manage permissions, and push "Over-The-Air" (OTA) updates to clients dynamically.
+
+---
+
+## 🏗️ 1. Pushing Over-The-Air (OTA) Updates
+Your child APK is now designed to automatically check for updates every time it opens. When you have a new version ready, follow this process to cleanly push it to all users:
+
+### Step 1: Update the Code Version
+1. Open your code editor and find `pubspec.yaml`.
+2. Locate the line: `version: 1.0.7+7` (for example).
+3. Change it to the new version. **Important:** You must increment the number after the `+`. Example: `version: 1.0.8+8`.
+
+### Step 2: Compile the Production APK
+Run this standard build command in your terminal:
+```bash
+flutter build apk --release --target lib/child/main_child.dart --dart-define=APP_MODE=child
+```
+Upload the resulting `app-release.apk` file to your server or Google Drive, making sure the direct download link is publicly accessible.
+
+### Step 3: Trigger the Update via Firestore
+1. Open your **Firebase Console**.
+2. Go to **Firestore Database**.
+3. Create a collection named `config` (if it doesn't exist).
+4. Inside `config`, create a document named `appUpdates`.
+5. Add the following fields exactly as written:
+   - **`latestBuild`** (Number): `8` (This must match the number after the `+` in your pubspec.yaml).
+   - **`latestVersion`** (String): `"1.0.8"`
+   - **`updateLogs`** (String): `"Added new features and fixed bugs."`
+   - **`downloadUrl`** (String): `"https://your-website.com/direct-download-link.apk"`
+
+Whenever a child's phone opens the app, it will hit Firestore. If their local build number is less than `8`, a pop-up dialog will appear on their screen telling them to update, providing your custom release notes and the download button!
+
+-----------------------------------------
+-----------------------------------------
+
+Right below where the word Data is underlined with a blue line, look for a column. At the top of that column or section, you will see a button that says + Start collection. Click that.
+
+A popup will ask for the Collection ID. Type exactly: config
+
+Click the Next button.
+
+Now it will ask for a Document ID at the top. Type exactly: appUpdates
+
+Below that, it will ask you to add Fields. Click the + Add field button and add the following 4 fields exactly as written here:
+
+Field 1:
+Field name: latestBuild
+Type: Change this dropdown from String to Number
+Value: 8 (Or whatever your latest build number is from your pubspec.yaml)
+Field 2:
+Field name: latestVersion
+Type: String
+Value: 1.0.8
+Field 3:
+Field name: updateLogs
+Type: String
+Value: Added new features and fixed bugs.
+Field 4:
+Field name: downloadUrl
+Type: String
+Value: https://your-website.com/direct-download-link.apk
+Finally, click Save.
+
+Once you click Save, the config collection will instantly exist in your database, and the child's app will be able to read it to push your updates automatically! Let me know if you see the "+ Start collection" button.
+
+-------------------------------------------
+-------------------------------------------
+
+---
+
+## 📦 2. Distributing the App to Clients
+You have two distinct methods to distribute this app based on how tech-savvy your clients are. Your single compiled APK seamlessly adapts to both!
+
+### Method A: The "Non-Techy" Consumer (Recommended)
+This is the standard distribution approach for general parents.
+1. Host your `app-release.apk` on a website.
+2. The parent downloads it on the child's phone and taps 'Install'.
+3. **Capabilities:** The parent has full UI access, screen locking, schedules, and analytics. If the parent chooses to "Hide" an app on the dashboard, the app does not mathematically vanish from the launcher, but will immediately display the un-bypassable lock screen if the child taps on it. 
+
+### Method B: The "Fully Managed" Setup (Hiding Icons Physically)
+If you require icons to dynamically disappear entirely from the phone launcher, Android requires **Device Owner** / **Profile Owner** privileges. This is an advanced deployment step.
+1. Factory reset the target child's phone.
+2. Complete setup without adding any accounts.
+3. Plug the phone into a PC with ADB installed.
+4. Install the app via: `adb install -r path/to/app-release.apk`.
+5. Run the privilege command: 
+   `adb shell dpm set-profile-owner com.parentalcontrol.applocker/.AppLockerAdminReceiver`
+6. Unplug the phone and sign into Google normally.
+7. **Capabilities:** Unrestricted control. When the parent hits "Hide", the physical icon completely drops off the phone interface.
+
+--------------------
+--------------------
+--------------------
+
+TRACK WITHOUT GPS
+
+"I need to add a 'Stolen Device Recovery' feature to my existing Android AppLocker project. Since thieves often disable GPS, I need to implement a background service that fetches the device's location using Cell Tower Triangulation and Wi-Fi Positioning (WPS) only.Requirements:Request ACCESS_COARSE_LOCATION and ACCESS_BACKGROUND_LOCATION permissions instead of Fine/GPS location.Implement a FusedLocationProviderClient that explicitly sets the priority to PRIORITY_BALANCED_POWER_ACCURACY (this forces the use of Wi-Fi and Cell signals).Create a 'Stealth Trigger'—when a specific AppLock failure occurs (e.g., 3 wrong attempts), the app should silently grab the current Cell ID and Wi-Fi SSID list.Provide a function to package this network metadata (Cell ID, LAC, MCC, MNC) into a JSON string that can be sent to a backend for police tracking.Ensure the code is optimized for minimal battery drain so the thief doesn't notice the background activity."Key Technical Details for Your ProjectPermissions: Ensure your AndroidManifest.xml includes:<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" /><uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />The "Police" Data: For officers to track the phone without GPS, your app should collect the Cell Identity. This includes the MCC (Country Code), MNC (Network Code), LAC (Area Code), and CID (Cell ID). Law enforcement can take these four numbers to a carrier to pinpoint the exact tower.Integration Point: Since you already have an AppLocker, the best place to trigger this is in your Wrong Password/Pattern Listener.
+
+----------------------
+----------------------
+----------------------
+
+
+WEB ADMIN DEPLOY GUIDE
+
+
+Since your project already uses Firebase, Firebase Hosting is the best way to deploy your Admin Panel. I've created a complete Deployment Guide artifact above with the specific steps.
+
+I'm currently running the production build for you in the background (flutter build web), so once it finishes, you'll just need to run one command to go live:
+
+After the build finishes:
+Open your terminal in the project folder.
+Run: firebase deploy --only hosting
+Your firebase.json is already set up to point to the correct folder, so it will work immediately! Check the Deployment Guide artifact for details on setting up a custom domain or updating the site later.

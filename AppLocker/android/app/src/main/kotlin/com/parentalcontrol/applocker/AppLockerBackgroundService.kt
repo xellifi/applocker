@@ -1,0 +1,830 @@
+package com.parentalcontrol.applocker
+
+import android.app.*
+import android.app.usage.UsageEvents
+import android.app.usage.UsageStatsManager
+import android.content.Context
+import android.content.Intent
+import android.content.SharedPreferences
+import android.content.pm.PackageManager
+import android.os.*
+import android.provider.Settings
+import android.app.AppOpsManager
+import android.util.Log
+import android.content.pm.ServiceInfo
+import androidx.core.app.NotificationCompat
+import com.google.firebase.FirebaseApp
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.ktx.Firebase
+import java.text.SimpleDateFormat
+import java.util.*
+
+/**
+ * AppLockerBackgroundService
+ *
+ * Runs as a foreground service to:
+ *   1. Poll foreground apps every 300ms for app-blocking
+ *   2. Poll Firestore every 10s for lock state changes
+ *   3. Show/hide the native system overlay (LockOverlayService) accordingly
+ *
+ * This service works even when the Flutter app is NOT in the foreground.
+ * It's the bridge between Firestore lock commands and the native overlay.
+ */
+class AppLockerBackgroundService : Service() {
+
+    private val CHANNEL_ID = "AppLockerBackgroundServiceChannel"
+    private var blockedApps = mutableListOf<String>()
+    private var controlMode = "basic"
+    private var tempAccess = mutableMapOf<String, Long>()
+    private var appSchedules = mutableMapOf<String, Map<String, Any>>()
+    private val handler = Handler(Looper.getMainLooper())
+    private val checkInterval = 300L // 300ms for faster app detection
+
+    // Firestore lock polling
+    private val lockPollInterval = 10_000L // 10 seconds
+    private val usagePollInterval = 120_000L // 2 minutes for usage stats sync
+    private var deviceId: String = ""
+    private var currentPin: String = "1234"
+    private var isLocked = false
+    private var subscriptionActive = true
+    private var appRestrictionOverlayPackage: String? = null
+    
+    // Local persistence
+    private lateinit var sharedPrefs: SharedPreferences
+    private lateinit var localPrefs: SharedPreferences
+    
+    companion object {
+        private const val LOCAL_PREFS_NAME = "applocker_local_settings"
+        private const val KEY_BLOCKED_APPS = "blocked_apps"
+        private const val KEY_CONTROL_MODE = "control_mode"
+        private const val KEY_TEMP_ACCESS = "temp_access"
+        private const val KEY_DEVICE_ID = "device_id"
+        private const val KEY_PIN = "pin"
+        private const val KEY_LAST_SYNC = "last_firestore_sync"
+        // Persisted lock state — survives service kills AND device reboots
+        private const val KEY_IS_LOCKED = "is_locked"
+    }
+
+    // App blocking runnable
+    private val checkRunnable = object : Runnable {
+        override fun run() {
+            checkForegroundApp()
+            handler.postDelayed(this, checkInterval)
+        }
+    }
+
+    // Firestore lock state polling runnable
+    private val lockPollRunnable = object : Runnable {
+        override fun run() {
+            pollFirestoreLockState()
+            handler.postDelayed(this, lockPollInterval)
+        }
+    }
+
+    // Usage stats sync runnable
+    private val usageSyncRunnable = object : Runnable {
+        override fun run() {
+            syncUsageStats()
+            handler.postDelayed(this, usagePollInterval)
+        }
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+
+        // CRITICAL: startForeground MUST be called within 5 seconds on Android 12+
+        // Call it FIRST before any other initialization
+        createNotificationChannel()
+        val notification = createNotification("Parental Control Active")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(9001, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        } else {
+            startForeground(9001, notification)
+        }
+
+        // Safe to do slower initialization AFTER startForeground
+        sharedPrefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+        localPrefs = getSharedPreferences(LOCAL_PREFS_NAME, Context.MODE_PRIVATE)
+        loadLocalSettings()
+
+        val flutterDeviceId = sharedPrefs.getString("flutter.deviceId", "") ?: ""
+        if (flutterDeviceId.isNotEmpty()) {
+            deviceId = flutterDeviceId
+            localPrefs.edit().putString(KEY_DEVICE_ID, deviceId).apply()
+        }
+
+        Log.d("AppLockerService", "onCreate deviceId=$deviceId, blockedApps=${blockedApps.size}")
+
+        try {
+            if (FirebaseApp.getApps(this).isEmpty()) {
+                FirebaseApp.initializeApp(this)
+            }
+        } catch (e: Exception) {
+            Log.e("AppLockerService", "Firebase init error: ${e.message}")
+        }
+
+        // Start polling loops with a small delay to let Firebase settle
+        handler.postDelayed({
+            handler.post(checkRunnable)
+            if (deviceId.isNotEmpty()) {
+                handler.post(lockPollRunnable)
+                handler.post(usageSyncRunnable)
+            } else {
+                val backupDeviceId = localPrefs.getString(KEY_DEVICE_ID, "") ?: ""
+                if (backupDeviceId.isNotEmpty()) {
+                    deviceId = backupDeviceId
+                    Log.d("AppLockerService", "Recovered deviceId from local backup: $deviceId")
+                    handler.post(lockPollRunnable)
+                    handler.post(usageSyncRunnable)
+                }
+            }
+        }, 1000)
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        try {
+            val apps = intent?.getStringArrayListExtra("blockedApps")
+            val mode = intent?.getStringExtra("controlMode")
+            @Suppress("UNCHECKED_CAST")
+            val temps = intent?.getSerializableExtra("tempAccess") as? HashMap<String, Long>
+            @Suppress("UNCHECKED_CAST")
+            val schedules = intent?.getSerializableExtra("appSchedules") as? HashMap<String, Map<String, Any>>
+            val action = intent?.getStringExtra("action") ?: "sync"
+            val devId = intent?.getStringExtra("deviceId")
+            val pin = intent?.getStringExtra("pin")
+
+            if (apps != null) blockedApps = apps.toMutableList()
+            if (mode != null) controlMode = mode
+            if (temps != null) tempAccess = temps.toMutableMap()
+            if (schedules != null) appSchedules = schedules.toMutableMap()
+            
+            if (devId != null && devId.isNotEmpty()) {
+                deviceId = devId
+                localPrefs.edit().putString(KEY_DEVICE_ID, deviceId).apply()
+                // Safety Delay
+                handler.removeCallbacks(lockPollRunnable)
+                handler.postDelayed(lockPollRunnable, 2000)
+            }
+            if (pin != null) {
+                currentPin = pin
+                localPrefs.edit().putString(KEY_PIN, currentPin).apply()
+            }
+            
+            if (apps != null || mode != null || temps != null) {
+                saveLocalSettings()
+            }
+
+            when (action) {
+                "lock" -> {
+                    isLocked = true
+                    localPrefs.edit().putBoolean(KEY_IS_LOCKED, true).apply()
+                    showNativeOverlay()
+                }
+                "unlock" -> {
+                    isLocked = false
+                    localPrefs.edit().putBoolean(KEY_IS_LOCKED, false).apply()
+                    hideNativeOverlay()
+                }
+                // On boot: immediately restore lock state from local persistence
+                // This ensures the overlay reappears before the first Firestore poll.
+                "boot" -> {
+                    val wasLocked = localPrefs.getBoolean(KEY_IS_LOCKED, false)
+                    Log.d("AppLockerService", "Boot action: wasLocked=$wasLocked")
+                    if (wasLocked && !isLocked && android.provider.Settings.canDrawOverlays(this)) {
+                        isLocked = true
+                        // Small delay to let the system settle after boot
+                        handler.postDelayed({
+                            showNativeOverlay()
+                        }, 500)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("AppLockerService", "Safety Catch: ${e.message}")
+        }
+        return START_STICKY
+    }
+
+    /**
+     * Polls Firestore for lock state changes.
+     * If locked=true or schedule is active, shows the native overlay.
+     * If locked=false and no schedule, hides it.
+     */
+    private fun pollFirestoreLockState() {
+        if (deviceId.isEmpty()) return
+
+        try {
+            val db = FirebaseFirestore.getInstance()
+            db.collection("devices").document(deviceId).get()
+                .addOnSuccessListener { doc ->
+                    if (doc == null || !doc.exists()) {
+                        Log.d("AppLockerService", "Firestore poll: doc not found for $deviceId")
+                        return@addOnSuccessListener
+                    }
+
+                    val manualLock = doc.getBoolean("locked") ?: false
+                    val subActive = doc.getBoolean("subscriptionActive") ?: true
+                    subscriptionActive = subActive
+                    val pin = doc.getString("pin") ?: "1234"
+                    currentPin = pin
+
+                    // Sync blocked apps, hidden apps, and control mode from Firestore
+                    val blockedAppsFromFirestore = doc.get("blockedApps") as? List<String> ?: mutableListOf<String>()
+                    val hiddenAppsFromFirestore = doc.get("hiddenApps") as? List<String> ?: mutableListOf<String>()
+                    val controlModeFromFirestore = doc.getString("controlMode") ?: "basic"
+                    
+                    // FIX: Properly deserialize tempAccess — Firestore stores Timestamps, not Longs
+                    val tempAccessRaw = doc.get("tempAccess") as? Map<String, Any> ?: mapOf()
+                    val tempAccessParsed = hashMapOf<String, Long>()
+                    for ((key, value) in tempAccessRaw) {
+                        when (value) {
+                            is com.google.firebase.Timestamp -> tempAccessParsed[key] = value.toDate().time
+                            is Long -> tempAccessParsed[key] = value
+                            is Double -> tempAccessParsed[key] = value.toLong()
+                            is Number -> tempAccessParsed[key] = value.toLong()
+                            else -> Log.w("AppLockerService", "Unexpected tempAccess type for $key: ${value?.javaClass?.name}")
+                        }
+                    }
+                    
+                    // FIX: Properly deserialize appSchedules — handle nested maps
+                    val appSchedulesRaw = doc.get("appSchedules") as? Map<String, Any> ?: mapOf()
+                    val appSchedulesParsed = hashMapOf<String, Map<String, Any>>()
+                    for ((key, value) in appSchedulesRaw) {
+                        if (value is Map<*, *>) {
+                            @Suppress("UNCHECKED_CAST")
+                            appSchedulesParsed[key] = value as Map<String, Any>
+                        }
+                    }
+
+                    Log.d("AppLockerService", "Firestore sync: blockedApps=${blockedAppsFromFirestore.size}, hiddenApps=${hiddenAppsFromFirestore.size}, mode=$controlModeFromFirestore, tempAccess=${tempAccessParsed.size}, appSchedules=${appSchedulesParsed.size}")
+                    
+                    // Update local state
+                    blockedApps = blockedAppsFromFirestore.toMutableList()
+                    controlMode = controlModeFromFirestore
+                    tempAccess = tempAccessParsed
+                    appSchedules = appSchedulesParsed
+                    
+                    // Sync custom messages and tasks
+                    val lockHeadline = doc.getString("lockHeadline") ?: "LOCKED"
+                    val lockMessage = doc.getString("lockMessage") ?: "Enter PIN Code to unlock"
+                    val taskTitle = doc.getString("taskTitle") ?: "To-Do List"
+                    val taskListRaw = doc.get("taskList") as? List<String> ?: listOf()
+                    
+                    val restrictedHeadline = doc.getString("restrictedHeadline") ?: "App Restricted"
+                    val restrictedMessage = doc.getString("restrictedMessage") ?: "This app is restricted by your parent."
+                    val warningTitle = doc.getString("warningTitle") ?: "Restricted Access"
+                    val warningListRaw = doc.get("warningList") as? List<String> ?: listOf()
+                    
+                    // Save to local storage as backup
+                    localPrefs.edit()
+                        .putString("lockHeadline", lockHeadline)
+                        .putString("lockMessage", lockMessage)
+                        .putString("taskTitle", taskTitle)
+                        .putString("taskList", taskListRaw.joinToString("\n"))
+                        .putString("restrictedHeadline", restrictedHeadline)
+                        .putString("restrictedMessage", restrictedMessage)
+                        .putString("warningTitle", warningTitle)
+                        .putString("warningList", warningListRaw.joinToString("\n"))
+                        .putLong(KEY_LAST_SYNC, System.currentTimeMillis())
+                        .apply()
+                    
+                    saveLocalSettings()
+
+                    // Always apply app hiding state changes
+                    Log.d("AppLockerService", "Applying app hiding for ${hiddenAppsFromFirestore.size} apps (subActive=$subscriptionActive)")
+                    if (subscriptionActive) {
+                        applyAppHiding(hiddenAppsFromFirestore)
+                    } else {
+                        applyAppHiding(listOf()) // Unhide everything if subscription paused
+                    }
+
+                    // Check schedule-based lock
+                    val scheduleLocked = isScheduleActive(doc)
+
+                    val shouldLock = subscriptionActive && (manualLock || scheduleLocked)
+                    
+                    Log.d("AppLockerService", "Firestore poll: manual=$manualLock schedule=$scheduleLocked blockedApps=${blockedApps.size} hiddenApps=${hiddenAppsFromFirestore.size} mode=$controlMode → shouldLock=$shouldLock (currently=$isLocked)")
+
+                    if (shouldLock && !isLocked) {
+                        isLocked = true
+                        // Persist the locked state so it survives a device reboot
+                        localPrefs.edit().putBoolean(KEY_IS_LOCKED, true).apply()
+                        showNativeOverlay()
+                    } else if (!shouldLock && isLocked) {
+                        isLocked = false
+                        // Clear the persisted locked state
+                        localPrefs.edit().putBoolean(KEY_IS_LOCKED, false).apply()
+                        hideNativeOverlay()
+                    }
+
+                    // Also update PIN on the overlay service
+                    LockOverlayService.overlayPin = currentPin
+                    LockOverlayService.overlayDeviceId = deviceId
+                }
+                .addOnFailureListener { e ->
+                    Log.e("AppLockerService", "Firestore poll failed: ${e.message}")
+                }
+        } catch (e: Exception) {
+            Log.e("AppLockerService", "pollFirestoreLockState error: ${e.message}")
+        }
+    }
+
+    /**
+     * Checks if any lock schedule is currently active
+     */
+    /**
+     * Checks if any enabled lock schedule is currently active.
+     *
+     * IMPORTANT: LockSchedule times are stored in HH:mm 24-hour format
+     * (e.g. "07:01", "22:00") by the Flutter DeviceModel / LockSchedule class.
+     * We must parse with "HH:mm" — NOT "h:mm a" — or sdf.parse() returns null
+     * and no schedule ever fires on the native side.
+     */
+    private fun isScheduleActive(doc: com.google.firebase.firestore.DocumentSnapshot): Boolean {
+        try {
+            val schedules = doc.get("lockSchedules") as? List<Map<String, Any>> ?: return false
+            if (schedules.isEmpty()) return false
+
+            // 24-hour format to match LockSchedule.start / .end stored by Flutter
+            val sdf = SimpleDateFormat("HH:mm", Locale.US)
+            val nowCal = java.util.Calendar.getInstance()
+            val nowMins = nowCal.get(java.util.Calendar.HOUR_OF_DAY) * 60 +
+                          nowCal.get(java.util.Calendar.MINUTE)
+
+            for (schedule in schedules) {
+                val enabled = schedule["enabled"] as? Boolean ?: true
+                if (!enabled) continue
+
+                val startStr = schedule["start"] as? String ?: continue
+                val endStr   = schedule["end"]   as? String ?: continue
+
+                try {
+                    // Parse "HH:mm" into total minutes since midnight for reliable comparison
+                    fun toMins(hhmm: String): Int? {
+                        val parts = hhmm.split(":")
+                        if (parts.size != 2) return null
+                        val h = parts[0].trim().toIntOrNull() ?: return null
+                        val m = parts[1].trim().toIntOrNull() ?: return null
+                        return h * 60 + m
+                    }
+
+                    val startMins = toMins(startStr) ?: continue
+                    val endMins   = toMins(endStr)   ?: continue
+
+                    val active = if (endMins <= startMins) {
+                        // Overnight schedule e.g. 22:00 → 06:00
+                        nowMins >= startMins || nowMins < endMins
+                    } else {
+                        nowMins >= startMins && nowMins < endMins
+                    }
+
+                    Log.d("AppLockerService", "Schedule $startStr-$endStr: nowMins=$nowMins active=$active")
+                    if (active) return true
+                } catch (e: Exception) {
+                    Log.e("AppLockerService", "Error parsing lock schedule item: ${e.message}")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("AppLockerService", "isScheduleActive error: ${e.message}")
+        }
+        return false
+    }
+
+    /**
+     * Shows the native system overlay via LockOverlayService
+     */
+    private fun showNativeOverlay() {
+        Log.d("AppLockerService", "🔒 Showing native system overlay")
+        
+        if (!android.provider.Settings.canDrawOverlays(this)) {
+            Log.e("AppLockerService", "Cannot show overlay: SYSTEM_ALERT_WINDOW not granted")
+            // Fallback: bring Flutter app to foreground
+            bringAppToForeground(null)
+            return
+        }
+
+        val intent = Intent(this, LockOverlayService::class.java).apply {
+            putExtra("action", "show")
+            putExtra("pin", currentPin)
+            putExtra("deviceId", deviceId)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
+    }
+
+    /**
+     * Hides the native system overlay
+     */
+    private fun hideNativeOverlay() {
+        Log.d("AppLockerService", "🔓 Hiding native system overlay")
+        val intent = Intent(this, LockOverlayService::class.java).apply {
+            putExtra("action", "hide")
+        }
+        try {
+            startService(intent)
+        } catch (e: Exception) {
+            // Service might not be running, that's fine
+            Log.d("AppLockerService", "hideNativeOverlay: service not running")
+        }
+    }
+
+    private var lastKnownForegroundPackage: String? = null
+
+    private fun checkForegroundApp() {
+        val usm = getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
+        if (usm == null) return
+
+        val time = System.currentTimeMillis()
+        
+        // 1. Check recent events (most accurate for transitions)
+        val events = usm.queryEvents(time - 1000 * 60, time)
+        val event = UsageEvents.Event()
+        var detectedPackage: String? = null
+
+        while (events.hasNextEvent()) {
+            events.getNextEvent(event)
+            if (event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND) {
+                detectedPackage = event.packageName
+            }
+        }
+
+        // 2. If no recent transition events, fallback to queryUsageStats to find the currently active app
+        if (detectedPackage == null) {
+            val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, time - 1000 * 60, time)
+            if (stats != null && stats.isNotEmpty()) {
+                var lastUsedApp: android.app.usage.UsageStats? = null
+                for (usageStats in stats) {
+                    if (lastUsedApp == null || usageStats.lastTimeUsed > lastUsedApp.lastTimeUsed) {
+                        lastUsedApp = usageStats
+                    }
+                }
+                detectedPackage = lastUsedApp?.packageName
+            }
+        }
+
+        // 3. Update state
+        if (detectedPackage != null) {
+            lastKnownForegroundPackage = detectedPackage
+        } else {
+            // If still null, we use the last known package as a fallback
+            detectedPackage = lastKnownForegroundPackage
+        }
+
+        if (detectedPackage != null) {
+            // Ignore our own apps (Dashboard/Child) to avoid circular locking
+            if (detectedPackage == packageName || detectedPackage == "com.parentalcontrol.applocker") {
+                hideAppRestrictionOverlayIfNeeded()
+                return
+            }
+
+            if (!subscriptionActive) {
+                hideAppRestrictionOverlayIfNeeded()
+                return
+            }
+
+            if (blockedApps.contains(detectedPackage)) {
+                // Check if currently IN an ALLOWED access window
+                if (isAppInAllowedWindow(detectedPackage)) {
+                    hideAppRestrictionOverlayIfNeeded()
+                    return
+                }
+
+                // Check for Timed Access (SaaS)
+                val expiry = tempAccess[detectedPackage]
+                if (expiry != null && expiry > time) {
+                    hideAppRestrictionOverlayIfNeeded()
+                    return
+                }
+
+                // If device is already fully locked, don't show per-app restriction (it would conflict)
+                if (isLocked) {
+                    hideAppRestrictionOverlayIfNeeded()
+                    return
+                }
+
+                showAppRestrictionOverlay(detectedPackage)
+            } else {
+                hideAppRestrictionOverlayIfNeeded()
+            }
+        }
+    }
+
+    private fun isAppInAllowedWindow(packageName: String): Boolean {
+        val schedule = appSchedules[packageName] ?: return false
+        val alwaysBlocked = schedule["alwaysBlocked"] as? Boolean ?: true
+        if (alwaysBlocked) return false
+
+        val startStr = schedule["start"] as? String ?: return false
+        val endStr = schedule["end"] as? String ?: return false
+
+        try {
+            val sdf = SimpleDateFormat("h:mm a", Locale.US)
+            val nowTime = SimpleDateFormat("h:mm a", Locale.US).format(Date())
+            
+            val now = sdf.parse(nowTime) ?: return false
+            val start = sdf.parse(startStr) ?: return false
+            val end = sdf.parse(endStr) ?: return false
+
+            return if (end.before(start)) {
+                // Overnight window e.g. 10PM to 8AM
+                now.after(start) || now.before(end)
+            } else {
+                now.after(start) && now.before(end)
+            }
+        } catch (e: Exception) {
+            Log.e("AppLockerService", "Error parsing app schedule: ${e.message}")
+        }
+        return false
+    }
+
+    private fun showAppRestrictionOverlay(packageName: String) {
+        if (appRestrictionOverlayPackage == packageName) {
+            return
+        }
+
+        if (!Settings.canDrawOverlays(this)) {
+            Log.w("AppLockerService", "Overlay permission missing. Falling back to AppLocker foreground UI.")
+            bringAppToForeground(packageName)
+            return
+        }
+
+        try {
+            AppOverlayService.startOverlayService(this, packageName)
+            appRestrictionOverlayPackage = packageName
+            Log.d("AppLockerService", "Showing native app restriction overlay for: $packageName")
+        } catch (e: Exception) {
+            Log.e("AppLockerService", "Failed to show native app overlay: ${e.message}")
+            bringAppToForeground(packageName)
+        }
+    }
+
+    private fun hideAppRestrictionOverlayIfNeeded() {
+        if (appRestrictionOverlayPackage == null) return
+        try {
+            AppOverlayService.stopOverlayService(this)
+            Log.d("AppLockerService", "Hiding native app restriction overlay")
+        } catch (e: Exception) {
+            Log.e("AppLockerService", "Failed to hide native app overlay: ${e.message}")
+        } finally {
+            appRestrictionOverlayPackage = null
+        }
+    }
+    
+    private fun hasUsageStatsPermission(): Boolean {
+        return try {
+            val packageManager = packageManager
+            val applicationInfo = packageManager.getApplicationInfo("android", PackageManager.GET_META_DATA)
+            val appOpsManager = getSystemService(Context.APP_OPS_SERVICE) as? AppOpsManager
+            if (appOpsManager == null) return false
+            
+            val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                appOpsManager.unsafeCheckOpNoThrow(
+                    "android:get_usage_stats",
+                    android.os.Process.myUid(),
+                    packageName
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                appOpsManager.checkOpNoThrow(
+                    "android:get_usage_stats",
+                    android.os.Process.myUid(),
+                    packageName
+                )
+            }
+            mode == AppOpsManager.MODE_ALLOWED
+        } catch (e: Exception) {
+            Log.e("AppLockerService", "Error checking usage permission: ${e.message}")
+            false
+        }
+    }
+    
+    private fun requestUsageStatsPermission() {
+        try {
+            val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(intent)
+            Log.d("AppLockerService", "Opened usage access settings for user")
+        } catch (e: Exception) {
+            Log.e("AppLockerService", "Failed to open usage access settings: ${e.message}")
+        }
+    }
+
+    // Track previously hidden apps so we can unhide removed ones
+    private var previouslyHiddenApps = mutableSetOf<String>()
+    
+    private fun applyAppHiding(hiddenApps: List<String>) {
+        try {
+            val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as? android.app.admin.DevicePolicyManager
+            val componentName = android.content.ComponentName(this, AppLockerAdminReceiver::class.java)
+            
+            // FIX: Check if OUR app is the device owner, not the target app
+            val isOwner = dpm != null && (dpm.isDeviceOwnerApp(this.packageName) || dpm.isProfileOwnerApp(this.packageName))
+            
+            // First: Unhide apps that were previously hidden but are no longer in the list
+            val appsToUnhide = previouslyHiddenApps - hiddenApps.toSet()
+            for (pkg in appsToUnhide) {
+                try {
+                    if (isOwner) {
+                        dpm!!.setApplicationHidden(componentName, pkg, false)
+                        Log.d("AppLockerService", "Unhidden app via Device Admin: $pkg")
+                    }
+                } catch (e: Exception) {
+                    Log.e("AppLockerService", "Failed to unhide $pkg: ${e.message}")
+                }
+            }
+            
+            if (isOwner) {
+                // Use Device Admin API (most reliable)
+                hiddenApps.forEach { pkg ->
+                    try {
+                        // Don't hide our own app or system launcher
+                        if (pkg == this.packageName) return@forEach
+                        val success = dpm!!.setApplicationHidden(componentName, pkg, true)
+                        Log.d("AppLockerService", "Hidden app via Device Admin: $pkg = $success")
+                    } catch (e: Exception) {
+                        Log.e("AppLockerService", "Failed to hide $pkg via Device Admin: ${e.message}")
+                    }
+                }
+            } else {
+                Log.w("AppLockerService", "App is NOT Device Owner — cannot hide apps. Run: adb shell dpm set-device-owner com.parentalcontrol.applocker/.AppLockerAdminReceiver")
+                // Add blocked apps to blockedApps list as fallback (overlay-based blocking)
+                hiddenApps.forEach { pkg ->
+                    if (!blockedApps.contains(pkg)) {
+                        blockedApps.add(pkg)
+                        Log.d("AppLockerService", "Fallback: Added $pkg to blockedApps for overlay-based blocking")
+                    }
+                }
+            }
+            
+            // Update tracking set
+            previouslyHiddenApps = hiddenApps.toMutableSet()
+        } catch (e: Exception) {
+            Log.e("AppLockerService", "applyAppHiding error: ${e.message}")
+        }
+    }
+
+    private fun bringAppToForeground(pkg: String?) {
+        val launchIntent = applicationContext.packageManager.getLaunchIntentForPackage(applicationContext.packageName)
+        if (launchIntent != null) {
+            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or 
+                         Intent.FLAG_ACTIVITY_SINGLE_TOP or 
+                         Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            if (pkg != null) {
+                launchIntent.putExtra("blockedPackage", pkg)
+                Log.d("AppLockerService", "Setting blockedPackage extra: $pkg")
+            }
+            startActivity(launchIntent)
+            Log.d("AppLockerService", "Brought AppLocker to foreground for blocked app: $pkg")
+        } else {
+            Log.e("AppLockerService", "Could not get launch intent for AppLocker")
+        }
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val serviceChannel = NotificationChannel(
+                CHANNEL_ID,
+                "AppLocker Background Guard",
+                NotificationManager.IMPORTANCE_LOW
+            )
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(serviceChannel)
+        }
+    }
+
+    private fun createNotification(content: String): Notification {
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("AppLocker Guard")
+            .setContentText(content)
+            .setSmallIcon(android.R.drawable.ic_secure) // Generic lock icon
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(Notification.CATEGORY_SERVICE)
+            .build()
+    }
+
+    private fun loadLocalSettings() {
+        try {
+            deviceId = localPrefs.getString(KEY_DEVICE_ID, "") ?: ""
+            currentPin = localPrefs.getString(KEY_PIN, "1234") ?: "1234"
+            controlMode = localPrefs.getString(KEY_CONTROL_MODE, "basic") ?: "basic"
+            // Restore persisted lock state — critical for boot scenario
+            isLocked = localPrefs.getBoolean(KEY_IS_LOCKED, false)
+            
+            val blockedAppsJson = localPrefs.getString(KEY_BLOCKED_APPS, null)
+            if (blockedAppsJson != null) {
+                val appsList = blockedAppsJson.split(",").filter { it.isNotEmpty() }
+                blockedApps = appsList.toMutableList()
+            }
+            
+            val tempAccessJson = localPrefs.getString(KEY_TEMP_ACCESS, null)
+            if (tempAccessJson != null) {
+                try {
+                    // Parse simple format: "pkg1:timestamp1,pkg2:timestamp2"
+                    val pairs = tempAccessJson.split(",")
+                    tempAccess.clear()
+                    for (pair in pairs) {
+                        val parts = pair.split(":")
+                        if (parts.size == 2) {
+                            tempAccess[parts[0]] = parts[1].toLongOrNull() ?: 0L
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("AppLockerService", "Failed to parse temp access: ${e.message}")
+                }
+            }
+            
+            Log.d("AppLockerService", "Loaded local settings: deviceId=$deviceId, blockedApps=${blockedApps.size}, isLocked=$isLocked")
+        } catch (e: Exception) {
+            Log.e("AppLockerService", "Failed to load local settings: ${e.message}")
+        }
+    }
+    
+    private fun saveLocalSettings() {
+        try {
+            val editor = localPrefs.edit()
+            editor.putString(KEY_DEVICE_ID, deviceId)
+            editor.putString(KEY_PIN, currentPin)
+            editor.putString(KEY_CONTROL_MODE, controlMode)
+            editor.putString(KEY_BLOCKED_APPS, blockedApps.joinToString(","))
+            
+            // Save temp access as simple string
+            val tempAccessString = tempAccess.map { "${it.key}:${it.value}" }.joinToString(",")
+            editor.putString(KEY_TEMP_ACCESS, tempAccessString)
+            editor.apply()
+            
+            Log.d("AppLockerService", "Saved local settings: blockedApps=${blockedApps.size}")
+        } catch (e: Exception) {
+            Log.e("AppLockerService", "Failed to save local settings: ${e.message}")
+        }
+    }
+    
+    /**
+     * Syncs today's app usage stats to Firestore
+     */
+    private fun syncUsageStats() {
+        if (deviceId.isEmpty()) return
+        val usm = getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return
+        
+        val calendar = Calendar.getInstance()
+        calendar.set(Calendar.HOUR_OF_DAY, 0)
+        calendar.set(Calendar.MINUTE, 0)
+        calendar.set(Calendar.SECOND, 0)
+        val startTime = calendar.timeInMillis
+        val endTime = System.currentTimeMillis()
+
+        val stats = usm.queryAndAggregateUsageStats(startTime, endTime)
+        val db = FirebaseFirestore.getInstance()
+
+        val pm = packageManager
+        stats.forEach { (pkg, usage) ->
+            try {
+                val minutes = usage.totalTimeInForeground / 1000 / 60
+                if (minutes <= 0) return@forEach // Skip apps with zero usage
+                
+                var appName = pkg
+                try {
+                    val appInfo = pm.getApplicationInfo(pkg, 0)
+                    appName = pm.getApplicationLabel(appInfo).toString()
+                } catch (_: Exception) {}
+
+                val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+                val docId = "${todayStr}_$pkg"
+
+                val activity = hashMapOf(
+                    "type" to "app_usage",
+                    "packageName" to pkg,
+                    "appName" to appName,
+                    "duration" to minutes,
+                    "timestamp" to FieldValue.serverTimestamp(),
+                    "deviceId" to deviceId
+                )
+
+                db.collection("devices")
+                    .document(deviceId)
+                    .collection("activity")
+                    .document(docId)
+                    .set(activity)
+                    .addOnFailureListener { e ->
+                        Log.e("AppLockerService", "Failed to sync usage for $pkg: ${e.message}")
+                    }
+            } catch (e: Exception) {
+                Log.e("AppLockerService", "Error processing usage for $pkg: ${e.message}")
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        handler.removeCallbacks(checkRunnable)
+        handler.removeCallbacks(lockPollRunnable)
+        handler.removeCallbacks(usageSyncRunnable)
+        hideAppRestrictionOverlayIfNeeded()
+        saveLocalSettings() // Save settings before destruction
+        super.onDestroy()
+    }
+}
