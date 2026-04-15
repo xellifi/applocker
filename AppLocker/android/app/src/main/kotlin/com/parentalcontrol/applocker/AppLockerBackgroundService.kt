@@ -66,6 +66,26 @@ class AppLockerBackgroundService : Service() {
         private const val KEY_IS_LOCKED = "is_locked"
     }
 
+    // Receiver that re-enforces the lock whenever the screen turns on or
+    // the user dismisses the device keyguard (e.g. after a reboot).
+    // This is the most reliable way to guarantee the overlay reappears
+    // even when Android's own lock screen was shown first on boot.
+    private val screenReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            when (intent.action) {
+                Intent.ACTION_USER_PRESENT,   // user unlocked keyguard
+                Intent.ACTION_SCREEN_ON -> {  // screen woke up
+                    if (isLocked) {
+                        Log.d("AppLockerService", "Screen/user-present event — re-enforcing lock overlay")
+                        // Small delay to let the window system settle
+                        handler.postDelayed({ if (isLocked) showNativeOverlay() }, 300)
+                    }
+                }
+            }
+        }
+    }
+    private var screenReceiverRegistered = false
+
     // App blocking runnable
     private val checkRunnable = object : Runnable {
         override fun run() {
@@ -122,6 +142,22 @@ class AppLockerBackgroundService : Service() {
             }
         } catch (e: Exception) {
             Log.e("AppLockerService", "Firebase init error: ${e.message}")
+        }
+
+        // Register receiver for screen-on / user-present so we can
+        // re-show the overlay immediately after the keyguard is dismissed.
+        // These two actions CANNOT be declared in the manifest — they must
+        // be registered dynamically.
+        try {
+            val filter = android.content.IntentFilter().apply {
+                addAction(Intent.ACTION_USER_PRESENT)
+                addAction(Intent.ACTION_SCREEN_ON)
+            }
+            registerReceiver(screenReceiver, filter)
+            screenReceiverRegistered = true
+            Log.d("AppLockerService", "Screen/user-present receiver registered")
+        } catch (e: Exception) {
+            Log.e("AppLockerService", "Failed to register screen receiver: ${e.message}")
         }
 
         // Start polling loops with a small delay to let Firebase settle
@@ -849,7 +885,15 @@ class AppLockerBackgroundService : Service() {
         handler.removeCallbacks(lockPollRunnable)
         handler.removeCallbacks(usageSyncRunnable)
         hideAppRestrictionOverlayIfNeeded()
-        saveLocalSettings() // Save settings before destruction
+        saveLocalSettings()
+        if (screenReceiverRegistered) {
+            try {
+                unregisterReceiver(screenReceiver)
+                screenReceiverRegistered = false
+            } catch (e: Exception) {
+                Log.e("AppLockerService", "Failed to unregister screen receiver: ${e.message}")
+            }
+        }
         super.onDestroy()
     }
 }
