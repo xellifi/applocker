@@ -191,12 +191,19 @@ class AppLockerBackgroundService : Service() {
                 "boot" -> {
                     val wasLocked = localPrefs.getBoolean(KEY_IS_LOCKED, false)
                     Log.d("AppLockerService", "Boot action: wasLocked=$wasLocked")
-                    if (wasLocked && !isLocked && android.provider.Settings.canDrawOverlays(this)) {
+                    if (wasLocked) {
                         isLocked = true
-                        // Small delay to let the system settle after boot
-                        handler.postDelayed({
-                            showNativeOverlay()
-                        }, 500)
+                        // Retry showing overlay at multiple delays because canDrawOverlays()
+                        // may return false immediately after boot while the system is still
+                        // initialising, then become true a few seconds later.
+                        for (delay in listOf(500L, 3000L, 6000L, 12000L)) {
+                            handler.postDelayed({
+                                if (isLocked) {
+                                    Log.d("AppLockerService", "Boot retry showNativeOverlay at delay=$delay")
+                                    showNativeOverlay()
+                                }
+                            }, delay)
+                        }
                     }
                 }
             }
@@ -331,26 +338,35 @@ class AppLockerBackgroundService : Service() {
     }
 
     /**
-     * Checks if any lock schedule is currently active
-     */
-    /**
      * Checks if any enabled lock schedule is currently active.
      *
-     * IMPORTANT: LockSchedule times are stored in HH:mm 24-hour format
-     * (e.g. "07:01", "22:00") by the Flutter DeviceModel / LockSchedule class.
-     * We must parse with "HH:mm" — NOT "h:mm a" — or sdf.parse() returns null
-     * and no schedule ever fires on the native side.
+     * The Flutter dashboard saves lock schedule times in "h:mm a" 12-hour AM/PM
+     * format (e.g. "1:30 PM", "10:00 PM") via DateFormat('h:mm a').
+     * We must parse with the same format here — the old "HH:mm" split approach
+     * silently failed because "30 PM".toIntOrNull() always returns null.
      */
     private fun isScheduleActive(doc: com.google.firebase.firestore.DocumentSnapshot): Boolean {
         try {
             val schedules = doc.get("lockSchedules") as? List<Map<String, Any>> ?: return false
             if (schedules.isEmpty()) return false
 
-            // 24-hour format to match LockSchedule.start / .end stored by Flutter
-            val sdf = SimpleDateFormat("HH:mm", Locale.US)
+            val sdf = SimpleDateFormat("h:mm a", Locale.US)
             val nowCal = java.util.Calendar.getInstance()
             val nowMins = nowCal.get(java.util.Calendar.HOUR_OF_DAY) * 60 +
                           nowCal.get(java.util.Calendar.MINUTE)
+
+            // Convert a "h:mm a" string to minutes-since-midnight
+            fun toMins(timeStr: String): Int? {
+                return try {
+                    val date = sdf.parse(timeStr) ?: return null
+                    val cal = java.util.Calendar.getInstance().apply { time = date }
+                    cal.get(java.util.Calendar.HOUR_OF_DAY) * 60 +
+                        cal.get(java.util.Calendar.MINUTE)
+                } catch (e: Exception) {
+                    Log.e("AppLockerService", "toMins parse error for '$timeStr': ${e.message}")
+                    null
+                }
+            }
 
             for (schedule in schedules) {
                 val enabled = schedule["enabled"] as? Boolean ?: true
@@ -360,29 +376,20 @@ class AppLockerBackgroundService : Service() {
                 val endStr   = schedule["end"]   as? String ?: continue
 
                 try {
-                    // Parse "HH:mm" into total minutes since midnight for reliable comparison
-                    fun toMins(hhmm: String): Int? {
-                        val parts = hhmm.split(":")
-                        if (parts.size != 2) return null
-                        val h = parts[0].trim().toIntOrNull() ?: return null
-                        val m = parts[1].trim().toIntOrNull() ?: return null
-                        return h * 60 + m
-                    }
-
                     val startMins = toMins(startStr) ?: continue
                     val endMins   = toMins(endStr)   ?: continue
 
                     val active = if (endMins <= startMins) {
-                        // Overnight schedule e.g. 22:00 → 06:00
+                        // Overnight schedule e.g. 10:00 PM → 6:00 AM
                         nowMins >= startMins || nowMins < endMins
                     } else {
                         nowMins >= startMins && nowMins < endMins
                     }
 
-                    Log.d("AppLockerService", "Schedule $startStr-$endStr: nowMins=$nowMins active=$active")
+                    Log.d("AppLockerService", "LockSchedule $startStr-$endStr: nowMins=$nowMins startMins=$startMins endMins=$endMins active=$active")
                     if (active) return true
                 } catch (e: Exception) {
-                    Log.e("AppLockerService", "Error parsing lock schedule item: ${e.message}")
+                    Log.e("AppLockerService", "Error evaluating lock schedule item: ${e.message}")
                 }
             }
         } catch (e: Exception) {
@@ -522,21 +529,39 @@ class AppLockerBackgroundService : Service() {
         val endStr = schedule["end"] as? String ?: return false
 
         try {
+            // App schedule times are stored in "h:mm a" format by the Flutter dashboard
             val sdf = SimpleDateFormat("h:mm a", Locale.US)
-            val nowTime = SimpleDateFormat("h:mm a", Locale.US).format(Date())
-            
-            val now = sdf.parse(nowTime) ?: return false
-            val start = sdf.parse(startStr) ?: return false
-            val end = sdf.parse(endStr) ?: return false
 
-            return if (end.before(start)) {
-                // Overnight window e.g. 10PM to 8AM
-                now.after(start) || now.before(end)
-            } else {
-                now.after(start) && now.before(end)
+            fun toMins(timeStr: String): Int? {
+                return try {
+                    val date = sdf.parse(timeStr) ?: return null
+                    val cal = java.util.Calendar.getInstance().apply { time = date }
+                    cal.get(java.util.Calendar.HOUR_OF_DAY) * 60 +
+                        cal.get(java.util.Calendar.MINUTE)
+                } catch (e: Exception) {
+                    Log.e("AppLockerService", "App schedule toMins error for '$timeStr': ${e.message}")
+                    null
+                }
             }
+
+            val nowCal = java.util.Calendar.getInstance()
+            val nowMins = nowCal.get(java.util.Calendar.HOUR_OF_DAY) * 60 +
+                          nowCal.get(java.util.Calendar.MINUTE)
+
+            val startMins = toMins(startStr) ?: return false
+            val endMins   = toMins(endStr)   ?: return false
+
+            val inWindow = if (endMins <= startMins) {
+                // Overnight window e.g. 10:00 PM → 8:00 AM
+                nowMins >= startMins || nowMins < endMins
+            } else {
+                nowMins >= startMins && nowMins < endMins
+            }
+
+            Log.d("AppLockerService", "AppSchedule $packageName $startStr-$endStr: nowMins=$nowMins startMins=$startMins endMins=$endMins inWindow=$inWindow")
+            return inWindow
         } catch (e: Exception) {
-            Log.e("AppLockerService", "Error parsing app schedule: ${e.message}")
+            Log.e("AppLockerService", "Error evaluating app schedule for $packageName: ${e.message}")
         }
         return false
     }
