@@ -41,8 +41,10 @@ class AppLockerBackgroundService : Service() {
     private val handler = Handler(Looper.getMainLooper())
     private val checkInterval = 300L // 300ms for faster app detection
 
-    // Firestore lock polling
-    private val lockPollInterval = 10_000L // 10 seconds
+    // Firestore lock polling (backup — real-time listener is the primary mechanism)
+    private val lockPollInterval = 60_000L // 60 seconds (backup only)
+    // Real-time Firestore listener — receives updates the moment the parent saves
+    private var firestoreListener: com.google.firebase.firestore.ListenerRegistration? = null
     private val usagePollInterval = 120_000L // 2 minutes for usage stats sync
     private var deviceId: String = ""
     private var currentPin: String = "1234"
@@ -160,17 +162,19 @@ class AppLockerBackgroundService : Service() {
             Log.e("AppLockerService", "Failed to register screen receiver: ${e.message}")
         }
 
-        // Start polling loops with a small delay to let Firebase settle
+        // Start loops with a small delay to let Firebase settle
         handler.postDelayed({
             handler.post(checkRunnable)
             if (deviceId.isNotEmpty()) {
-                handler.post(lockPollRunnable)
+                setupFirestoreRealtimeListener()
+                handler.post(lockPollRunnable)   // 60 s backup poll
                 handler.post(usageSyncRunnable)
             } else {
                 val backupDeviceId = localPrefs.getString(KEY_DEVICE_ID, "") ?: ""
                 if (backupDeviceId.isNotEmpty()) {
                     deviceId = backupDeviceId
                     Log.d("AppLockerService", "Recovered deviceId from local backup: $deviceId")
+                    setupFirestoreRealtimeListener()
                     handler.post(lockPollRunnable)
                     handler.post(usageSyncRunnable)
                 }
@@ -196,9 +200,14 @@ class AppLockerBackgroundService : Service() {
             if (schedules != null) appSchedules = schedules.toMutableMap()
             
             if (devId != null && devId.isNotEmpty()) {
+                val newDevice = devId != deviceId
                 deviceId = devId
                 localPrefs.edit().putString(KEY_DEVICE_ID, deviceId).apply()
-                // Safety Delay
+                if (newDevice) {
+                    // New device ID — set up the real-time listener for this device
+                    setupFirestoreRealtimeListener()
+                }
+                // Backup poll: reschedule to run soon
                 handler.removeCallbacks(lockPollRunnable)
                 handler.postDelayed(lockPollRunnable, 2000)
             }
@@ -241,124 +250,149 @@ class AppLockerBackgroundService : Service() {
     }
 
     /**
-     * Polls Firestore for lock state changes.
-     * If locked=true or schedule is active, shows the native overlay.
-     * If locked=false and no schedule, hides it.
+     * Applies all fields from a Firestore device document to the local service state.
+     * Called from both the real-time snapshot listener and the backup poll.
      */
-    private fun pollFirestoreLockState() {
+    private fun applyFirestoreDoc(doc: com.google.firebase.firestore.DocumentSnapshot) {
+        if (!doc.exists()) {
+            Log.d("AppLockerService", "applyFirestoreDoc: doc not found for $deviceId")
+            return
+        }
+
+        val manualLock = doc.getBoolean("locked") ?: false
+        val subActive = doc.getBoolean("subscriptionActive") ?: true
+        subscriptionActive = subActive
+        currentPin = doc.getString("pin") ?: "1234"
+
+        val blockedAppsFromFirestore = doc.get("blockedApps") as? List<String> ?: mutableListOf()
+        val hiddenAppsFromFirestore = doc.get("hiddenApps") as? List<String> ?: mutableListOf()
+        val controlModeFromFirestore = doc.getString("controlMode") ?: "basic"
+
+        // Deserialize tempAccess — Firestore stores Timestamps, not Longs
+        val tempAccessRaw = doc.get("tempAccess") as? Map<String, Any> ?: mapOf()
+        val tempAccessParsed = hashMapOf<String, Long>()
+        for ((key, value) in tempAccessRaw) {
+            when (value) {
+                is com.google.firebase.Timestamp -> tempAccessParsed[key] = value.toDate().time
+                is Long   -> tempAccessParsed[key] = value
+                is Double -> tempAccessParsed[key] = value.toLong()
+                is Number -> tempAccessParsed[key] = value.toLong()
+                else -> Log.w("AppLockerService", "Unexpected tempAccess type for $key: ${value?.javaClass?.name}")
+            }
+        }
+
+        // Deserialize appSchedules (nested maps)
+        val appSchedulesRaw = doc.get("appSchedules") as? Map<String, Any> ?: mapOf()
+        val appSchedulesParsed = hashMapOf<String, Map<String, Any>>()
+        for ((key, value) in appSchedulesRaw) {
+            if (value is Map<*, *>) {
+                @Suppress("UNCHECKED_CAST")
+                appSchedulesParsed[key] = value as Map<String, Any>
+            }
+        }
+
+        Log.d("AppLockerService", "Firestore update: blockedApps=${blockedAppsFromFirestore.size} hiddenApps=${hiddenAppsFromFirestore.size} mode=$controlModeFromFirestore tempAccess=${tempAccessParsed.size} appSchedules=${appSchedulesParsed.size}")
+
+        // Apply to local state immediately — checkForegroundApp() will pick this up on the next 300ms tick
+        blockedApps = blockedAppsFromFirestore.toMutableList()
+        controlMode = controlModeFromFirestore
+        tempAccess = tempAccessParsed
+        appSchedules = appSchedulesParsed
+
+        // Persist custom overlay messages
+        val lockHeadline      = doc.getString("lockHeadline")      ?: "LOCKED"
+        val lockMessage       = doc.getString("lockMessage")       ?: "Enter PIN Code to unlock"
+        val taskTitle         = doc.getString("taskTitle")         ?: "To-Do List"
+        val taskListRaw       = doc.get("taskList") as? List<String> ?: listOf()
+        val restrictedHeadline = doc.getString("restrictedHeadline") ?: "App Restricted"
+        val restrictedMessage  = doc.getString("restrictedMessage")  ?: "This app is restricted by your parent."
+        val warningTitle      = doc.getString("warningTitle")      ?: "Restricted Access"
+        val warningListRaw    = doc.get("warningList") as? List<String> ?: listOf()
+
+        localPrefs.edit()
+            .putString("lockHeadline",       lockHeadline)
+            .putString("lockMessage",        lockMessage)
+            .putString("taskTitle",          taskTitle)
+            .putString("taskList",           taskListRaw.joinToString("\n"))
+            .putString("restrictedHeadline", restrictedHeadline)
+            .putString("restrictedMessage",  restrictedMessage)
+            .putString("warningTitle",       warningTitle)
+            .putString("warningList",        warningListRaw.joinToString("\n"))
+            .putLong(KEY_LAST_SYNC, System.currentTimeMillis())
+            .apply()
+
+        saveLocalSettings()
+
+        if (subscriptionActive) {
+            applyAppHiding(hiddenAppsFromFirestore)
+        } else {
+            applyAppHiding(listOf())
+        }
+
+        val scheduleLocked = isScheduleActive(doc)
+        val shouldLock = subscriptionActive && (manualLock || scheduleLocked)
+
+        Log.d("AppLockerService", "shouldLock=$shouldLock (manual=$manualLock schedule=$scheduleLocked currently=$isLocked)")
+
+        if (shouldLock && !isLocked) {
+            isLocked = true
+            localPrefs.edit().putBoolean(KEY_IS_LOCKED, true).apply()
+            showNativeOverlay()
+        } else if (!shouldLock && isLocked) {
+            isLocked = false
+            localPrefs.edit().putBoolean(KEY_IS_LOCKED, false).apply()
+            handler.removeCallbacks(bootRetryRunnable)
+            hideNativeOverlay()
+        }
+
+        LockOverlayService.overlayPin      = currentPin
+        LockOverlayService.overlayDeviceId = deviceId
+    }
+
+    /**
+     * Registers a real-time Firestore snapshot listener so that ANY change the
+     * parent makes on the dashboard is reflected on the child device within
+     * milliseconds — no more 10-second polling delay.
+     *
+     * The backup poll (lockPollRunnable, every 60 s) handles reconnection
+     * scenarios where the listener might have silently dropped.
+     */
+    private fun setupFirestoreRealtimeListener() {
         if (deviceId.isEmpty()) return
+
+        // Remove any existing listener before registering a new one
+        firestoreListener?.remove()
+        firestoreListener = null
 
         try {
             val db = FirebaseFirestore.getInstance()
-            db.collection("devices").document(deviceId).get()
-                .addOnSuccessListener { doc ->
-                    if (doc == null || !doc.exists()) {
-                        Log.d("AppLockerService", "Firestore poll: doc not found for $deviceId")
-                        return@addOnSuccessListener
+            firestoreListener = db.collection("devices").document(deviceId)
+                .addSnapshotListener(com.google.firebase.firestore.MetadataChanges.EXCLUDE) { snap, err ->
+                    if (err != null) {
+                        Log.e("AppLockerService", "Firestore snapshot error: ${err.message}")
+                        return@addSnapshotListener
                     }
-
-                    val manualLock = doc.getBoolean("locked") ?: false
-                    val subActive = doc.getBoolean("subscriptionActive") ?: true
-                    subscriptionActive = subActive
-                    val pin = doc.getString("pin") ?: "1234"
-                    currentPin = pin
-
-                    // Sync blocked apps, hidden apps, and control mode from Firestore
-                    val blockedAppsFromFirestore = doc.get("blockedApps") as? List<String> ?: mutableListOf<String>()
-                    val hiddenAppsFromFirestore = doc.get("hiddenApps") as? List<String> ?: mutableListOf<String>()
-                    val controlModeFromFirestore = doc.getString("controlMode") ?: "basic"
-                    
-                    // FIX: Properly deserialize tempAccess — Firestore stores Timestamps, not Longs
-                    val tempAccessRaw = doc.get("tempAccess") as? Map<String, Any> ?: mapOf()
-                    val tempAccessParsed = hashMapOf<String, Long>()
-                    for ((key, value) in tempAccessRaw) {
-                        when (value) {
-                            is com.google.firebase.Timestamp -> tempAccessParsed[key] = value.toDate().time
-                            is Long -> tempAccessParsed[key] = value
-                            is Double -> tempAccessParsed[key] = value.toLong()
-                            is Number -> tempAccessParsed[key] = value.toLong()
-                            else -> Log.w("AppLockerService", "Unexpected tempAccess type for $key: ${value?.javaClass?.name}")
-                        }
-                    }
-                    
-                    // FIX: Properly deserialize appSchedules — handle nested maps
-                    val appSchedulesRaw = doc.get("appSchedules") as? Map<String, Any> ?: mapOf()
-                    val appSchedulesParsed = hashMapOf<String, Map<String, Any>>()
-                    for ((key, value) in appSchedulesRaw) {
-                        if (value is Map<*, *>) {
-                            @Suppress("UNCHECKED_CAST")
-                            appSchedulesParsed[key] = value as Map<String, Any>
-                        }
-                    }
-
-                    Log.d("AppLockerService", "Firestore sync: blockedApps=${blockedAppsFromFirestore.size}, hiddenApps=${hiddenAppsFromFirestore.size}, mode=$controlModeFromFirestore, tempAccess=${tempAccessParsed.size}, appSchedules=${appSchedulesParsed.size}")
-                    
-                    // Update local state
-                    blockedApps = blockedAppsFromFirestore.toMutableList()
-                    controlMode = controlModeFromFirestore
-                    tempAccess = tempAccessParsed
-                    appSchedules = appSchedulesParsed
-                    
-                    // Sync custom messages and tasks
-                    val lockHeadline = doc.getString("lockHeadline") ?: "LOCKED"
-                    val lockMessage = doc.getString("lockMessage") ?: "Enter PIN Code to unlock"
-                    val taskTitle = doc.getString("taskTitle") ?: "To-Do List"
-                    val taskListRaw = doc.get("taskList") as? List<String> ?: listOf()
-                    
-                    val restrictedHeadline = doc.getString("restrictedHeadline") ?: "App Restricted"
-                    val restrictedMessage = doc.getString("restrictedMessage") ?: "This app is restricted by your parent."
-                    val warningTitle = doc.getString("warningTitle") ?: "Restricted Access"
-                    val warningListRaw = doc.get("warningList") as? List<String> ?: listOf()
-                    
-                    // Save to local storage as backup
-                    localPrefs.edit()
-                        .putString("lockHeadline", lockHeadline)
-                        .putString("lockMessage", lockMessage)
-                        .putString("taskTitle", taskTitle)
-                        .putString("taskList", taskListRaw.joinToString("\n"))
-                        .putString("restrictedHeadline", restrictedHeadline)
-                        .putString("restrictedMessage", restrictedMessage)
-                        .putString("warningTitle", warningTitle)
-                        .putString("warningList", warningListRaw.joinToString("\n"))
-                        .putLong(KEY_LAST_SYNC, System.currentTimeMillis())
-                        .apply()
-                    
-                    saveLocalSettings()
-
-                    // Always apply app hiding state changes
-                    Log.d("AppLockerService", "Applying app hiding for ${hiddenAppsFromFirestore.size} apps (subActive=$subscriptionActive)")
-                    if (subscriptionActive) {
-                        applyAppHiding(hiddenAppsFromFirestore)
-                    } else {
-                        applyAppHiding(listOf()) // Unhide everything if subscription paused
-                    }
-
-                    // Check schedule-based lock
-                    val scheduleLocked = isScheduleActive(doc)
-
-                    val shouldLock = subscriptionActive && (manualLock || scheduleLocked)
-                    
-                    Log.d("AppLockerService", "Firestore poll: manual=$manualLock schedule=$scheduleLocked blockedApps=${blockedApps.size} hiddenApps=${hiddenAppsFromFirestore.size} mode=$controlMode → shouldLock=$shouldLock (currently=$isLocked)")
-
-                    if (shouldLock && !isLocked) {
-                        isLocked = true
-                        // Persist the locked state so it survives a device reboot
-                        localPrefs.edit().putBoolean(KEY_IS_LOCKED, true).apply()
-                        showNativeOverlay()
-                    } else if (!shouldLock && isLocked) {
-                        isLocked = false
-                        localPrefs.edit().putBoolean(KEY_IS_LOCKED, false).apply()
-                        handler.removeCallbacks(bootRetryRunnable)
-                        hideNativeOverlay()
-                    }
-
-                    // Also update PIN on the overlay service
-                    LockOverlayService.overlayPin = currentPin
-                    LockOverlayService.overlayDeviceId = deviceId
+                    if (snap == null) return@addSnapshotListener
+                    Log.d("AppLockerService", "Firestore real-time update received")
+                    applyFirestoreDoc(snap)
                 }
-                .addOnFailureListener { e ->
-                    Log.e("AppLockerService", "Firestore poll failed: ${e.message}")
-                }
+            Log.d("AppLockerService", "Firestore real-time listener registered for $deviceId")
+        } catch (e: Exception) {
+            Log.e("AppLockerService", "setupFirestoreRealtimeListener error: ${e.message}")
+        }
+    }
+
+    /**
+     * Backup poll — runs every 60 s to catch any listener drop due to network
+     * changes.  Uses the same applyFirestoreDoc() logic as the real-time path.
+     */
+    private fun pollFirestoreLockState() {
+        if (deviceId.isEmpty()) return
+        try {
+            FirebaseFirestore.getInstance()
+                .collection("devices").document(deviceId).get()
+                .addOnSuccessListener { doc -> if (doc != null) applyFirestoreDoc(doc) }
+                .addOnFailureListener { e -> Log.e("AppLockerService", "Backup poll failed: ${e.message}") }
         } catch (e: Exception) {
             Log.e("AppLockerService", "pollFirestoreLockState error: ${e.message}")
         }
@@ -913,6 +947,8 @@ class AppLockerBackgroundService : Service() {
         handler.removeCallbacks(lockPollRunnable)
         handler.removeCallbacks(usageSyncRunnable)
         handler.removeCallbacks(bootRetryRunnable)
+        firestoreListener?.remove()
+        firestoreListener = null
         hideAppRestrictionOverlayIfNeeded()
         saveLocalSettings()
         if (screenReceiverRegistered) {
