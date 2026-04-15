@@ -1,0 +1,35 @@
+modules = ["java-graalvm22.3", "web", "nodejs-20"]
+[agent]
+expertMode = true
+
+[nix]
+channel = "stable-25_05"
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "AppLocker Dashboard"
+
+[[workflows.workflow]]
+name = "AppLocker Dashboard"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "/home/runner/workspace/.config/npm/node_global/bin/serve -s AppLocker/build/web -l 5000 --no-clipboard"
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+[deployment]
+deploymentTarget = "static"
+build = ["bash", "-c", "cd AppLocker && flutter pub get && flutter build web --target lib/dashboard/main_web.dart --release"]
+publicDir = "AppLocker/build/web"
