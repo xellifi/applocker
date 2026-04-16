@@ -3,10 +3,13 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter/material.dart' hide Path;
 import 'package:flutter/scheduler.dart';
 import 'dart:ui' as ui;
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:html' as html;
 import 'package:latlong2/latlong.dart' hide Path;
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -14,6 +17,7 @@ import 'package:heroicons/heroicons.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'dart:math';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -1078,7 +1082,7 @@ class _DevicesListState extends State<_DevicesList> {
               const SizedBox(width: 12),
               _buildMiniActionButton(icon: Icons.location_on_rounded, color: const Color(0xFF6366F1), onTap: () => _showLocation(context, device)),
               const SizedBox(width: 12),
-              _buildMiniActionButton(icon: Icons.message_rounded, color: const Color(0xFFF59E0B), onTap: () => showDialog(context: context, builder: (_) => AlertDialog(backgroundColor: widget.cardColor, title: const Text('Latest Messages'), content: Text(device['lastMessage'] ?? 'No recent messages exist on this device.')))),
+              _buildMiniActionButton(icon: Icons.message_rounded, color: const Color(0xFFF59E0B), onTap: () => _showChatDialog(context, deviceId)),
               const SizedBox(width: 12),
               _buildMiniActionButton(icon: Icons.history_rounded, color: const Color(0xFF8B5CF6), onTap: () => showDialog(context: context, builder: (_) => AlertDialog(backgroundColor: widget.cardColor, title: const Text('Device Activity History'), content: const Text('Detailed activity history will be populated here as events synchronize from the device.')))),
               const SizedBox(width: 12),
@@ -1088,6 +1092,175 @@ class _DevicesListState extends State<_DevicesList> {
         ],
       ),
     );
+  }
+
+  void _showChatDialog(BuildContext context, String deviceId) {
+    final TextEditingController msgCtrl = TextEditingController();
+    final ScrollController scrollCtrl = ScrollController();
+    bool sending = false;
+
+    void scrollToBottom() {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (scrollCtrl.hasClients) {
+          scrollCtrl.animateTo(scrollCtrl.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+        }
+      });
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) {
+          return Dialog(
+            backgroundColor: widget.cardColor,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            child: Container(
+              width: 420,
+              height: 520,
+              padding: const EdgeInsets.all(0),
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF59E0B),
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Text('💬', style: TextStyle(fontSize: 22)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text('Chat with Child',
+                              style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: Colors.black)),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, color: Colors.black54),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseService.instance.streamChatMessages(deviceId),
+                      builder: (context, snapshot) {
+                        final docs = snapshot.data?.docs ?? [];
+                        if (docs.isNotEmpty) scrollToBottom();
+                        if (docs.isEmpty) {
+                          return Center(
+                            child: Text('No messages yet.',
+                                style: GoogleFonts.outfit(color: const Color(0xFF94A3B8))),
+                          );
+                        }
+                        return ListView.builder(
+                          controller: scrollCtrl,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          itemCount: docs.length,
+                          itemBuilder: (context, i) {
+                            final data = docs[i].data() as Map<String, dynamic>;
+                            final isParent = data['sender'] == 'parent';
+                            final text = data['text'] as String? ?? '';
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Row(
+                                mainAxisAlignment: isParent
+                                    ? MainAxisAlignment.end
+                                    : MainAxisAlignment.start,
+                                children: [
+                                  Flexible(
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                      decoration: BoxDecoration(
+                                        color: isParent
+                                            ? const Color(0xFF6366F1)
+                                            : (widget.isDark ? Colors.white12 : const Color(0xFFF1F5F9)),
+                                        borderRadius: BorderRadius.only(
+                                          topLeft: const Radius.circular(16),
+                                          topRight: const Radius.circular(16),
+                                          bottomLeft: isParent ? const Radius.circular(16) : const Radius.circular(4),
+                                          bottomRight: isParent ? const Radius.circular(4) : const Radius.circular(16),
+                                        ),
+                                      ),
+                                      child: Text(text,
+                                          style: GoogleFonts.outfit(
+                                            color: isParent ? Colors.white : widget.textColor,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w500,
+                                          )),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                    decoration: BoxDecoration(
+                      border: Border(top: BorderSide(color: widget.borderColor, width: 1)),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: msgCtrl,
+                            style: GoogleFonts.outfit(color: widget.textColor),
+                            decoration: InputDecoration(
+                              hintText: 'Type a message...',
+                              hintStyle: GoogleFonts.outfit(color: const Color(0xFF94A3B8)),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(20)),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            ),
+                            onSubmitted: (_) async {
+                              final text = msgCtrl.text.trim();
+                              if (text.isEmpty || sending) return;
+                              setS(() => sending = true);
+                              msgCtrl.clear();
+                              await FirebaseService.instance.sendChatMessage(deviceId, text, 'parent');
+                              setS(() => sending = false);
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: sending ? null : () async {
+                            final text = msgCtrl.text.trim();
+                            if (text.isEmpty) return;
+                            setS(() => sending = true);
+                            msgCtrl.clear();
+                            await FirebaseService.instance.sendChatMessage(deviceId, text, 'parent');
+                            setS(() => sending = false);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF6366F1),
+                            foregroundColor: Colors.white,
+                            shape: const CircleBorder(),
+                            padding: const EdgeInsets.all(12),
+                          ),
+                          child: sending
+                              ? const SizedBox(width: 16, height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              : const Icon(Icons.send_rounded, size: 18),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    ).then((_) {
+      msgCtrl.dispose();
+      scrollCtrl.dispose();
+      FirebaseService.instance.markMessagesRead(deviceId, 'child');
+    });
   }
 
   void _showScheduleDialog(BuildContext context, String deviceId, Map<String, dynamic> device) {
@@ -1544,8 +1717,8 @@ class _AppActionButton extends StatelessWidget {
                     final endDt = DateTime(2022, 1, 1, end.hour, end.minute);
                     
                     setDialogState(() {
-                      startCtrl.text = DateFormat('h:mm a').format(startDt);
-                      endCtrl.text = DateFormat('h:mm a').format(endDt);
+                      startCtrl.text = DateFormat('h:mm a', 'en_US').format(startDt);
+                      endCtrl.text = DateFormat('h:mm a', 'en_US').format(endDt);
                     });
                   },
                   child: Container(
@@ -2183,6 +2356,49 @@ class _SettingsViewState extends State<_SettingsView> {
   final TextEditingController _profileImageUrlCtrl = TextEditingController();
   final TextEditingController _unlockGreetingCtrl = TextEditingController();
   bool _isLoading = false;
+  bool _uploadingImage = false;
+
+  Future<void> _pickAndUploadImage() async {
+    if (_selectedDeviceId == null) return;
+    final uploadInput = html.FileUploadInputElement();
+    uploadInput.accept = 'image/*';
+    uploadInput.click();
+    await uploadInput.onChange.first;
+    final file = uploadInput.files?.first;
+    if (file == null) return;
+
+    setState(() => _uploadingImage = true);
+    try {
+      final reader = html.FileReader();
+      reader.readAsArrayBuffer(file);
+      await reader.onLoad.first;
+      final bytes = reader.result as List<int>;
+      final uid = FirebaseAuth.instance.currentUser?.uid ?? 'unknown';
+      final ref = FirebaseStorage.instance
+          .ref()
+          .child('profile_images/$uid/${DateTime.now().millisecondsSinceEpoch}_${file.name}');
+      final metadata = SettableMetadata(contentType: file.type);
+      await ref.putData(Uint8List.fromList(bytes), metadata);
+      final url = await ref.getDownloadURL();
+      if (mounted) {
+        setState(() => _profileImageUrlCtrl.text = url);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Image uploaded! Tap "Save All Settings" to apply.'),
+            backgroundColor: Color(0xFF10B981),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Upload failed: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingImage = false);
+    }
+  }
 
   void _saveSettings() async {
     if (_selectedDeviceId == null) return;
@@ -2301,8 +2517,79 @@ class _SettingsViewState extends State<_SettingsView> {
                   children: [
                     Text('CHILD HOME SCREEN', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF6366F1), letterSpacing: 1.5)),
                     const SizedBox(height: 16),
-                    _buildInputField('PARENT PROFILE IMAGE URL', 'https://example.com/photo.jpg', _profileImageUrlCtrl),
-                    const SizedBox(height: 16),
+
+                    // Profile image upload
+                    Text('PARENT PROFILE IMAGE', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF94A3B8), letterSpacing: 1.2)),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        // Portrait image preview
+                        Container(
+                          width: 72,
+                          height: 96,
+                          decoration: BoxDecoration(
+                            color: widget.isDark ? Colors.white10 : const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFF64748B), width: 0.8),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(11),
+                            child: _profileImageUrlCtrl.text.isNotEmpty
+                                ? Image.network(
+                                    _profileImageUrlCtrl.text,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => const Icon(
+                                        Icons.person_rounded,
+                                        color: Color(0xFF94A3B8),
+                                        size: 36),
+                                  )
+                                : const Icon(Icons.person_rounded,
+                                    color: Color(0xFF94A3B8), size: 36),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Upload a portrait photo to show on the child\'s home screen.',
+                                style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF94A3B8), height: 1.4),
+                              ),
+                              const SizedBox(height: 10),
+                              OutlinedButton.icon(
+                                onPressed: _uploadingImage ? null : _pickAndUploadImage,
+                                icon: _uploadingImage
+                                    ? const SizedBox(width: 14, height: 14,
+                                        child: CircularProgressIndicator(strokeWidth: 2))
+                                    : const Icon(Icons.upload_rounded, size: 16),
+                                label: Text(
+                                  _uploadingImage ? 'Uploading...' : 'Choose Image',
+                                  style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 13),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF6366F1),
+                                  side: const BorderSide(color: Color(0xFF6366F1)),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
+                              ),
+                              if (_profileImageUrlCtrl.text.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 6),
+                                  child: TextButton.icon(
+                                    onPressed: () => setState(() => _profileImageUrlCtrl.text = ''),
+                                    icon: const Icon(Icons.delete_outline_rounded, size: 14, color: Color(0xFFEF4444)),
+                                    label: Text('Remove image', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFFEF4444))),
+                                    style: TextButton.styleFrom(padding: EdgeInsets.zero, visualDensity: VisualDensity.compact),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 20),
                     _buildInputField('PARENT QUOTE (shown on child screen)', 'e.g. Be kind and work hard today!', _parentQuoteCtrl),
                     const SizedBox(height: 16),
                     _buildInputField('UNLOCK GREETING', 'e.g. Enjoy Your Day', _unlockGreetingCtrl),

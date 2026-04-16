@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'chat_screen.dart';
 
 class LockOverlay extends StatefulWidget {
   final String deviceId;
@@ -40,6 +41,8 @@ class _LockOverlayState extends State<LockOverlay>
 
   static const _platform = MethodChannel('com.parentalcontrol/lock');
   static const _kAutoUnlockTimeout = Duration(minutes: 5);
+
+  bool get _isRestricted => widget.headline.toUpperCase() != 'LOCKED';
 
   @override
   void initState() {
@@ -87,15 +90,14 @@ class _LockOverlayState extends State<LockOverlay>
     _autoUnlockTimer = Timer(_kAutoUnlockTimeout, _unlock);
   }
 
-  void _handleTopLeftTap() {
+  // 10 rapid taps anywhere on the lock icon area triggers emergency PIN
+  void _handleEmergencyTap() {
     _tapCount++;
     _tapResetTimer?.cancel();
     _tapResetTimer = Timer(const Duration(seconds: 3), () => _tapCount = 0);
     if (_tapCount >= 10) {
       _tapCount = 0;
-      _platform.invokeMethod('openSettings').catchError((_) {
-        _showPinDialog();
-      });
+      _showPinDialog();
     }
   }
 
@@ -122,8 +124,8 @@ class _LockOverlayState extends State<LockOverlay>
           title: const Row(children: [
             Text('🔓', style: TextStyle(fontSize: 24)),
             SizedBox(width: 8),
-            Text('Enter PIN',
-                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+            Text('Emergency Unlock',
+                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
           ]),
           content: Column(mainAxisSize: MainAxisSize.min, children: [
             TextField(
@@ -183,19 +185,26 @@ class _LockOverlayState extends State<LockOverlay>
 
   @override
   Widget build(BuildContext context) {
+    final bgColor = _isRestricted
+        ? const Color(0xFFE53935)
+        : const Color(0xFFFBBC05);
+
     return PopScope(
       canPop: false,
       child: AnnotatedRegion<SystemUiOverlayStyle>(
-        value: SystemUiOverlayStyle.dark,
+        value: _isRestricted
+            ? SystemUiOverlayStyle.light
+            : SystemUiOverlayStyle.dark,
         child: Scaffold(
-          backgroundColor: const Color(0xFFFBBC05),
+          backgroundColor: bgColor,
           body: Stack(children: [
-            _buildContent(),
+            _buildContent(bgColor),
+            // Hidden 10-tap area at top-left for emergency unlock
             Positioned(
               top: 0,
               left: 0,
               child: GestureDetector(
-                onTap: _handleTopLeftTap,
+                onTap: _handleEmergencyTap,
                 child: Container(
                     width: 60,
                     height: 60,
@@ -208,8 +217,11 @@ class _LockOverlayState extends State<LockOverlay>
     );
   }
 
-  Widget _buildContent() {
-    final isRestricted = widget.headline.toUpperCase() != 'LOCKED';
+  Widget _buildContent(Color bgColor) {
+    final textColor = _isRestricted ? Colors.white : Colors.black;
+    final borderColor = _isRestricted
+        ? Colors.white.withOpacity(0.7)
+        : Colors.black;
 
     return SafeArea(
       child: SingleChildScrollView(
@@ -217,18 +229,19 @@ class _LockOverlayState extends State<LockOverlay>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            GestureDetector(
-              onTap: _showPinDialog,
-              child: Container(
-                width: 110,
-                height: 110,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.black, width: 3),
-                  color: const Color(0xFFFBBC05),
-                ),
-                child: const Center(
-                  child: Text('🔒', style: TextStyle(fontSize: 54)),
+            // Lock icon — NOT tappable, just decorative
+            Container(
+              width: 110,
+              height: 110,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: borderColor, width: 3),
+                color: bgColor,
+              ),
+              child: Center(
+                child: Text(
+                  _isRestricted ? '🚫' : '🔒',
+                  style: const TextStyle(fontSize: 54),
                 ),
               ),
             ),
@@ -238,8 +251,8 @@ class _LockOverlayState extends State<LockOverlay>
             Text(
               widget.headline.toUpperCase(),
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.black,
+              style: TextStyle(
+                color: textColor,
                 fontSize: 42,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 6,
@@ -248,13 +261,14 @@ class _LockOverlayState extends State<LockOverlay>
 
             const SizedBox(height: 28),
 
+            // Task / warning box
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: Colors.transparent,
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: Colors.black, width: 1.8),
+                border: Border.all(color: borderColor, width: 1.8),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
@@ -262,8 +276,8 @@ class _LockOverlayState extends State<LockOverlay>
                   Text(
                     widget.lockTitle.toUpperCase(),
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.black,
+                    style: TextStyle(
+                      color: textColor,
                       fontSize: 16,
                       fontWeight: FontWeight.w900,
                       letterSpacing: 1.5,
@@ -279,8 +293,8 @@ class _LockOverlayState extends State<LockOverlay>
                         child: Text(
                           clean.toUpperCase(),
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: Colors.black,
+                          style: TextStyle(
+                            color: textColor,
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
                             height: 1.4,
@@ -293,8 +307,10 @@ class _LockOverlayState extends State<LockOverlay>
                     Text(
                       widget.fallbackMessage,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
-                          color: Colors.black54, fontSize: 14, height: 1.5),
+                      style: TextStyle(
+                          color: textColor.withOpacity(0.7),
+                          fontSize: 14,
+                          height: 1.5),
                     ),
                   ],
                 ],
@@ -303,9 +319,18 @@ class _LockOverlayState extends State<LockOverlay>
 
             const SizedBox(height: 16),
 
-            if (!isRestricted)
+            // Chat button — only on lock screen, not restriction screen
+            if (!_isRestricted)
               GestureDetector(
-                onTap: () {},
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          ChildChatScreen(deviceId: widget.deviceId),
+                    ),
+                  );
+                },
                 child: Container(
                   width: double.infinity,
                   height: 60,
@@ -333,7 +358,8 @@ class _LockOverlayState extends State<LockOverlay>
                 ),
               ),
 
-            if (isRestricted) ...[
+            // GOT IT button — only on restriction screen
+            if (_isRestricted) ...[
               const SizedBox(height: 8),
               GestureDetector(
                 onTap: () async {
@@ -348,13 +374,13 @@ class _LockOverlayState extends State<LockOverlay>
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: Colors.black, width: 1.5),
+                    border: Border.all(color: Colors.white, width: 1.5),
                   ),
                   child: const Center(
                     child: Text(
                       'GOT IT',
                       style: TextStyle(
-                        color: Colors.black,
+                        color: Color(0xFFE53935),
                         fontSize: 18,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 2,
@@ -368,10 +394,12 @@ class _LockOverlayState extends State<LockOverlay>
             const SizedBox(height: 28),
 
             Text(
-              'This device is temporarily locked. Complete\nyour tasks to unlock.',
+              _isRestricted
+                  ? 'This app is temporarily restricted by your parent.'
+                  : 'This device is temporarily locked. Complete\nyour tasks to unlock.',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: Colors.black.withOpacity(0.55),
+                color: textColor.withOpacity(0.55),
                 fontSize: 13,
                 height: 1.5,
               ),

@@ -730,4 +730,56 @@ class FirebaseService {
       debugPrint('//TEST: updateDeviceControlMode error: $e');
     }
   }
+
+  // ─── Chat Messages ────────────────────────────────────────────────────────
+
+  /// Send a chat message in the device's messages subcollection.
+  /// [sender] should be 'child' or 'parent'.
+  Future<void> sendChatMessage(String deviceId, String text, String sender) async {
+    try {
+      await _db
+          .collection('devices')
+          .doc(deviceId)
+          .collection('messages')
+          .add({
+        'text': text,
+        'sender': sender,
+        'timestamp': FieldValue.serverTimestamp(),
+        'read': false,
+      });
+    } catch (e) {
+      debugPrint('//TEST: sendChatMessage error: $e');
+      rethrow;
+    }
+  }
+
+  /// Stream all chat messages for a device, ordered by time.
+  Stream<QuerySnapshot> streamChatMessages(String deviceId) {
+    return _db
+        .collection('devices')
+        .doc(deviceId)
+        .collection('messages')
+        .orderBy('timestamp', descending: false)
+        .snapshots();
+  }
+
+  /// Mark all messages from [otherSender] as read.
+  Future<void> markMessagesRead(String deviceId, String otherSender) async {
+    try {
+      final unread = await _db
+          .collection('devices')
+          .doc(deviceId)
+          .collection('messages')
+          .where('sender', isEqualTo: otherSender)
+          .where('read', isEqualTo: false)
+          .get();
+      final batch = _db.batch();
+      for (final doc in unread.docs) {
+        batch.update(doc.reference, {'read': true});
+      }
+      await batch.commit();
+    } catch (e) {
+      debugPrint('//TEST: markMessagesRead error: $e');
+    }
+  }
 }

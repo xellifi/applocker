@@ -357,12 +357,12 @@ class MainActivity : FlutterActivity() {
                     intent.putExtra("controlMode", mode)
                     intent.putExtra("tempAccess", temps)
                     if (appSchedules != null) {
-                        // Wrap each nested map so it survives serialization as Serializable
-                        val serializable = HashMap<String, Map<String, Any>>()
+                        // Use HashMap (Serializable) for nested maps so Intent extras survive
+                        val serializable = HashMap<String, HashMap<String, Any>>()
                         for ((key, value) in appSchedules) {
                             if (value is Map<*, *>) {
                                 @Suppress("UNCHECKED_CAST")
-                                serializable[key] = value as Map<String, Any>
+                                serializable[key] = HashMap(value as Map<String, Any>)
                             }
                         }
                         intent.putExtra("appSchedules", serializable)

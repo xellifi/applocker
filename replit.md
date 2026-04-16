@@ -79,3 +79,8 @@ Configured as a static deployment:
 - Remote commands via Firebase
 - Advanced mode (hiding app icons)
 - Parent dashboard with device management
+- Child ↔ Parent real-time chat (accessible from the lock screen)
+- App restriction schedule enforcement fix (DateFormat en_US locale + Intent serialization fix)
+- Image upload for parent profile photo in admin settings (Firebase Storage)
+- Lock screen: PIN removed from lock icon tap; 10-tap hidden emergency unlock
+- Restricted mode: red/pink background, GOT IT button with matching rounded corners
