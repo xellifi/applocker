@@ -15,15 +15,19 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "AppLocker Dashboard"
+args = "Start application"
 
 [[workflows.workflow]]
-name = "AppLocker Dashboard"
+name = "Start application"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "/home/runner/workspace/.config/npm/node_global/bin/serve -s AppLocker/build/web -l 5000 --no-clipboard"
+args = "npx serve -s AppLocker/build/web -l 5000 --no-clipboard"
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"
 
 [[ports]]
 localPort = 5000

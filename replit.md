@@ -60,7 +60,7 @@ flutter build web --target lib/dashboard/main_web.dart --release
 
 ### Workflow Command
 ```
-serve -s AppLocker/build/web -l 5000 --no-clipboard
+npx serve -s AppLocker/build/web -l 5000 --no-clipboard
 ```
 
 ## Deployment
