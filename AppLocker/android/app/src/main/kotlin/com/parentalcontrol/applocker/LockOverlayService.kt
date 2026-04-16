@@ -218,55 +218,110 @@ class LockOverlayService : Service() {
         centerWrapper.addView(iconContainer)
 
         // Spacer
-        centerWrapper.addView(createSpacer(32))
+        centerWrapper.addView(createSpacer(28))
 
         val prefs = getSharedPreferences("applocker_local_settings", Context.MODE_PRIVATE)
         val headlineText = prefs.getString("lockHeadline", "LOCKED") ?: "LOCKED"
-        val messageText = prefs.getString("lockMessage", "Enter PIN Code to unlock") ?: "Enter PIN Code to unlock"
 
         // Headline title (Customizable)
         val title = TextView(context).apply {
             layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { gravity = Gravity.CENTER_HORIZONTAL }
+            )
             text = headlineText.uppercase()
             setTextColor(Color.BLACK)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 36f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 42f)
             setTypeface(null, Typeface.BOLD)
-            letterSpacing = 0.05f
+            letterSpacing = 0.15f
             gravity = Gravity.CENTER
         }
         centerWrapper.addView(title)
 
-        centerWrapper.addView(createSpacer(32))
+        centerWrapper.addView(createSpacer(28))
 
-        // Message/Subtitle text (Customizable)
-        val subtitle = TextView(context).apply {
+        // Task list box (centered, black border, rounded)
+        val taskTitle = prefs.getString("taskTitle", "") ?: ""
+        val taskItems = prefs.getString("taskList", "") ?: ""
+        val fallbackMsg = prefs.getString("lockMessage", "This device is temporarily locked.\nComplete your tasks to unlock.") ?: ""
+
+        val taskContainer = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { gravity = Gravity.CENTER_HORIZONTAL }
-            text = messageText
+            )
+            background = GradientDrawable().apply {
+                cornerRadius = dpToPx(18).toFloat()
+                setColor(Color.TRANSPARENT)
+                setStroke(dpToPx(2), Color.BLACK)
+            }
+            setPadding(dpToPx(20), dpToPx(20), dpToPx(20), dpToPx(20))
+        }
+
+        // YOUR TASKS label
+        val taskTitleLabel = if (taskTitle.isNotEmpty()) taskTitle else "YOUR TASKS"
+        taskContainer.addView(TextView(context).apply {
+            text = taskTitleLabel.uppercase()
             setTextColor(Color.BLACK)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             setTypeface(null, Typeface.BOLD)
+            letterSpacing = 0.12f
             gravity = Gravity.CENTER
-            setPadding(dpToPx(16), 0, dpToPx(16), 0)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        })
+
+        if (taskItems.isNotEmpty()) {
+            taskContainer.addView(createSpacer(14))
+            val lines = taskItems.split("\n")
+            lines.forEach { line ->
+                val clean = line.replace(Regex("^\\s*[•\\-*]\\s*"), "").trim()
+                if (clean.isNotEmpty()) {
+                    taskContainer.addView(TextView(context).apply {
+                        text = clean.uppercase()
+                        setTextColor(Color.BLACK)
+                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+                        setTypeface(null, Typeface.BOLD)
+                        gravity = Gravity.CENTER
+                        setLineSpacing(dpToPx(2).toFloat(), 1f)
+                        layoutParams = LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT
+                        ).apply { bottomMargin = dpToPx(4) }
+                    })
+                }
+            }
+        } else {
+            taskContainer.addView(createSpacer(10))
+            taskContainer.addView(TextView(context).apply {
+                text = fallbackMsg
+                setTextColor(Color.parseColor("#88000000"))
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                gravity = Gravity.CENTER
+                textAlignment = View.TEXT_ALIGNMENT_CENTER
+                setLineSpacing(dpToPx(2).toFloat(), 1f)
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+            })
         }
-        centerWrapper.addView(subtitle)
+        centerWrapper.addView(taskContainer)
 
-        centerWrapper.addView(createSpacer(16))
+        centerWrapper.addView(createSpacer(14))
 
-        // PIN Input container
+        // PIN Input container (Enter PIN to unlock)
         val pinContainer = LinearLayout(context).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                dpToPx(60)
+                dpToPx(58)
             )
             background = GradientDrawable().apply {
-                cornerRadius = dpToPx(8).toFloat()
-                setStroke(dpToPx(1), Color.BLACK)
+                cornerRadius = dpToPx(18).toFloat()
+                setStroke(dpToPx(2), Color.BLACK)
                 setColor(Color.TRANSPARENT)
             }
             gravity = Gravity.CENTER
@@ -278,13 +333,13 @@ class LockOverlayService : Service() {
                 LinearLayout.LayoutParams.MATCH_PARENT
             )
             setTextColor(Color.BLACK)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 28f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 26f)
             setTypeface(null, Typeface.BOLD)
             letterSpacing = 0.5f
             gravity = Gravity.CENTER
-            inputType = InputType.TYPE_CLASS_NUMBER
-            hint = "* * * * * *"
-            setHintTextColor(Color.parseColor("#61000000"))
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            hint = "· · · · · ·"
+            setHintTextColor(Color.parseColor("#66000000"))
             background = null
             isSingleLine = true
             imeOptions = EditorInfo.IME_ACTION_DONE
@@ -296,80 +351,57 @@ class LockOverlayService : Service() {
         // Error text (hidden initially)
         val errorText = TextView(context).apply {
             layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
                 gravity = Gravity.CENTER_HORIZONTAL
-                topMargin = dpToPx(8)
+                topMargin = dpToPx(6)
             }
             text = "INCORRECT PIN"
             setTextColor(Color.RED)
             setTypeface(null, Typeface.BOLD)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            gravity = Gravity.CENTER
             visibility = View.INVISIBLE
         }
         centerWrapper.addView(errorText)
 
-        // GAP between PIN and Task Box: 10dp
-        centerWrapper.addView(createSpacer(10))
+        centerWrapper.addView(createSpacer(14))
 
-        // Dynamic Task List
-        val taskTitle = prefs.getString("taskTitle", "") ?: ""
-        val taskItems = prefs.getString("taskList", "") ?: ""
-        
-        if (taskTitle.isNotEmpty() || taskItems.isNotEmpty()) {
-            val taskContainer = LinearLayout(context).apply {
-                orientation = LinearLayout.VERTICAL
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                )
-                background = GradientDrawable().apply {
-                    cornerRadius = dpToPx(12).toFloat()
-                    setColor(Color.TRANSPARENT)
-                    setStroke(dpToPx(1), Color.BLACK)
-                }
-                setPadding(dpToPx(20), dpToPx(20), dpToPx(20), dpToPx(20))
+        // "SEND MESSAGE HERE" button (UI placeholder — message feature coming soon)
+        val sendMsgButton = TextView(context).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dpToPx(58)
+            )
+            text = "💬  SEND MESSAGE HERE"
+            setTextColor(Color.BLACK)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+            setTypeface(null, Typeface.BOLD)
+            letterSpacing = 0.08f
+            gravity = Gravity.CENTER
+            background = GradientDrawable().apply {
+                cornerRadius = dpToPx(18).toFloat()
+                setStroke(dpToPx(2), Color.BLACK)
+                setColor(Color.TRANSPARENT)
             }
-
-            if (taskTitle.isNotEmpty()) {
-                taskContainer.addView(TextView(context).apply {
-                    text = taskTitle.uppercase()
-                    setTextColor(Color.parseColor("#E65100")) // Deep Orange
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-                    setTypeface(null, Typeface.BOLD)
-                    letterSpacing = 0.1f
-                })
-                taskContainer.addView(createSpacer(12))
-            }
-
-            if (taskItems.isNotEmpty()) {
-                // Clean any starting bullets in taskItems
-                val cleanItems = taskItems.replace(Regex("^[•\\-*]\\s*"), "").trim()
-                taskContainer.addView(TextView(context).apply {
-                    text = cleanItems
-                    setTextColor(Color.BLACK)
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-                    setTypeface(null, Typeface.BOLD)
-                    setLineSpacing(0f, 1.2f)
-                })
-            }
-            centerWrapper.addView(taskContainer)
         }
+        centerWrapper.addView(sendMsgButton)
 
-        centerWrapper.addView(createSpacer(24))
+        centerWrapper.addView(createSpacer(28))
 
-        // "Device is locked by parent" info text (Footer)
+        // Footer info text
         val infoText = TextView(context).apply {
             layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { gravity = Gravity.CENTER_HORIZONTAL }
-            text = "This device is temporarily locked.\nComplete the tasks or enter PIN to unlock."
-            setTextColor(Color.parseColor("#99000000"))
+            )
+            text = "This device is temporarily locked. Complete\nyour tasks to unlock."
+            setTextColor(Color.parseColor("#88000000"))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             textAlignment = View.TEXT_ALIGNMENT_CENTER
-            setLineSpacing(dpToPx(4).toFloat(), 1f)
+            setLineSpacing(dpToPx(3).toFloat(), 1f)
+            gravity = Gravity.CENTER
         }
         centerWrapper.addView(infoText)
 
@@ -394,9 +426,7 @@ class LockOverlayService : Service() {
         })
 
         // When PIN input is tapped, make the window focusable so keyboard works
-        pinInput.setOnClickListener {
-            makeFocusable()
-        }
+        pinInput.setOnClickListener { makeFocusable() }
         pinInput.setOnFocusChangeListener { _, hasFocus ->
             if (hasFocus) makeFocusable()
         }

@@ -65,6 +65,9 @@ class _ChildHomeScreenState extends State<ChildHomeScreen> {
   String _restrictedHeadline = 'APP RESTRICTED';
   String _lockMessage = 'This device is temporarily locked.\nComplete the tasks or enter PIN to unlock.';
   String _restrictedMessage = 'Access to this application is restricted.';
+  String _parentQuote = '';
+  String _profileImageUrl = '';
+  String _unlockGreeting = 'Enjoy Your Day';
   Timer? _permissionCheckTimer;
 
   static const _lockChannel = MethodChannel('com.parentalcontrol/lock');
@@ -417,6 +420,9 @@ class _ChildHomeScreenState extends State<ChildHomeScreen> {
           _restrictedHeadline = device.restrictedHeadline;
           _lockMessage = device.lockMessage;
           _restrictedMessage = device.restrictedMessage;
+          _parentQuote = device.parentQuote;
+          _profileImageUrl = device.profileImageUrl;
+          _unlockGreeting = device.unlockGreeting;
         });
 
         // Update PIN on the lock controller and native side
@@ -740,10 +746,11 @@ class _ChildHomeScreenState extends State<ChildHomeScreen> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F0F23),
+      backgroundColor: const Color(0xFFF0EDF8),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1A1A3E),
-        elevation: 0,
+        backgroundColor: Colors.white,
+        elevation: 0.5,
+        shadowColor: Colors.black12,
         title: Row(
           children: [
             GestureDetector(
@@ -758,7 +765,11 @@ class _ChildHomeScreenState extends State<ChildHomeScreen> {
               },
               child: const Text(
                 'AppLocker',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  color: Colors.black,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 22,
+                ),
               ),
             ),
             const SizedBox(width: 8),
@@ -767,7 +778,6 @@ class _ChildHomeScreenState extends State<ChildHomeScreen> {
                 try {
                   const channel = MethodChannel('com.parentalcontrol/lock');
                   final unhiddenCount = await channel.invokeMethod<int>('unhideAllPkgs') ?? 0;
-                  // Force a fresh sync of the installed apps
                   _installedAppsSynced = false;
                   _trySyncInstalledApps(reason: 'rescued hidden apps');
                   if (mounted) {
@@ -784,17 +794,17 @@ class _ChildHomeScreenState extends State<ChildHomeScreen> {
                 }
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(8),
+                  color: const Color(0xFF10B981),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
                   _appVersion,
                   style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -803,7 +813,7 @@ class _ChildHomeScreenState extends State<ChildHomeScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white70),
+            icon: Icon(Icons.sync_rounded, color: Colors.grey.shade600, size: 22),
             onPressed: () async {
               final info = await PackageInfo.fromPlatform();
               _checkForUpdates(info, manual: true);
@@ -811,7 +821,7 @@ class _ChildHomeScreenState extends State<ChildHomeScreen> {
             tooltip: 'Check for Updates',
           ),
           IconButton(
-            icon: const Icon(Icons.logout, color: Colors.white70),
+            icon: Icon(Icons.logout_rounded, color: Colors.grey.shade600, size: 22),
             onPressed: _signOut,
             tooltip: 'Sign Out',
           ),
@@ -820,21 +830,231 @@ class _ChildHomeScreenState extends State<ChildHomeScreen> {
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (_permissionsSettled && (!_hasUsagePermission || !_isAdminActive || !_hasAccessibilityPermission || !_hasNotificationPermission)) _buildPermissionCard(),
-            const SizedBox(height: 16),
-            _StatusCard(
-              deviceId: widget.deviceId,
-              pairingCode: _pairingCode,
-              battery: _battery,
-              lat: _lat,
-              lng: _lng,
-              status: _status,
-              onCopyId: _copyDeviceId,
+            if (_permissionsSettled &&
+                (!_hasUsagePermission ||
+                    !_isAdminActive ||
+                    !_hasAccessibilityPermission ||
+                    !_hasNotificationPermission))
+              _buildPermissionCard(),
+            const SizedBox(height: 4),
+            _buildStatusRow(),
+            const SizedBox(height: 12),
+            _buildQuoteCard(),
+            const SizedBox(height: 12),
+            _buildUnlockCard(),
+            const SizedBox(height: 12),
+            _buildPairingSection(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusRow() {
+    Color batteryColor;
+    IconData batteryIcon;
+    if (_battery >= 50) {
+      batteryColor = const Color(0xFF10B981);
+      batteryIcon = Icons.battery_full_rounded;
+    } else if (_battery >= 20) {
+      batteryColor = const Color(0xFFF59E0B);
+      batteryIcon = Icons.battery_5_bar_rounded;
+    } else {
+      batteryColor = const Color(0xFFEF4444);
+      batteryIcon = Icons.battery_alert_rounded;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEDE9F8),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 16,
+            height: 16,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: _status.toLowerCase() == 'online'
+                  ? const Color(0xFF10B981)
+                  : Colors.grey,
             ),
-            const SizedBox(height: 20),
-            _LockStateCard(locked: _locked),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            _status.toLowerCase() == 'online' ? 'Online' : 'Offline',
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
+              color: Colors.black87,
+            ),
+          ),
+          const Spacer(),
+          Icon(batteryIcon, color: batteryColor, size: 22),
+          const SizedBox(width: 4),
+          Text(
+            '$_battery%',
+            style: TextStyle(
+              color: batteryColor,
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuoteCard() {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEDE9F8),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('❤', style: TextStyle(fontSize: 28)),
+                const SizedBox(height: 8),
+                Text(
+                  _parentQuote.isNotEmpty
+                      ? '"$_parentQuote"'
+                      : '"Have a wonderful day!"',
+                  style: const TextStyle(
+                    color: Colors.black87,
+                    fontSize: 14,
+                    fontStyle: FontStyle.italic,
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 14),
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFF10B981), width: 3),
+              color: const Color(0xFFD1FAE5),
+            ),
+            child: ClipOval(
+              child: _profileImageUrl.isNotEmpty
+                  ? Image.network(
+                      _profileImageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const Icon(
+                        Icons.person_rounded,
+                        color: Color(0xFF10B981),
+                        size: 40,
+                      ),
+                    )
+                  : const Icon(
+                      Icons.person_rounded,
+                      color: Color(0xFF10B981),
+                      size: 40,
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUnlockCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEDE9F8),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.black26, width: 1.5),
+              color: Colors.white,
+            ),
+            child: const Center(
+              child: Icon(Icons.lock_open_rounded,
+                  color: Colors.black54, size: 28),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Device Unlocked',
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 17,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '"$_unlockGreeting"',
+                style: const TextStyle(
+                  fontStyle: FontStyle.italic,
+                  fontSize: 13,
+                  color: Colors.black54,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPairingSection() {
+    return GestureDetector(
+      onTap: _copyDeviceId,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEDE9F8),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.qr_code_rounded, color: Colors.black38, size: 20),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Pairing Code',
+                  style: TextStyle(
+                      fontSize: 11, color: Colors.black38, letterSpacing: 0.5),
+                ),
+                Text(
+                  _pairingCode.isNotEmpty ? _pairingCode : '——',
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 6,
+                    color: Colors.black87,
+                  ),
+                ),
+              ],
+            ),
+            const Spacer(),
+            const Icon(Icons.copy_rounded, color: Colors.black26, size: 18),
           ],
         ),
       ),

@@ -2179,6 +2179,9 @@ class _SettingsViewState extends State<_SettingsView> {
   final TextEditingController _restHeadlineCtrl = TextEditingController();
   final TextEditingController _lockMsgCtrl = TextEditingController();
   final TextEditingController _restMsgCtrl = TextEditingController();
+  final TextEditingController _parentQuoteCtrl = TextEditingController();
+  final TextEditingController _profileImageUrlCtrl = TextEditingController();
+  final TextEditingController _unlockGreetingCtrl = TextEditingController();
   bool _isLoading = false;
 
   void _saveSettings() async {
@@ -2212,6 +2215,9 @@ class _SettingsViewState extends State<_SettingsView> {
         'restrictedHeadline': _restHeadlineCtrl.text.trim(),
         'lockMessage': _lockMsgCtrl.text.trim(),
         'restrictedMessage': _restMsgCtrl.text.trim(),
+        'parentQuote': _parentQuoteCtrl.text.trim(),
+        'profileImageUrl': _profileImageUrlCtrl.text.trim(),
+        'unlockGreeting': _unlockGreetingCtrl.text.trim(),
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -2241,6 +2247,9 @@ class _SettingsViewState extends State<_SettingsView> {
       _restHeadlineCtrl.text = data['restrictedHeadline'] ?? 'APP RESTRICTED';
       _lockMsgCtrl.text = data['lockMessage'] ?? 'This device is locked by your parent.\nPlease complete your routines to unlock.';
       _restMsgCtrl.text = data['restrictedMessage'] ?? 'Access to this application is restricted by parent settings.';
+      _parentQuoteCtrl.text = data['parentQuote'] ?? '';
+      _profileImageUrlCtrl.text = data['profileImageUrl'] ?? '';
+      _unlockGreetingCtrl.text = data['unlockGreeting'] ?? 'Enjoy Your Day';
     } catch (e) {
       debugPrint('Error loading device settings: $e');
     }
@@ -2256,6 +2265,9 @@ class _SettingsViewState extends State<_SettingsView> {
     _restHeadlineCtrl.dispose();
     _lockMsgCtrl.dispose();
     _restMsgCtrl.dispose();
+    _parentQuoteCtrl.dispose();
+    _profileImageUrlCtrl.dispose();
+    _unlockGreetingCtrl.dispose();
     super.dispose();
   }
 
@@ -2281,6 +2293,26 @@ class _SettingsViewState extends State<_SettingsView> {
             Text('Manage your account, preferences, and system security.', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 14)),
             const SizedBox(height: 32),
             
+            _buildSettingsSection('UNLOCK PAGE CUSTOMISATION', [
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('CHILD HOME SCREEN', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF6366F1), letterSpacing: 1.5)),
+                    const SizedBox(height: 16),
+                    _buildInputField('PARENT PROFILE IMAGE URL', 'https://example.com/photo.jpg', _profileImageUrlCtrl),
+                    const SizedBox(height: 16),
+                    _buildInputField('PARENT QUOTE (shown on child screen)', 'e.g. Be kind and work hard today!', _parentQuoteCtrl),
+                    const SizedBox(height: 16),
+                    _buildInputField('UNLOCK GREETING', 'e.g. Enjoy Your Day', _unlockGreetingCtrl),
+                  ],
+                ),
+              ),
+            ]),
+
+            const SizedBox(height: 24),
+
             _buildSettingsSection('DEVICE LOCK SCREEN SETTINGS', [
               Padding(
                 padding: const EdgeInsets.all(20),

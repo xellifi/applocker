@@ -81,6 +81,11 @@ class DeviceModel {
   final String restrictedMessage;
   final bool subscriptionActive;
 
+  // Unlock page customisation
+  final String parentQuote;
+  final String profileImageUrl;
+  final String unlockGreeting;
+
   // New Dashboard Features
   final String controlMode; // 'basic' | 'advanced'
   final Map<String, dynamic> tempAccess; // {pkgName: expiresAt}
@@ -118,6 +123,9 @@ class DeviceModel {
     this.lockMessage = 'This device is locked by your parent.\nPlease complete your routines to unlock.',
     this.restrictedMessage = 'Access to this application is restricted by parent settings.',
     this.subscriptionActive = true,
+    this.parentQuote = '',
+    this.profileImageUrl = '',
+    this.unlockGreeting = 'Enjoy Your Day',
   });
 
   /// Firestore nested maps may be `Map<Object?, Object?>`; normalize for Dart.
@@ -186,6 +194,9 @@ class DeviceModel {
       lockMessage: data['lockMessage'] as String? ?? 'This device is locked by your parent.\nPlease complete your routines to unlock.',
       restrictedMessage: data['restrictedMessage'] as String? ?? 'Access to this application is restricted by parent settings.',
       subscriptionActive: data['subscriptionActive'] as bool? ?? true,
+      parentQuote: data['parentQuote'] as String? ?? '',
+      profileImageUrl: data['profileImageUrl'] as String? ?? '',
+      unlockGreeting: data['unlockGreeting'] as String? ?? 'Enjoy Your Day',
     );
   }
 
@@ -227,6 +238,9 @@ class DeviceModel {
       lockMessage: map['lockMessage'] as String? ?? 'This device is locked by your parent.\nPlease complete your routines to unlock.',
       restrictedMessage: map['restrictedMessage'] as String? ?? 'Access to this application is restricted by parent settings.',
       subscriptionActive: map['subscriptionActive'] as bool? ?? true,
+      parentQuote: map['parentQuote'] as String? ?? '',
+      profileImageUrl: map['profileImageUrl'] as String? ?? '',
+      unlockGreeting: map['unlockGreeting'] as String? ?? 'Enjoy Your Day',
     );
   }
 
@@ -259,6 +273,9 @@ class DeviceModel {
         'lockMessage': lockMessage,
         'restrictedMessage': restrictedMessage,
         'subscriptionActive': subscriptionActive,
+        'parentQuote': parentQuote,
+        'profileImageUrl': profileImageUrl,
+        'unlockGreeting': unlockGreeting,
       };
 
   DeviceModel copyWith({

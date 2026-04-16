@@ -31,6 +31,21 @@ AppLocker/
 └── pubspec.yaml        # Flutter dependencies
 ```
 
+## UI Design (Latest)
+
+### Child App Screens
+- **Unlock Page (Home)**: Light purple (`#F0EDF8`) background. White AppBar with "AppLocker" bold black + green version badge. Status row card (online indicator + color-coded battery: green ≥50%, orange 20–49%, red <20%). Quote/profile card (❤ doodle + quote text + profile image with green border). Unlock card (open lock icon + "Device Unlocked" + "Enjoy Your Day" greeting).
+- **Locked Page**: Yellow `#FBBC05` background. Lock icon in circle (tap to enter PIN dialog). "LOCKED" bold 42sp. Task box (black border, "YOUR TASKS" title, centered task items in CAPS). "SEND MESSAGE HERE" placeholder button. Footer text.
+- **Restricted App Page**: Red `#F44336` background. ⚠ triangle emoji. "RESTRICTED" bold white. White-bordered tasks box. White "GOT IT" button.
+
+### Admin Settings (New Fields)
+Three new Firestore fields added to device documents:
+- `parentQuote` — quote text shown on the child's unlock screen
+- `profileImageUrl` — parent photo URL shown with green border on unlock screen
+- `unlockGreeting` — the "Enjoy Your Day" text under "Device Unlocked"
+
+These are configurable in the "UNLOCK PAGE CUSTOMISATION" section in Settings.
+
 ## Running the App
 
 ### Development
