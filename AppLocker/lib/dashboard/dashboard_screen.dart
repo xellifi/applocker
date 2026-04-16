@@ -187,8 +187,25 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   _DashboardMenu _selectedMenu = _DashboardMenu.dashboard;
   bool _isSidebarOpen = true;
-  bool _isDark = false;
+  bool _isDark = true;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  void _showMobileMoreSheet(BuildContext context, Color cardColor, Color textColor, String userRole) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _MobileMoreSheet(
+        isDark: _isDark,
+        selectedMenu: _selectedMenu,
+        onMenuSelected: (menu) {
+          setState(() => _selectedMenu = menu);
+          Navigator.pop(context);
+        },
+        userRole: userRole,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -200,36 +217,109 @@ class _DashboardScreenState extends State<DashboardScreen> {
           final data = userSnapshot.data!.data() as Map<String, dynamic>;
           userRole = data['role'] ?? 'parent';
         }
-        
+
         final bool isMobile = MediaQuery.of(context).size.width <= 1024;
-        final bgColor = _isDark ? const Color(0xFF0D0D10) : const Color(0xFFF8FAFC);
+        final bgColor = _isDark
+            ? (isMobile ? const Color(0xFF060D1F) : const Color(0xFF0D0D10))
+            : const Color(0xFFF8FAFC);
         final cardColor = _isDark ? const Color(0xFF18181B) : Colors.white;
         final textColor = _isDark ? Colors.white : const Color(0xFF1E293B);
         final borderColor = const Color(0xFF64748B);
 
+        if (isMobile) {
+          return Scaffold(
+            key: _scaffoldKey,
+            backgroundColor: bgColor,
+            body: SafeArea(
+              child: Column(children: [
+                _MobileTopBar(
+                  title: _selectedMenu == _DashboardMenu.dashboard
+                      ? 'AppLocker'
+                      : _mobileMenuLabel(_selectedMenu),
+                  isDark: _isDark,
+                  onThemeToggle: () => setState(() => _isDark = !_isDark),
+                  onPrev: _selectedMenu.index > 0
+                      ? () => setState(() => _selectedMenu =
+                          _DashboardMenu.values[_selectedMenu.index - 1])
+                      : null,
+                  onNext: _selectedMenu.index < _DashboardMenu.values.length - 1
+                      ? () => setState(() => _selectedMenu =
+                          _DashboardMenu.values[_selectedMenu.index + 1])
+                      : null,
+                ),
+                Expanded(
+                  child: _buildContent(textColor, cardColor, borderColor, true, userRole),
+                ),
+              ]),
+            ),
+            bottomNavigationBar: _MobileBottomNav(
+              selected: _selectedMenu,
+              isDark: _isDark,
+              onSelected: (menu) => setState(() => _selectedMenu = menu),
+              onMorePressed: () =>
+                  _showMobileMoreSheet(context, cardColor, textColor, userRole),
+            ),
+          );
+        }
+
         return Scaffold(
           key: _scaffoldKey,
           backgroundColor: bgColor,
-          drawer: isMobile ? Drawer(width: 280, backgroundColor: cardColor, child: _Sidebar(selectedMenu: _selectedMenu, onMenuSelected: (menu) { setState(() => _selectedMenu = menu); Navigator.pop(context); }, isCollapsed: false, isDark: _isDark, userRole: userRole)) : null,
           body: Row(
             children: [
-              if (!isMobile) _Sidebar(selectedMenu: _selectedMenu, onMenuSelected: (menu) => setState(() => _selectedMenu = menu), isCollapsed: !_isSidebarOpen, isDark: _isDark, userRole: userRole),
+              _Sidebar(
+                selectedMenu: _selectedMenu,
+                onMenuSelected: (menu) => setState(() => _selectedMenu = menu),
+                isCollapsed: !_isSidebarOpen,
+                isDark: _isDark,
+                userRole: userRole,
+              ),
               Expanded(
-                child: Column(
-                  children: [
-                    _Header(title: _selectedMenu.name.toUpperCase(), onMenuPressed: () { if (isMobile) { _scaffoldKey.currentState?.openDrawer(); } else { setState(() => _isSidebarOpen = !_isSidebarOpen); } }, isDark: _isDark, onThemeToggle: () => setState(() => _isDark = !_isDark), isMobile: isMobile),
-                    Expanded(child: Padding(padding: EdgeInsets.all(isMobile ? 20 : 32), child: _buildContent(textColor, cardColor, borderColor, isMobile, userRole))),
-                  ],
-                ),
+                child: Column(children: [
+                  _Header(
+                    title: _selectedMenu.name.toUpperCase(),
+                    onMenuPressed: () =>
+                        setState(() => _isSidebarOpen = !_isSidebarOpen),
+                    isDark: _isDark,
+                    onThemeToggle: () =>
+                        setState(() => _isDark = !_isDark),
+                    isMobile: false,
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: _buildContent(
+                          textColor, cardColor, borderColor, false, userRole),
+                    ),
+                  ),
+                ]),
               ),
             ],
           ),
         );
-      }
+      },
     );
   }
 
+  String _mobileMenuLabel(_DashboardMenu m) {
+    switch (m) {
+      case _DashboardMenu.dashboard: return 'Dashboard';
+      case _DashboardMenu.devices: return 'My Devices';
+      case _DashboardMenu.apps: return 'App Controls';
+      case _DashboardMenu.schedules: return 'Schedules';
+      case _DashboardMenu.location: return 'Location';
+      case _DashboardMenu.monitoring: return 'Monitoring';
+      case _DashboardMenu.reports: return 'Reports';
+      case _DashboardMenu.subscriptions: return 'Subscription';
+      case _DashboardMenu.settings: return 'Settings';
+      case _DashboardMenu.users: return 'Users Admin';
+    }
+  }
+
   Widget _buildContent(Color textColor, Color cardColor, Color borderColor, bool isMobile, String userRole) {
+    if (isMobile && _selectedMenu == _DashboardMenu.dashboard) {
+      return _MobileDashboardHome(isDark: _isDark, userRole: userRole);
+    }
     switch (_selectedMenu) {
       case _DashboardMenu.dashboard: return _DashboardOverview(isDark: _isDark, isMobile: isMobile, userRole: userRole);
       case _DashboardMenu.devices: return SingleChildScrollView(child: _DevicesList(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor, isMobile: isMobile, userRole: userRole));
@@ -600,6 +690,808 @@ class _DashboardOverview extends StatelessWidget {
       _StatCard(title: 'Hidden Apps', value: hidden.toString(), icon: HeroIcons.eyeSlash, color: const Color(0xFF8B5CF6), isDark: isDark),
       _StatCard(title: 'Total Apps', value: totalApps.toString(), icon: HeroIcons.squaresPlus, color: const Color(0xFFEC4899), isDark: isDark),
     ]; 
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MOBILE TOP BAR
+// ─────────────────────────────────────────────────────────────────────────────
+class _MobileTopBar extends StatelessWidget {
+  final String title;
+  final bool isDark;
+  final VoidCallback onThemeToggle;
+  final VoidCallback? onPrev;
+  final VoidCallback? onNext;
+
+  const _MobileTopBar({
+    required this.title,
+    required this.isDark,
+    required this.onThemeToggle,
+    this.onPrev,
+    this.onNext,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final textColor = isDark ? Colors.white70 : const Color(0xFF64748B);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: onPrev,
+            child: Icon(Icons.chevron_left_rounded,
+                color: onPrev != null ? textColor : textColor.withOpacity(0.2),
+                size: 28),
+          ),
+          const Spacer(),
+          Text(
+            title,
+            style: GoogleFonts.outfit(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: isDark ? Colors.white : const Color(0xFF1E293B),
+              letterSpacing: -0.5,
+            ),
+          ),
+          const Spacer(),
+          GestureDetector(
+            onTap: onThemeToggle,
+            child: Icon(
+              isDark ? Icons.light_mode_rounded : Icons.dark_mode_outlined,
+              color: textColor,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          GestureDetector(
+            onTap: onNext,
+            child: Icon(Icons.chevron_right_rounded,
+                color: onNext != null ? textColor : textColor.withOpacity(0.2),
+                size: 28),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MOBILE DASHBOARD HOME (new design matching the image)
+// ─────────────────────────────────────────────────────────────────────────────
+class _MobileDashboardHome extends StatelessWidget {
+  final bool isDark;
+  final String userRole;
+  const _MobileDashboardHome({required this.isDark, required this.userRole});
+
+  String _formatCount(int n) {
+    if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}K';
+    return n.toString();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseService.instance.streamAdminDevices(),
+      builder: (context, snapshot) {
+        int totalDevices = 0, onlineDevices = 0, offlineDevices = 0, totalApps = 0;
+        List<QueryDocumentSnapshot> docs = [];
+        if (snapshot.hasData) {
+          docs = snapshot.data!.docs;
+          totalDevices = docs.length;
+          final Set<String> pkgs = {};
+          for (var doc in docs) {
+            final data = doc.data() as Map<String, dynamic>;
+            if ((data['status'] ?? 'offline') == 'online') {
+              onlineDevices++;
+            } else {
+              offlineDevices++;
+            }
+            for (var app in (data['installedApps'] as List<dynamic>? ?? [])) {
+              if (app is Map) {
+                final pkg = (app['packageName'] ?? app['pkg'] ?? '').toString();
+                if (pkg.isNotEmpty) pkgs.add(pkg);
+              }
+            }
+          }
+          totalApps = pkgs.length;
+        }
+
+        final bg = isDark ? const Color(0xFF060D1F) : const Color(0xFFF0F4FF);
+        final textColor = isDark ? Colors.white : const Color(0xFF1E293B);
+
+        return Container(
+          color: bg,
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.only(bottom: 24),
+            child: Column(
+              children: [
+                const SizedBox(height: 8),
+                // ── Circular Gauge ──
+                SizedBox(
+                  height: 260,
+                  child: Center(
+                    child: CustomPaint(
+                      size: const Size(220, 220),
+                      painter: _GaugePainter(
+                        isDark: isDark,
+                        value: totalApps,
+                        total: max(totalApps, 1),
+                      ),
+                      child: SizedBox(
+                        width: 220,
+                        height: 220,
+                        child: Center(
+                          child: Text(
+                            _formatCount(totalApps),
+                            style: GoogleFonts.outfit(
+                              fontSize: 44,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                              letterSpacing: -1,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 4),
+
+                // ── Quick Stat Buttons ──
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _MobileQuickStat(
+                        icon: Icons.phone_android_rounded,
+                        label: 'Devices',
+                        value: totalDevices,
+                        iconColor: const Color(0xFF38BDF8),
+                        isDark: isDark,
+                      ),
+                      _MobileQuickStat(
+                        icon: Icons.wifi_rounded,
+                        label: 'Online',
+                        value: onlineDevices,
+                        iconColor: const Color(0xFF34D399),
+                        isDark: isDark,
+                      ),
+                      _MobileQuickStat(
+                        icon: Icons.remove_circle_outline_rounded,
+                        label: 'Offline',
+                        value: offlineDevices,
+                        iconColor: const Color(0xFFF87171),
+                        isDark: isDark,
+                      ),
+                      _MobileQuickStat(
+                        icon: Icons.apps_rounded,
+                        label: 'Apps',
+                        value: totalApps,
+                        iconColor: const Color(0xFFA78BFA),
+                        isDark: isDark,
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 32),
+
+                // ── Latest Devices heading ──
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Row(
+                    children: [
+                      Text(
+                        'Latest Devices',
+                        style: GoogleFonts.outfit(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: textColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 14),
+
+                // ── Device Cards ──
+                if (docs.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
+                    child: Text(
+                      'No devices paired yet.\nPair a device to start monitoring.',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.outfit(
+                        fontSize: 14,
+                        color: isDark ? Colors.white38 : const Color(0xFF94A3B8),
+                        height: 1.6,
+                      ),
+                    ),
+                  )
+                else
+                  ...docs.take(6).map((doc) {
+                    final data = doc.data() as Map<String, dynamic>;
+                    final name = data['deviceName'] ?? data['name'] ?? 'Unknown Device';
+                    final status = data['status'] ?? 'offline';
+                    final battery = data['battery'] ?? data['batteryLevel'] ?? 0;
+                    final lastSeen = data['lastSeen'] as Timestamp?;
+                    final isOnline = status == 'online';
+
+                    String timeLabel;
+                    if (isOnline) {
+                      timeLabel = 'Last Seen: Just now';
+                    } else if (lastSeen != null) {
+                      final diff = DateTime.now().difference(lastSeen.toDate());
+                      if (diff.inMinutes < 60) {
+                        timeLabel = 'Last Sync: ${diff.inMinutes} min ago';
+                      } else if (diff.inHours < 24) {
+                        timeLabel = 'Last Sync: ${diff.inHours}h ago';
+                      } else {
+                        timeLabel = 'Last Sync: Yesterday';
+                      }
+                    } else {
+                      timeLabel = 'Last Sync: Unknown';
+                    }
+
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                      child: _MobileDeviceCard(
+                        name: name,
+                        status: status,
+                        battery: battery is int ? battery : (battery as num).toInt(),
+                        timeLabel: timeLabel,
+                        isOnline: isOnline,
+                        isDark: isDark,
+                      ),
+                    );
+                  }),
+
+                const SizedBox(height: 16),
+
+                // ── Pair button ──
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Builder(builder: (ctx) => GestureDetector(
+                    onTap: () {
+                      final cardColor = isDark ? const Color(0xFF18181B) : Colors.white;
+                      showAppLockerPairingDialog(ctx, cardColor, textColor);
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF7C3AED), Color(0xFF2563EB)],
+                        ),
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.add_circle_outline_rounded,
+                              color: Colors.white, size: 20),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Pair New Device',
+                            style: GoogleFonts.outfit(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GAUGE PAINTER — three concentric gradient arcs + tick marks
+// ─────────────────────────────────────────────────────────────────────────────
+class _GaugePainter extends CustomPainter {
+  final bool isDark;
+  final int value;
+  final int total;
+  const _GaugePainter({required this.isDark, required this.value, required this.total});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final center = Offset(cx, cy);
+
+    final r1 = size.width * 0.43;
+    final r2 = size.width * 0.33;
+    final r3 = size.width * 0.23;
+
+    const double startAngle = pi * 0.82;
+    const double fullSweep = pi * 1.56;
+
+    final trackPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 10
+      ..color = const Color(0xFF131D3B);
+
+    canvas.drawCircle(center, r1, trackPaint..strokeWidth = 11);
+    canvas.drawCircle(center, r2, trackPaint..strokeWidth = 9);
+    canvas.drawCircle(center, r3, trackPaint..strokeWidth = 7);
+
+    void drawGradientArc(double radius, double sweep, double strokeW,
+        List<Color> colors, List<double> stops) {
+      final rect = Rect.fromCircle(center: center, radius: radius);
+      final paint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeW
+        ..strokeCap = StrokeCap.round
+        ..shader = SweepGradient(
+          colors: colors,
+          stops: stops,
+          startAngle: startAngle,
+          endAngle: startAngle + fullSweep,
+          transform: GradientRotation(0),
+        ).createShader(Rect.fromCircle(center: center, radius: radius * 1.5));
+      canvas.drawArc(rect, startAngle, sweep, false, paint);
+    }
+
+    drawGradientArc(r1, fullSweep, 11,
+        [const Color(0xFF7C3AED), const Color(0xFF6366F1), const Color(0xFF38BDF8)],
+        [0.0, 0.5, 1.0]);
+    drawGradientArc(r2, fullSweep * 0.72, 9,
+        [const Color(0xFF4F46E5), const Color(0xFF818CF8)],
+        [0.0, 1.0]);
+    drawGradientArc(r3, fullSweep * 0.48, 7,
+        [const Color(0xFF7C3AED), const Color(0xFFA78BFA)],
+        [0.0, 1.0]);
+
+    // Tick marks at the bottom
+    final tickPaint = Paint()
+      ..color = const Color(0xFF2D3A6B)
+      ..style = PaintingStyle.fill;
+
+    const int tickCount = 7;
+    const double tickCenterAngle = pi / 2;
+    const double tickSpread = pi * 0.38;
+    final double tickStartA = tickCenterAngle - tickSpread / 2;
+    final double tickR = r1 * 1.12;
+
+    for (int i = 0; i < tickCount; i++) {
+      final angle = tickStartA + (i * tickSpread / (tickCount - 1));
+      final tx = cx + tickR * cos(angle);
+      final ty = cy + tickR * sin(angle);
+      canvas.save();
+      canvas.translate(tx, ty);
+      canvas.rotate(angle + pi / 2);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(center: Offset.zero, width: 5, height: 14),
+          const Radius.circular(3),
+        ),
+        tickPaint..color = i == tickCount ~/ 2
+            ? const Color(0xFF6366F1)
+            : const Color(0xFF2D3A6B),
+      );
+      canvas.restore();
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _GaugePainter old) =>
+      old.value != value || old.isDark != isDark;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MOBILE QUICK STAT BUTTON
+// ─────────────────────────────────────────────────────────────────────────────
+class _MobileQuickStat extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final int value;
+  final Color iconColor;
+  final bool isDark;
+  const _MobileQuickStat({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.iconColor,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = isDark ? const Color(0xFF0F1A35) : const Color(0xFFE8EFFF);
+    final labelColor = isDark ? Colors.white54 : const Color(0xFF64748B);
+    final valueColor = isDark ? Colors.white : const Color(0xFF1E293B);
+
+    return Column(
+      children: [
+        Container(
+          width: 68,
+          height: 68,
+          decoration: BoxDecoration(
+            color: bg,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: iconColor.withOpacity(0.2),
+              width: 1,
+            ),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: iconColor, size: 22),
+              const SizedBox(height: 2),
+              Text(
+                value.toString(),
+                style: GoogleFonts.outfit(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: valueColor,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          style: GoogleFonts.outfit(
+            fontSize: 12,
+            color: labelColor,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MOBILE DEVICE CARD — gradient background matching the design
+// ─────────────────────────────────────────────────────────────────────────────
+class _MobileDeviceCard extends StatelessWidget {
+  final String name;
+  final String status;
+  final int battery;
+  final String timeLabel;
+  final bool isOnline;
+  final bool isDark;
+
+  const _MobileDeviceCard({
+    required this.name,
+    required this.status,
+    required this.battery,
+    required this.timeLabel,
+    required this.isOnline,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final gradient = isOnline
+        ? const LinearGradient(
+            colors: [Color(0xFF6D28D9), Color(0xFF4338CA)],
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+          )
+        : const LinearGradient(
+            colors: [Color(0xFFEA580C), Color(0xFFF59E0B)],
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+          );
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      decoration: BoxDecoration(
+        gradient: gradient,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: (isOnline ? const Color(0xFF6D28D9) : const Color(0xFFEA580C))
+                .withOpacity(0.35),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: GoogleFonts.outfit(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Row(children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: isOnline ? const Color(0xFF4ADE80) : const Color(0xFFF87171),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    isOnline ? 'Online' : 'Offline',
+                    style: GoogleFonts.outfit(
+                      fontSize: 13,
+                      color: Colors.white70,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ]),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '$battery%',
+                style: GoogleFonts.outfit(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                timeLabel,
+                style: GoogleFonts.outfit(
+                  fontSize: 11,
+                  color: Colors.white70,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MOBILE BOTTOM NAV
+// ─────────────────────────────────────────────────────────────────────────────
+class _MobileBottomNav extends StatelessWidget {
+  final _DashboardMenu selected;
+  final bool isDark;
+  final Function(_DashboardMenu) onSelected;
+  final VoidCallback onMorePressed;
+
+  const _MobileBottomNav({
+    required this.selected,
+    required this.isDark,
+    required this.onSelected,
+    required this.onMorePressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = isDark ? const Color(0xFF080F22) : Colors.white;
+    final activeColor = const Color(0xFF818CF8);
+    final inactiveColor = isDark ? Colors.white38 : const Color(0xFF94A3B8);
+
+    final items = [
+      (_DashboardMenu.dashboard, Icons.home_rounded, 'Home'),
+      (_DashboardMenu.devices, Icons.phone_android_rounded, 'Devices'),
+      (_DashboardMenu.apps, Icons.shield_rounded, 'Apps'),
+      (_DashboardMenu.schedules, Icons.schedule_rounded, 'Schedule'),
+    ];
+
+    return Container(
+      height: 68,
+      decoration: BoxDecoration(
+        color: bg,
+        border: Border(top: BorderSide(color: Colors.white.withOpacity(0.07), width: 1)),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.3),
+              blurRadius: 20,
+              offset: const Offset(0, -4))
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          ...items.map((item) {
+            final isActive = selected == item.$1;
+            return GestureDetector(
+              onTap: () => onSelected(item.$1),
+              behavior: HitTestBehavior.opaque,
+              child: SizedBox(
+                width: 60,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: isActive ? activeColor.withOpacity(0.15) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(item.$2,
+                          color: isActive ? activeColor : inactiveColor,
+                          size: 22),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(item.$3,
+                        style: GoogleFonts.outfit(
+                          fontSize: 10,
+                          fontWeight: isActive ? FontWeight.w700 : FontWeight.w400,
+                          color: isActive ? activeColor : inactiveColor,
+                        )),
+                  ],
+                ),
+              ),
+            );
+          }),
+          GestureDetector(
+            onTap: onMorePressed,
+            behavior: HitTestBehavior.opaque,
+            child: SizedBox(
+              width: 60,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    child: Icon(Icons.more_horiz_rounded,
+                        color: inactiveColor, size: 22),
+                  ),
+                  const SizedBox(height: 2),
+                  Text('More',
+                      style: GoogleFonts.outfit(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w400,
+                          color: inactiveColor)),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MOBILE MORE SHEET
+// ─────────────────────────────────────────────────────────────────────────────
+class _MobileMoreSheet extends StatelessWidget {
+  final bool isDark;
+  final _DashboardMenu selectedMenu;
+  final Function(_DashboardMenu) onMenuSelected;
+  final String userRole;
+
+  const _MobileMoreSheet({
+    required this.isDark,
+    required this.selectedMenu,
+    required this.onMenuSelected,
+    required this.userRole,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = isDark ? const Color(0xFF0D1530) : Colors.white;
+    final textColor = isDark ? Colors.white : const Color(0xFF1E293B);
+    final subtextColor = isDark ? Colors.white54 : const Color(0xFF94A3B8);
+
+    final moreItems = <(_DashboardMenu, IconData, String, String, Color)>[
+      (_DashboardMenu.location, Icons.location_on_rounded, 'Location', 'Track child location', const Color(0xFF10B981)),
+      (_DashboardMenu.monitoring, Icons.monitor_heart_rounded, 'Monitoring', 'Child activity logs', const Color(0xFF6366F1)),
+      (_DashboardMenu.reports, Icons.bar_chart_rounded, 'Reports', 'Usage statistics', const Color(0xFFF59E0B)),
+      (_DashboardMenu.subscriptions, Icons.workspace_premium_rounded, 'Subscription', 'Plan & billing', const Color(0xFFEC4899)),
+      (_DashboardMenu.settings, Icons.settings_rounded, 'Settings', 'App configuration', const Color(0xFF94A3B8)),
+      if (userRole == 'super_admin')
+        (_DashboardMenu.users, Icons.admin_panel_settings_rounded, 'Users Admin', 'Global user management', const Color(0xFFEF4444)),
+    ];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 40,
+            height: 4,
+            margin: const EdgeInsets.only(bottom: 20),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white12 : const Color(0xFFE2E8F0),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Text(
+            'More Options',
+            style: GoogleFonts.outfit(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: textColor,
+            ),
+          ),
+          const SizedBox(height: 20),
+          ...moreItems.map((item) {
+            final isActive = selectedMenu == item.$1;
+            return GestureDetector(
+              onTap: () => onMenuSelected(item.$1),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: isActive
+                      ? item.$5.withOpacity(0.12)
+                      : (isDark ? Colors.white.withOpacity(0.04) : const Color(0xFFF8FAFC)),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isActive ? item.$5.withOpacity(0.3) : Colors.transparent,
+                    width: 1,
+                  ),
+                ),
+                child: Row(children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: item.$5.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(item.$2, color: item.$5, size: 20),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(item.$3,
+                            style: GoogleFonts.outfit(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: isActive ? item.$5 : textColor,
+                            )),
+                        Text(item.$4,
+                            style: GoogleFonts.outfit(
+                              fontSize: 11,
+                              color: subtextColor,
+                            )),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right_rounded,
+                      color: isActive ? item.$5 : subtextColor, size: 18),
+                ]),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
   }
 }
 
