@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'chat_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../shared/firebase_service.dart';
 
 class LockOverlay extends StatefulWidget {
   final String deviceId;
@@ -90,7 +92,6 @@ class _LockOverlayState extends State<LockOverlay>
     _autoUnlockTimer = Timer(_kAutoUnlockTimeout, _unlock);
   }
 
-  // 10 rapid taps anywhere on the lock icon area triggers emergency PIN
   void _handleEmergencyTap() {
     _tapCount++;
     _tapResetTimer?.cancel();
@@ -183,6 +184,25 @@ class _LockOverlayState extends State<LockOverlay>
     );
   }
 
+  // ── Chat Dialog ────────────────────────────────────────────────────────────
+  void _showChatDialog() {
+    FirebaseService.instance.markMessagesRead(widget.deviceId, 'parent');
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.65),
+      builder: (ctx) => _ChildChatDialog(deviceId: widget.deviceId),
+    );
+  }
+
+  // ── Dialer Dialog ──────────────────────────────────────────────────────────
+  void _showDialerDialog() {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.65),
+      builder: (ctx) => const _DialerDialog(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bgColor = _isRestricted
@@ -199,7 +219,6 @@ class _LockOverlayState extends State<LockOverlay>
           backgroundColor: bgColor,
           body: Stack(children: [
             _buildContent(bgColor),
-            // Hidden 10-tap area at top-left for emergency unlock
             Positioned(
               top: 0,
               left: 0,
@@ -225,14 +244,14 @@ class _LockOverlayState extends State<LockOverlay>
 
     return SafeArea(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 36),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Lock icon — NOT tappable, just decorative
+            // Lock icon
             Container(
-              width: 110,
-              height: 110,
+              width: 100,
+              height: 100,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(color: borderColor, width: 3),
@@ -241,30 +260,30 @@ class _LockOverlayState extends State<LockOverlay>
               child: Center(
                 child: Text(
                   _isRestricted ? '🚫' : '🔒',
-                  style: const TextStyle(fontSize: 54),
+                  style: const TextStyle(fontSize: 50),
                 ),
               ),
             ),
 
-            const SizedBox(height: 28),
+            const SizedBox(height: 20),
 
             Text(
               widget.headline.toUpperCase(),
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: textColor,
-                fontSize: 42,
+                fontSize: 40,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 6,
               ),
             ),
 
-            const SizedBox(height: 28),
+            const SizedBox(height: 20),
 
             // Task / warning box
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
                 color: Colors.transparent,
                 borderRadius: BorderRadius.circular(18),
@@ -278,13 +297,13 @@ class _LockOverlayState extends State<LockOverlay>
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: textColor,
-                      fontSize: 16,
+                      fontSize: 14,
                       fontWeight: FontWeight.w900,
                       letterSpacing: 1.5,
                     ),
                   ),
                   if (widget.todos.isNotEmpty) ...[
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
                     ...widget.todos.map((task) {
                       final clean =
                           task.replaceFirst(RegExp(r'^\s*[•\-*]\s*'), '').trim();
@@ -295,7 +314,7 @@ class _LockOverlayState extends State<LockOverlay>
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: textColor,
-                            fontSize: 15,
+                            fontSize: 14,
                             fontWeight: FontWeight.w600,
                             height: 1.4,
                           ),
@@ -303,13 +322,13 @@ class _LockOverlayState extends State<LockOverlay>
                       );
                     }),
                   ] else ...[
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
                     Text(
                       widget.fallbackMessage,
                       textAlign: TextAlign.center,
                       style: TextStyle(
                           color: textColor.withOpacity(0.7),
-                          fontSize: 14,
+                          fontSize: 13,
                           height: 1.5),
                     ),
                   ],
@@ -319,46 +338,36 @@ class _LockOverlayState extends State<LockOverlay>
 
             const SizedBox(height: 16),
 
-            // Chat button — only on lock screen, not restriction screen
-            if (!_isRestricted)
-              GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          ChildChatScreen(deviceId: widget.deviceId),
+            // ── Action buttons (lock screen only) ──────────────────────────
+            if (!_isRestricted) ...[
+              Row(
+                children: [
+                  // Chat button
+                  Expanded(
+                    child: _ActionButton(
+                      icon: '💬',
+                      label: 'MESSAGE',
+                      onTap: _showChatDialog,
+                      borderColor: Colors.black,
+                      textColor: Colors.black,
                     ),
-                  );
-                },
-                child: Container(
-                  width: double.infinity,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    color: Colors.transparent,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: Colors.black, width: 1.8),
                   ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text('💬', style: TextStyle(fontSize: 26)),
-                      SizedBox(width: 12),
-                      Text(
-                        'SEND MESSAGE HERE',
-                        style: TextStyle(
-                          color: Colors.black,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1,
-                        ),
-                      ),
-                    ],
+                  const SizedBox(width: 12),
+                  // Call button
+                  Expanded(
+                    child: _ActionButton(
+                      icon: '📞',
+                      label: 'CALL',
+                      onTap: _showDialerDialog,
+                      borderColor: Colors.black,
+                      textColor: Colors.black,
+                    ),
                   ),
-                ),
+                ],
               ),
+            ],
 
-            // GOT IT button — only on restriction screen
+            // GOT IT button — restriction screen only
             if (_isRestricted) ...[
               const SizedBox(height: 8),
               GestureDetector(
@@ -370,7 +379,7 @@ class _LockOverlayState extends State<LockOverlay>
                 },
                 child: Container(
                   width: double.infinity,
-                  height: 58,
+                  height: 56,
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(18),
@@ -381,7 +390,7 @@ class _LockOverlayState extends State<LockOverlay>
                       'GOT IT',
                       style: TextStyle(
                         color: Color(0xFFE53935),
-                        fontSize: 18,
+                        fontSize: 17,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 2,
                       ),
@@ -391,7 +400,7 @@ class _LockOverlayState extends State<LockOverlay>
               ),
             ],
 
-            const SizedBox(height: 28),
+            const SizedBox(height: 20),
 
             Text(
               _isRestricted
@@ -399,12 +408,623 @@ class _LockOverlayState extends State<LockOverlay>
                   : 'This device is temporarily locked. Complete\nyour tasks to unlock.',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: textColor.withOpacity(0.55),
-                fontSize: 13,
+                color: textColor.withOpacity(0.5),
+                fontSize: 12,
                 height: 1.5,
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Shared action button widget ────────────────────────────────────────────────
+class _ActionButton extends StatelessWidget {
+  final String icon;
+  final String label;
+  final VoidCallback onTap;
+  final Color borderColor;
+  final Color textColor;
+
+  const _ActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    required this.borderColor,
+    required this.textColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 60,
+        decoration: BoxDecoration(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: borderColor, width: 1.8),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(icon, style: const TextStyle(fontSize: 22)),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                color: textColor,
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Child Chat Dialog ─────────────────────────────────────────────────────────
+class _ChildChatDialog extends StatefulWidget {
+  final String deviceId;
+  const _ChildChatDialog({required this.deviceId});
+
+  @override
+  State<_ChildChatDialog> createState() => _ChildChatDialogState();
+}
+
+class _ChildChatDialogState extends State<_ChildChatDialog> {
+  final _msgCtrl = TextEditingController();
+  final _scrollCtrl = ScrollController();
+  bool _sending = false;
+
+  @override
+  void dispose() {
+    _msgCtrl.dispose();
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollCtrl.hasClients) {
+        _scrollCtrl.animateTo(
+          _scrollCtrl.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  Future<void> _send() async {
+    final text = _msgCtrl.text.trim();
+    if (text.isEmpty || _sending) return;
+    setState(() => _sending = true);
+    _msgCtrl.clear();
+    try {
+      await FirebaseService.instance
+          .sendChatMessage(widget.deviceId, text, 'child');
+      _scrollToBottom();
+    } catch (_) {} finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 48),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 420),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A2E),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: const Color(0xFFFBBC05).withOpacity(0.5), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.6),
+              blurRadius: 40,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ── Header ──
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFBBC05),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Center(
+                      child: Text('💬', style: TextStyle(fontSize: 18)),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Text('Message Parent',
+                            style: TextStyle(
+                              color: Colors.black,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.3,
+                            )),
+                        Text('Emergency chat',
+                            style: TextStyle(
+                              color: Colors.black54,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            )),
+                      ],
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.of(context, rootNavigator: true).pop(),
+                    child: Container(
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.close_rounded, color: Colors.black54, size: 16),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Messages ──
+            SizedBox(
+              height: 320,
+              child: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseService.instance.streamChatMessages(widget.deviceId),
+                builder: (context, snapshot) {
+                  final docs = snapshot.data?.docs ?? [];
+                  if (docs.isNotEmpty) _scrollToBottom();
+                  if (docs.isEmpty) {
+                    return const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('💬', style: TextStyle(fontSize: 36)),
+                            SizedBox(height: 8),
+                            Text(
+                              'No messages yet.\nSend your parent a message!',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Color(0xFF94A3B8),
+                                fontSize: 13,
+                                height: 1.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+                  return ListView.builder(
+                    controller: _scrollCtrl,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    itemCount: docs.length,
+                    itemBuilder: (context, i) {
+                      final data = docs[i].data() as Map<String, dynamic>;
+                      final isChild = data['sender'] == 'child';
+                      final text = data['text'] as String? ?? '';
+                      final ts = data['timestamp'] as Timestamp?;
+                      final timeStr = ts != null ? _formatTime(ts.toDate()) : '';
+
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          mainAxisAlignment: isChild
+                              ? MainAxisAlignment.end
+                              : MainAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            if (!isChild) ...[
+                              Container(
+                                width: 28,
+                                height: 28,
+                                decoration: const BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Color(0xFFFBBC05),
+                                ),
+                                child: const Center(
+                                  child: Text('👨‍👩‍👦', style: TextStyle(fontSize: 13)),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                            ],
+                            Flexible(
+                              child: Column(
+                                crossAxisAlignment: isChild
+                                    ? CrossAxisAlignment.end
+                                    : CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 9),
+                                    decoration: BoxDecoration(
+                                      color: isChild
+                                          ? const Color(0xFFFBBC05)
+                                          : const Color(0xFF2D2D44),
+                                      borderRadius: BorderRadius.only(
+                                        topLeft: const Radius.circular(16),
+                                        topRight: const Radius.circular(16),
+                                        bottomLeft: isChild
+                                            ? const Radius.circular(16)
+                                            : const Radius.circular(4),
+                                        bottomRight: isChild
+                                            ? const Radius.circular(4)
+                                            : const Radius.circular(16),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      text,
+                                      style: TextStyle(
+                                        color: isChild ? Colors.black : Colors.white,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                  if (timeStr.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 3),
+                                      child: Text(
+                                        timeStr,
+                                        style: const TextStyle(
+                                            color: Color(0xFF64748B), fontSize: 10),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            if (isChild) const SizedBox(width: 6),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+
+            // ── Input ──
+            Container(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 14),
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: Colors.white.withOpacity(0.08), width: 1),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2D2D44),
+                        borderRadius: BorderRadius.circular(22),
+                        border: Border.all(
+                            color: const Color(0xFFFBBC05).withOpacity(0.3),
+                            width: 1),
+                      ),
+                      child: TextField(
+                        controller: _msgCtrl,
+                        keyboardType: TextInputType.multiline,
+                        maxLines: 3,
+                        minLines: 1,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500),
+                        decoration: const InputDecoration(
+                          hintText: 'Type a message...',
+                          hintStyle: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 10),
+                        ),
+                        onSubmitted: (_) => _send(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: _send,
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFBBC05),
+                        shape: BoxShape.circle,
+                      ),
+                      child: _sending
+                          ? const Padding(
+                              padding: EdgeInsets.all(12),
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.black),
+                            )
+                          : const Icon(Icons.send_rounded,
+                              color: Colors.black, size: 18),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatTime(DateTime dt) {
+    final now = DateTime.now();
+    final isToday =
+        dt.year == now.year && dt.month == now.month && dt.day == now.day;
+    if (isToday) {
+      final h = dt.hour > 12
+          ? dt.hour - 12
+          : (dt.hour == 0 ? 12 : dt.hour);
+      final m = dt.minute.toString().padLeft(2, '0');
+      final ampm = dt.hour >= 12 ? 'PM' : 'AM';
+      return '$h:$m $ampm';
+    }
+    return '${dt.day}/${dt.month} ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
+  }
+}
+
+// ── Dialer Dialog ─────────────────────────────────────────────────────────────
+class _DialerDialog extends StatefulWidget {
+  const _DialerDialog();
+
+  @override
+  State<_DialerDialog> createState() => _DialerDialogState();
+}
+
+class _DialerDialogState extends State<_DialerDialog> {
+  String _number = '';
+
+  void _append(String digit) {
+    if (_number.length >= 15) return;
+    setState(() => _number += digit);
+  }
+
+  void _backspace() {
+    if (_number.isEmpty) return;
+    setState(() => _number = _number.substring(0, _number.length - 1));
+  }
+
+  Future<void> _call() async {
+    if (_number.isEmpty) return;
+    final uri = Uri.parse('tel:$_number');
+    try {
+      await launchUrl(uri);
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 60),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 340),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A2E),
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(
+              color: const Color(0xFFFBBC05).withOpacity(0.5), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.6),
+              blurRadius: 40,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ── Header ──
+            Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFBBC05).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Center(
+                    child: Text('📞', style: TextStyle(fontSize: 18)),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text('Emergency Call',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                      )),
+                ),
+                GestureDetector(
+                  onTap: () => Navigator.of(context, rootNavigator: true).pop(),
+                  child: Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.close_rounded,
+                        color: Colors.white38, size: 16),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 20),
+
+            // ── Number display ──
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2D2D44),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                    color: const Color(0xFFFBBC05).withOpacity(0.2), width: 1),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _number.isEmpty ? 'Enter number...' : _number,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: _number.isEmpty
+                            ? const Color(0xFF64748B)
+                            : Colors.white,
+                        fontSize: _number.length > 10 ? 20 : 26,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: _backspace,
+                    onLongPress: () => setState(() => _number = ''),
+                    child: const Icon(Icons.backspace_outlined,
+                        color: Color(0xFF64748B), size: 20),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // ── Dial pad ──
+            ...[
+              ['1', '2', '3'],
+              ['4', '5', '6'],
+              ['7', '8', '9'],
+              ['*', '0', '#'],
+            ].map(
+              (row) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Row(
+                  children: row.map((digit) {
+                    return Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 5),
+                        child: _DialKey(
+                          digit: digit,
+                          onTap: () => _append(digit),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 4),
+
+            // ── Call button ──
+            GestureDetector(
+              onTap: _call,
+              child: Container(
+                width: double.infinity,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF22C55E),
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF22C55E).withOpacity(0.4),
+                      blurRadius: 16,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.call_rounded, color: Colors.white, size: 22),
+                    SizedBox(width: 10),
+                    Text(
+                      'CALL',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DialKey extends StatelessWidget {
+  final String digit;
+  final VoidCallback onTap;
+
+  const _DialKey({required this.digit, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 56,
+        decoration: BoxDecoration(
+          color: const Color(0xFF2D2D44),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+              color: Colors.white.withOpacity(0.06), width: 1),
+        ),
+        child: Center(
+          child: Text(
+            digit,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ),
       ),
     );
