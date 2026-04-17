@@ -1,42 +1,77 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-  -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="AppLocker SaaS - Premium Parent Control Dashboard.">
   <meta name="theme-color" content="#6366F1">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 
   <!-- PWA / iOS -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="AppLocker SaaS">
+  <meta name="apple-mobile-web-app-title" content="AppLocker">
 
   <!-- Open Graph -->
-  <meta property="og:title" content="AppLocker SaaS - Parent Control">
+  <meta property="og:title" content="AppLocker - Parent Control">
   <meta property="og:description" content="Premium Parental Control & Device Management">
   <meta property="og:type" content="website">
 
-  <title>AppLocker SaaS - Parent Dashboard</title>
+  <title>AppLocker - Parent Dashboard</title>
   <link rel="manifest" href="manifest.json">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
+  <!-- Preload critical Flutter resources for faster boot -->
+  <link rel="preload" href="flutter_bootstrap.js" as="script">
+  <link rel="preload" href="main.dart.js" as="script">
+
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <!--
+    ╔══════════════════════════════════════════════════════════╗
+    ║  PWA INSTALL — captured IMMEDIATELY, before Flutter loads ║
+    ║  beforeinstallprompt fires at page-load time; we must    ║
+    ║  intercept it here in raw JS and stash it in a global.   ║
+    ║  Flutter's Dart code reads window._pwaPrompt later.      ║
+    ╚══════════════════════════════════════════════════════════╝
+  -->
+  <script>
+    (function () {
+      window._pwaPrompt = null;
+      window._pwaPromptCallback = null;
+
+      // Already installed? mark it.
+      if (localStorage.getItem('pwa_installed') === 'true') {
+        window._pwaInstalled = true;
+      }
+
+      window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault();
+        window._pwaPrompt = e;
+        // If Flutter is already running, call the Dart-registered callback
+        if (typeof window._pwaPromptCallback === 'function') {
+          window._pwaPromptCallback();
+        }
+      });
+
+      window.addEventListener('appinstalled', function () {
+        window._pwaInstalled = true;
+        window._pwaPrompt = null;
+        localStorage.setItem('pwa_installed', 'true');
+        if (typeof window._pwaInstalledCallback === 'function') {
+          window._pwaInstalledCallback();
+        }
+      });
+    })();
+  </script>
 
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -56,7 +91,6 @@
       z-index: 9999;
       transition: opacity 0.5s ease;
     }
-    /* Background orbs */
     #loading::before, #loading::after {
       content: '';
       position: absolute;
@@ -64,89 +98,50 @@
       pointer-events: none;
     }
     #loading::before {
-      width: 400px;
-      height: 400px;
+      width: 400px; height: 400px;
       background: radial-gradient(circle, rgba(99,102,241,0.15) 0%, transparent 70%);
-      top: -100px;
-      right: -80px;
+      top: -100px; right: -80px;
     }
     #loading::after {
-      width: 300px;
-      height: 300px;
+      width: 300px; height: 300px;
       background: radial-gradient(circle, rgba(139,92,246,0.1) 0%, transparent 70%);
-      bottom: -60px;
-      left: -60px;
+      bottom: -60px; left: -60px;
     }
-    .logo-wrap {
-      position: relative;
-      margin-bottom: 28px;
-    }
+    .logo-wrap { position: relative; margin-bottom: 28px; }
     .logo-ring {
-      position: absolute;
-      inset: -14px;
-      border-radius: 50%;
+      position: absolute; inset: -14px; border-radius: 50%;
       border: 1.5px solid rgba(99,102,241,0.25);
       animation: ring-pulse 2s ease-in-out infinite;
     }
     .logo-ring-2 {
-      inset: -24px;
-      border-color: rgba(99,102,241,0.12);
-      animation-delay: 0.3s;
+      inset: -24px; border-color: rgba(99,102,241,0.12); animation-delay: 0.3s;
     }
     .logo {
-      width: 80px;
-      height: 80px;
+      width: 80px; height: 80px;
       background: linear-gradient(135deg, #6366F1, #8B5CF6);
-      border-radius: 22px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      border-radius: 22px; display: flex; align-items: center; justify-content: center;
       box-shadow: 0 0 40px rgba(99,102,241,0.45), 0 16px 32px rgba(0,0,0,0.3);
-      animation: pulse 2.5s ease-in-out infinite;
-      position: relative;
-      z-index: 1;
+      animation: pulse 2.5s ease-in-out infinite; position: relative; z-index: 1;
     }
     .logo svg { width: 42px; height: 42px; fill: white; }
-    .app-name {
-      font-size: 30px;
-      font-weight: 900;
-      letter-spacing: -1px;
-      margin-bottom: 6px;
-    }
+    .app-name { font-size: 30px; font-weight: 900; letter-spacing: -1px; margin-bottom: 6px; }
     .app-name span:first-child { color: #ffffff; }
     .app-name span:last-child  { color: #6366F1; }
     .app-sub {
-      color: rgba(255,255,255,0.35);
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 3.5px;
-      text-transform: uppercase;
-      margin-bottom: 48px;
+      color: rgba(255,255,255,0.35); font-size: 11px; font-weight: 700;
+      letter-spacing: 3.5px; text-transform: uppercase; margin-bottom: 48px;
     }
-    .spinner-wrap {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 12px;
-    }
+    .spinner-wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; }
     .spinner {
-      width: 38px;
-      height: 38px;
-      border: 3px solid rgba(99,102,241,0.15);
-      border-top-color: #6366F1;
-      border-radius: 50%;
-      animation: spin 0.9s linear infinite;
+      width: 38px; height: 38px;
+      border: 3px solid rgba(99,102,241,0.15); border-top-color: #6366F1;
+      border-radius: 50%; animation: spin 0.9s linear infinite;
     }
-    .loading-text {
-      color: rgba(255,255,255,0.25);
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: 1px;
-    }
+    .loading-text { color: rgba(255,255,255,0.25); font-size: 12px; font-weight: 600; letter-spacing: 1px; }
     @keyframes spin { to { transform: rotate(360deg); } }
     @keyframes pulse {
       0%, 100% { box-shadow: 0 0 40px rgba(99,102,241,0.45), 0 16px 32px rgba(0,0,0,0.3); }
-      50%       { box-shadow: 0 0 64px rgba(99,102,241,0.7), 0 16px 32px rgba(0,0,0,0.3); }
+      50%       { box-shadow: 0 0 64px rgba(99,102,241,0.7),  0 16px 32px rgba(0,0,0,0.3); }
     }
     @keyframes ring-pulse {
       0%, 100% { transform: scale(1); opacity: 1; }
@@ -155,7 +150,7 @@
   </style>
 </head>
 <body>
-  <!-- Loading screen -->
+  <!-- Loading screen (pure HTML — shows immediately, no JS needed) -->
   <div id="loading">
     <div class="logo-wrap">
       <div class="logo-ring logo-ring-2"></div>
@@ -176,20 +171,19 @@
 
   <script>
     function hideLoading() {
-      var loading = document.getElementById('loading');
-      if (loading) {
-        loading.style.opacity = '0';
-        setTimeout(function() { loading.remove(); }, 400);
+      var el = document.getElementById('loading');
+      if (el) {
+        el.style.opacity = '0';
+        setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 500);
       }
     }
-
-    // Hide loading screen when Flutter is ready
+    // Flutter fires this event on its very first rendered frame
     window.addEventListener('flutter-first-frame', hideLoading);
-
-    // Fallback: hide after 5 seconds no matter what
-    setTimeout(hideLoading, 5000);
+    // Hard fallback — never block the user longer than 8 seconds
+    setTimeout(hideLoading, 8000);
   </script>
 
+  <!-- Load Flutter immediately (not async/defer so it starts as soon as parsed) -->
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

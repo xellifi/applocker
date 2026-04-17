@@ -28,45 +28,62 @@ Future<void> main() async {
 }
 
 // ─── PWA Install helper (JS interop) ──────────────────────────────────────────
+//
+// beforeinstallprompt fires at page-load time — before Flutter even downloads.
+// index.html captures it into window._pwaPrompt via plain JS.
+// We read that global here so we never miss it.
+//
 class _PwaInstallManager {
-  static html.Event? _deferredPrompt;
   static bool _installed = false;
 
   static void init(VoidCallback onPromptAvailable) {
-    if (html.window.localStorage['pwa_installed'] == 'true') {
+    // Already installed via previous session?
+    if (html.window.localStorage['pwa_installed'] == 'true' ||
+        js.context['_pwaInstalled'] == true) {
       _installed = true;
       return;
     }
-    html.window.addEventListener('beforeinstallprompt', (e) {
-      e.preventDefault();
-      _deferredPrompt = e;
+    // Already dismissed?
+    if (wasDismissed) return;
+
+    // If the event was captured by index.html JS before Flutter loaded, fire now.
+    if (js.context['_pwaPrompt'] != null) {
       onPromptAvailable();
+    }
+
+    // Register callback so if it fires after Flutter loads (rare), we handle it.
+    js.context['_pwaPromptCallback'] = js.allowInterop(() {
+      if (!wasDismissed && !_installed) onPromptAvailable();
     });
-    html.window.addEventListener('appinstalled', (e) {
+
+    // Listen for install completion
+    js.context['_pwaInstalledCallback'] = js.allowInterop(() {
       _installed = true;
-      _deferredPrompt = null;
-      html.window.localStorage['pwa_installed'] = 'true';
     });
   }
 
-  static bool get canInstall => _deferredPrompt != null && !_installed;
-  static bool get isInstalled => _installed || html.window.localStorage['pwa_installed'] == 'true';
+  static bool get canInstall =>
+      js.context['_pwaPrompt'] != null && !_installed;
 
-  static Future<void> prompt() async {
-    if (_deferredPrompt == null) return;
-    try {
-      js.JsObject.fromBrowserObject(_deferredPrompt!).callMethod('prompt', []);
-    } catch (_) {}
-    _deferredPrompt = null;
-  }
-
-  static void dismiss() {
-    _deferredPrompt = null;
-    html.window.localStorage['pwa_install_dismissed'] = 'true';
-  }
+  static bool get isInstalled =>
+      _installed || html.window.localStorage['pwa_installed'] == 'true';
 
   static bool get wasDismissed =>
       html.window.localStorage['pwa_install_dismissed'] == 'true';
+
+  static Future<void> prompt() async {
+    final p = js.context['_pwaPrompt'];
+    if (p == null) return;
+    try {
+      (p as js.JsObject).callMethod('prompt', []);
+    } catch (_) {}
+    js.context['_pwaPrompt'] = null;
+  }
+
+  static void dismiss() {
+    js.context['_pwaPrompt'] = null;
+    html.window.localStorage['pwa_install_dismissed'] = 'true';
+  }
 }
 
 // ─── App root ─────────────────────────────────────────────────────────────────
