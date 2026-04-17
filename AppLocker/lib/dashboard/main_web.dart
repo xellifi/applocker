@@ -230,20 +230,19 @@ class _PwaInstallBannerState extends State<_PwaInstallBanner>
     super.dispose();
   }
 
-  void _handleInstall(BuildContext context) async {
-    if (_PwaInstallManager.canInstall) {
-      widget.onInstall();
-    } else {
-      _showInstallInstructions(context);
-    }
+  void _handleInstall(BuildContext context) {
+    _showInstallInstructions(context);
   }
 
   void _showInstallInstructions(BuildContext context) {
+    final canInstall = _PwaInstallManager.canInstall;
     showDialog(
       context: context,
-      barrierColor: Colors.black.withOpacity(0.7),
-      builder: (_) => Dialog(
+      useRootNavigator: true,
+      barrierColor: Colors.black.withOpacity(0.75),
+      builder: (dialogCtx) => Dialog(
         backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
         child: Container(
           constraints: const BoxConstraints(maxWidth: 400),
           decoration: BoxDecoration(
@@ -287,7 +286,7 @@ class _PwaInstallBannerState extends State<_PwaInstallBanner>
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'How to Install',
+                      'Install AppLocker',
                       style: GoogleFonts.outfit(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
@@ -297,7 +296,7 @@ class _PwaInstallBannerState extends State<_PwaInstallBanner>
                     ),
                   ),
                   GestureDetector(
-                    onTap: () => Navigator.of(context).pop(),
+                    onTap: () => Navigator.of(dialogCtx, rootNavigator: true).pop(),
                     child: Container(
                       width: 28,
                       height: 28,
@@ -311,50 +310,98 @@ class _PwaInstallBannerState extends State<_PwaInstallBanner>
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
+              if (canInstall) ...[
+                GestureDetector(
+                  onTap: () {
+                    Navigator.of(dialogCtx, rootNavigator: true).pop();
+                    widget.onInstall();
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF6366F1).withOpacity(0.45),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.download_rounded,
+                            color: Colors.white, size: 20),
+                        const SizedBox(width: 10),
+                        Text(
+                          'Install Now',
+                          style: GoogleFonts.outfit(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                            decoration: TextDecoration.none,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(children: [
+                  Expanded(child: Divider(color: Colors.white.withOpacity(0.12))),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Text('or install manually',
+                        style: GoogleFonts.outfit(
+                            fontSize: 11,
+                            color: Colors.white38,
+                            decoration: TextDecoration.none)),
+                  ),
+                  Expanded(child: Divider(color: Colors.white.withOpacity(0.12))),
+                ]),
+                const SizedBox(height: 16),
+              ],
               _InstructionStep(
                 icon: Icons.desktop_windows_rounded,
                 label: 'Chrome / Edge (Desktop)',
-                detail: 'Click the install icon (⊕) in the address bar, or open the browser menu and select "Install AppLocker".',
+                detail: 'Click the install icon (⊕) in the address bar, or open the browser menu → "Install AppLocker".',
               ),
               const SizedBox(height: 12),
               _InstructionStep(
                 icon: Icons.phone_android_rounded,
                 label: 'Chrome (Android)',
-                detail: 'Tap the 3-dot menu then tap "Add to Home screen" or "Install app".',
+                detail: 'Tap the 3-dot menu → "Add to Home screen" or "Install app".',
               ),
               const SizedBox(height: 12),
               _InstructionStep(
                 icon: Icons.phone_iphone_rounded,
                 label: 'Safari (iPhone / iPad)',
-                detail: 'Tap the Share button (□↑), then scroll down and tap "Add to Home Screen".',
+                detail: 'Tap the Share button (□↑) → scroll down → "Add to Home Screen".',
               ),
               const SizedBox(height: 20),
               GestureDetector(
-                onTap: () => Navigator.of(context).pop(),
+                onTap: () => Navigator.of(dialogCtx, rootNavigator: true).pop(),
                 child: Container(
                   width: double.infinity,
-                  height: 48,
+                  height: 44,
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
-                    ),
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF6366F1).withOpacity(0.4),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
+                    color: Colors.white.withOpacity(0.07),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white.withOpacity(0.1)),
                   ),
                   child: Center(
                     child: Text(
-                      'Got it',
+                      'Close',
                       style: GoogleFonts.outfit(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 15,
+                        color: Colors.white54,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
                         decoration: TextDecoration.none,
                       ),
                     ),
