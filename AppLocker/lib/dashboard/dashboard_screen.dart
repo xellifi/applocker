@@ -4524,9 +4524,30 @@ class _DevicesListState extends State<_DevicesList> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFF6366F1).withOpacity(0.1), shape: BoxShape.circle), child: const Icon(Icons.smartphone_rounded, color: Color(0xFF6366F1), size: 22)),
+              () {
+                final isOnlineDevice = (device['status'] ?? 'offline').toString().toLowerCase() == 'online';
+                final circleCol = isOnlineDevice ? const Color(0xFF22C55E) : const Color(0xFF94A3B8);
+                return Container(
+                  width: 52, height: 52,
+                  decoration: BoxDecoration(color: circleCol, shape: BoxShape.circle),
+                  child: const Icon(Icons.smartphone_rounded, color: Colors.white, size: 24),
+                );
+              }(),
               const SizedBox(width: 16),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(deviceId, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 18, color: widget.textColor), maxLines: 1, overflow: TextOverflow.ellipsis), const SizedBox(height: 2), Text('Status: ${device['status'] ?? 'offline'}', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 12))])),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(deviceId, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 18, color: widget.textColor), maxLines: 1, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 4),
+                Row(children: [
+                  Container(width: 7, height: 7, decoration: BoxDecoration(
+                    color: (device['status'] ?? 'offline').toString().toLowerCase() == 'online' ? const Color(0xFF22C55E) : const Color(0xFF94A3B8),
+                    shape: BoxShape.circle,
+                  )),
+                  const SizedBox(width: 5),
+                  Text((device['status'] ?? 'offline').toString().toLowerCase() == 'online' ? 'Online' : 'Offline',
+                    style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700,
+                      color: (device['status'] ?? 'offline').toString().toLowerCase() == 'online' ? const Color(0xFF22C55E) : const Color(0xFF94A3B8))),
+                ]),
+              ])),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -5395,59 +5416,48 @@ class _AppActionButton extends StatelessWidget {
               ],
             ),
           ),
-          if (schedule != null)
-            IconButton(
-              onPressed: () => _showRestrictionDialog(context, pkg, appName),
-              icon: const Icon(Icons.edit_note_rounded, size: 22, color: Color(0xFF6366F1)),
-              tooltip: 'Edit Active Rule',
-            ),
           PopupMenuButton<String>(
-            icon: Icon(
-              isBlocked ? Icons.block_rounded : (isHidden ? Icons.visibility_off_rounded : Icons.more_vert_rounded),
-              size: 18,
-              color: isBlocked ? Colors.red : (isHidden ? Colors.purple : const Color(0xFF94A3B8)),
-            ),
-            onSelected: (val) {
-              if (val == 'setup' || val == 'edit') {
+            icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF94A3B8), size: 18),
+            color: isDark ? const Color(0xFF0F1A35) : Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            padding: EdgeInsets.zero,
+            onSelected: (action) async {
+              if (action == 'schedule_block') {
                 _showRestrictionDialog(context, pkg, appName);
                 return;
               }
               final newBlocked = List<String>.from(blockedApps)..remove(pkg);
-              final newHidden = List<String>.from(hiddenApps)..remove(pkg);
+              final newHidden  = List<String>.from(hiddenApps)..remove(pkg);
               final newSchedules = Map<String, dynamic>.from(appSchedules);
-              
-              if (val == 'block') {
+              if (action == 'block_now') {
                 if (blockedApps.length >= blockedLimit) {
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Blocked apps limit reached ($blockedLimit)'), backgroundColor: Colors.redAccent));
                   return;
                 }
                 newBlocked.add(pkg);
-                newSchedules[pkg] = { 'start': '12:00 AM', 'end': '12:00 AM', 'alwaysBlocked': true };
-              }
-              if (val == 'hide') {
+              } else if (action == 'hide') {
                 if (hiddenApps.length >= hiddenLimit) {
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Hidden apps limit reached ($hiddenLimit)'), backgroundColor: Colors.redAccent));
                   return;
                 }
                 newHidden.add(pkg);
-              }
-              if (val == 'allow') {
+              } else if (action == 'allow') {
                 newSchedules.remove(pkg);
               }
-
               FirebaseFirestore.instance.collection('devices').doc(deviceId).update({
                 'blockedApps': newBlocked, 'hiddenApps': newHidden, 'appSchedules': newSchedules,
               });
             },
-            itemBuilder: (c) => [
-              PopupMenuItem(
-                value: schedule != null ? 'edit' : 'setup', 
-                child: Row(children: [const Icon(Icons.timer_rounded, size: 16), const SizedBox(width: 8), Text(schedule != null ? 'Edit Rules' : 'Setup Rules')])
-              ),
-              const PopupMenuItem(value: 'allow', child: Text('Allow All Access')),
-              const PopupMenuItem(value: 'block', child: Text('Block Instantly')),
-              const PopupMenuItem(value: 'hide', child: Text('Hide Icon')),
-            ],
+            itemBuilder: (c) {
+              final textColor = isDark ? Colors.white : const Color(0xFF1E293B);
+              return [
+                PopupMenuItem(value: 'allow', child: Row(children: [const Icon(Icons.check_circle_rounded, color: Color(0xFF22C55E), size: 16), const SizedBox(width: 8), Text('Allow', style: GoogleFonts.outfit(fontSize: 13, color: textColor))])),
+                PopupMenuItem(value: 'block_now', child: Row(children: [const Icon(Icons.block_rounded, color: Color(0xFFEF4444), size: 16), const SizedBox(width: 8), Text('Block instantly', style: GoogleFonts.outfit(fontSize: 13, color: textColor))])),
+                PopupMenuItem(value: 'hide', child: Row(children: [const Icon(Icons.visibility_off_rounded, color: Color(0xFFFBBF24), size: 16), const SizedBox(width: 8), Text('Hide', style: GoogleFonts.outfit(fontSize: 13, color: textColor))])),
+                const PopupMenuDivider(),
+                PopupMenuItem(value: 'schedule_block', child: Row(children: [const Icon(Icons.schedule_rounded, color: Color(0xFF6366F1), size: 16), const SizedBox(width: 8), Text('Schedule Block', style: GoogleFonts.outfit(fontSize: 13, color: textColor, fontWeight: FontWeight.w700))])),
+              ];
+            },
           ),
         ],
       ),
