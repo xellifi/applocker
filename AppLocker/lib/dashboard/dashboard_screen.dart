@@ -2449,16 +2449,46 @@ class _MobileAppControlsViewState extends State<_MobileAppControlsView> {
         final apps = data['installedApps'] as List<dynamic>? ?? [];
         final blockedApps = (data['blockedApps'] as List<dynamic>? ?? []).map((e) => e.toString()).toSet();
         final hiddenApps = (data['hiddenApps'] as List<dynamic>? ?? []).map((e) => e.toString()).toSet();
-        final filtered = apps.where((app) {
-          final d = app as Map<String, dynamic>;
-          final pkg = (d['packageName'] ?? '').toString();
-          final name = (d['appName'] ?? d['name'] ?? d['label'] ?? pkg).toString().toLowerCase();
-          if (_filterMode == 'blocked') { if (!blockedApps.contains(pkg)) return false; }
-          else if (_filterMode == 'hidden') { if (!hiddenApps.contains(pkg)) return false; }
-          else if (_filterMode == 'allowed') { if (blockedApps.contains(pkg) || hiddenApps.contains(pkg)) return false; }
-          if (_searchQuery.isNotEmpty && !name.contains(_searchQuery) && !pkg.toLowerCase().contains(_searchQuery)) return false;
-          return true;
-        }).toList();
+        // Build a lookup map from packageName -> app data for enrichment
+        final installedMap = <String, Map<String, dynamic>>{};
+        for (final a in apps) {
+          final m = a as Map<String, dynamic>;
+          final p = (m['packageName'] ?? '').toString();
+          if (p.isNotEmpty) installedMap[p] = m;
+        }
+        List<Map<String, dynamic>> filtered;
+        if (_filterMode == 'blocked') {
+          // Show all blocked packages; enrich with installedApps data where available
+          filtered = blockedApps.map<Map<String, dynamic>>((pkg) =>
+            installedMap[pkg] ?? {'packageName': pkg, 'appName': '', 'name': '', 'label': ''}
+          ).where((app) {
+            final pkg = (app['packageName'] ?? '').toString();
+            final name = (app['appName'] ?? app['name'] ?? app['label'] ?? pkg).toString().toLowerCase();
+            final effectiveName = name.isNotEmpty ? name : pkg.toLowerCase();
+            if (_searchQuery.isNotEmpty && !effectiveName.contains(_searchQuery) && !pkg.toLowerCase().contains(_searchQuery)) return false;
+            return true;
+          }).toList();
+        } else if (_filterMode == 'hidden') {
+          // Show all hidden packages; enrich with installedApps data where available
+          filtered = hiddenApps.map<Map<String, dynamic>>((pkg) =>
+            installedMap[pkg] ?? {'packageName': pkg, 'appName': '', 'name': '', 'label': ''}
+          ).where((app) {
+            final pkg = (app['packageName'] ?? '').toString();
+            final name = (app['appName'] ?? app['name'] ?? app['label'] ?? pkg).toString().toLowerCase();
+            final effectiveName = name.isNotEmpty ? name : pkg.toLowerCase();
+            if (_searchQuery.isNotEmpty && !effectiveName.contains(_searchQuery) && !pkg.toLowerCase().contains(_searchQuery)) return false;
+            return true;
+          }).toList();
+        } else {
+          filtered = apps.where((app) {
+            final d = app as Map<String, dynamic>;
+            final pkg = (d['packageName'] ?? '').toString();
+            final name = (d['appName'] ?? d['name'] ?? d['label'] ?? pkg).toString().toLowerCase();
+            if (_filterMode == 'allowed') { if (blockedApps.contains(pkg) || hiddenApps.contains(pkg)) return false; }
+            if (_searchQuery.isNotEmpty && !name.contains(_searchQuery) && !pkg.toLowerCase().contains(_searchQuery)) return false;
+            return true;
+          }).cast<Map<String, dynamic>>().toList();
+        }
         return Container(
           color: bg,
           child: SingleChildScrollView(
@@ -4808,24 +4838,46 @@ class _AppControlsState extends State<_AppControls> {
         final blockedApps = (data['blockedApps'] as List<dynamic>? ?? []).map((e) => e.toString()).toList();
         final hiddenApps = (data['hiddenApps'] as List<dynamic>? ?? []).map((e) => e.toString()).toList();
         final appSchedules = data['appSchedules'] as Map<String, dynamic>? ?? {};
-        
-        final filteredApps = apps.where((app) {
-          final d = app as Map<String, dynamic>;
-          final pkg = (d['packageName'] ?? '').toString();
-          final name = (d['appName'] ?? d['name'] ?? d['label'] ?? '').toString().toLowerCase();
-          
-          // Apply search filter
-          final query = _searchQuery.toLowerCase();
-          final matchesSearch = name.contains(query) || pkg.toLowerCase().contains(query);
-          if (!matchesSearch) return false;
-          
-          // Apply category filter
-          if (_filterMode == 'blocked') return blockedApps.contains(pkg);
-          if (_filterMode == 'hidden') return hiddenApps.contains(pkg);
-          if (_filterMode == 'allowed') return !blockedApps.contains(pkg) && !hiddenApps.contains(pkg);
-          
-          return true; // 'all' mode
-        }).toList();
+
+        // Build a lookup map from packageName -> app data for enrichment
+        final installedMapDesktop = <String, Map<String, dynamic>>{};
+        for (final a in apps) {
+          final m = a as Map<String, dynamic>;
+          final p = (m['packageName'] ?? '').toString();
+          if (p.isNotEmpty) installedMapDesktop[p] = m;
+        }
+        final query = _searchQuery.toLowerCase();
+
+        List<Map<String, dynamic>> filteredApps;
+        if (_filterMode == 'blocked') {
+          filteredApps = blockedApps.map<Map<String, dynamic>>((pkg) =>
+            installedMapDesktop[pkg] ?? {'packageName': pkg, 'appName': '', 'name': '', 'label': ''}
+          ).where((app) {
+            final pkg = (app['packageName'] ?? '').toString();
+            final name = (app['appName'] ?? app['name'] ?? app['label'] ?? pkg).toString().toLowerCase();
+            final effectiveName = name.isNotEmpty ? name : pkg.toLowerCase();
+            return query.isEmpty || effectiveName.contains(query) || pkg.toLowerCase().contains(query);
+          }).toList();
+        } else if (_filterMode == 'hidden') {
+          filteredApps = hiddenApps.map<Map<String, dynamic>>((pkg) =>
+            installedMapDesktop[pkg] ?? {'packageName': pkg, 'appName': '', 'name': '', 'label': ''}
+          ).where((app) {
+            final pkg = (app['packageName'] ?? '').toString();
+            final name = (app['appName'] ?? app['name'] ?? app['label'] ?? pkg).toString().toLowerCase();
+            final effectiveName = name.isNotEmpty ? name : pkg.toLowerCase();
+            return query.isEmpty || effectiveName.contains(query) || pkg.toLowerCase().contains(query);
+          }).toList();
+        } else {
+          filteredApps = apps.where((app) {
+            final d = app as Map<String, dynamic>;
+            final pkg = (d['packageName'] ?? '').toString();
+            final name = (d['appName'] ?? d['name'] ?? d['label'] ?? '').toString().toLowerCase();
+            final matchesSearch = name.contains(query) || pkg.toLowerCase().contains(query);
+            if (!matchesSearch) return false;
+            if (_filterMode == 'allowed') return !blockedApps.contains(pkg) && !hiddenApps.contains(pkg);
+            return true; // 'all' mode
+          }).cast<Map<String, dynamic>>().toList();
+        }
 
         return StreamBuilder<DocumentSnapshot>(
           stream: FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser?.uid).snapshots(),
