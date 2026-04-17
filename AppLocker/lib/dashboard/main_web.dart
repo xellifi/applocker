@@ -15,9 +15,10 @@ import 'package:flutter_animate/flutter_animate.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Disable runtime fetching to avoid CORS and long loading issues on Web.
-  // The correct fonts are already loaded via index.html.
-  GoogleFonts.config.allowRuntimeFetching = false;
+  // Allow runtime fetching so the google_fonts package can download Outfit
+  // from Google CDN. The app already preconnects to fonts.googleapis.com
+  // in index.html, so there are no CORS issues.
+  GoogleFonts.config.allowRuntimeFetching = true;
 
   try {
     await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
