@@ -949,7 +949,9 @@ class _MobileDashboardHome extends StatelessWidget {
                 else
                   ...docs.take(6).map((doc) {
                     final data = doc.data() as Map<String, dynamic>;
-                    final name = data['deviceName'] ?? data['name'] ?? 'Unknown Device';
+                    // Match same field priority as the Devices page
+                    final rawName = data['model'] ?? data['deviceName'] ?? data['name'] ?? data['brand'] ?? '';
+                    final name = rawName.toString().trim().isEmpty ? doc.id : rawName.toString().trim();
                     final status = data['status'] ?? 'offline';
                     final battery = data['battery'] ?? data['batteryLevel'] ?? 0;
                     final lastSeen = data['lastSeen'] as Timestamp?;
