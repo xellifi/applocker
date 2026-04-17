@@ -1897,9 +1897,7 @@ class _ScheduleLockSheetState extends State<_ScheduleLockSheet> {
   TimeOfDay _endTime = const TimeOfDay(hour: 6, minute: 0);
   bool _saving = false;
 
-  List<Map<String, dynamic>> get _schedules =>
-      (widget.deviceData['lockSchedules'] as List<dynamic>? ?? []).map((s) => Map<String, dynamic>.from(s as Map)).toList();
-
+  // ── helpers ────────────────────────────────────────────────────────────────
   String _fmtTimeStore(TimeOfDay t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
   String _fmtTime(TimeOfDay t) {
@@ -1919,25 +1917,65 @@ class _ScheduleLockSheetState extends State<_ScheduleLockSheet> {
     return '$h:${m.toString().padLeft(2, '0')} $period';
   }
 
+  /// Returns true if the current time is inside the given start→end window.
+  bool _isNowInWindow(String start24, String end24) {
+    final now = TimeOfDay.now();
+    final nowMin = now.hour * 60 + now.minute;
+    final sp = start24.split(':');
+    final ep = end24.split(':');
+    if (sp.length < 2 || ep.length < 2) return false;
+    final startMin = (int.tryParse(sp[0]) ?? 0) * 60 + (int.tryParse(sp[1]) ?? 0);
+    final endMin   = (int.tryParse(ep[0]) ?? 0) * 60 + (int.tryParse(ep[1]) ?? 0);
+    // Handles overnight windows (e.g. 22:00 → 06:00)
+    if (startMin <= endMin) return nowMin >= startMin && nowMin < endMin;
+    return nowMin >= startMin || nowMin < endMin;
+  }
+
   Future<void> _pickTime(bool isStart) async {
     final picked = await showTimePicker(context: context, initialTime: isStart ? _startTime : _endTime,
       builder: (context, child) => Theme(data: ThemeData.light().copyWith(colorScheme: const ColorScheme.light(primary: Color(0xFF6366F1))), child: child!));
     if (picked != null) setState(() { if (isStart) _startTime = picked; else _endTime = picked; });
   }
 
-  Future<void> _addSchedule() async {
+  Future<void> _addSchedule(List<dynamic> currentSchedules) async {
     setState(() => _saving = true);
-    final current = List<dynamic>.from(widget.deviceData['lockSchedules'] ?? []);
-    current.add({'start': _fmtTimeStore(_startTime), 'end': _fmtTimeStore(_endTime)});
-    await FirebaseFirestore.instance.collection('devices').doc(widget.deviceId).update({'lockSchedules': current});
-    setState(() => _saving = false);
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Schedule added!'), backgroundColor: Color(0xFF22C55E)));
+    try {
+      final updated = List<dynamic>.from(currentSchedules)
+        ..add({'start': _fmtTimeStore(_startTime), 'end': _fmtTimeStore(_endTime)});
+      // Check if the new schedule is active right now — if so, lock immediately
+      final activeNow = _isNowInWindow(_fmtTimeStore(_startTime), _fmtTimeStore(_endTime));
+      final Map<String, dynamic> patch = {'lockSchedules': updated};
+      if (activeNow) {
+        patch['locked'] = true;
+        patch['lockReason'] = 'Scheduled lock: ${_fmtTime(_startTime)} – ${_fmtTime(_endTime)}';
+      }
+      await FirebaseFirestore.instance.collection('devices').doc(widget.deviceId).update(patch);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(activeNow ? 'Schedule added & device locked now!' : 'Schedule added!'),
+        backgroundColor: const Color(0xFF22C55E),
+      ));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
-  Future<void> _deleteSchedule(int index) async {
-    final current = List<dynamic>.from(widget.deviceData['lockSchedules'] ?? []);
-    current.removeAt(index);
-    await FirebaseFirestore.instance.collection('devices').doc(widget.deviceId).update({'lockSchedules': current});
+  Future<void> _deleteSchedule(List<dynamic> currentSchedules, int index) async {
+    final schedule = Map<String, dynamic>.from(currentSchedules[index] as Map);
+    final start24 = schedule['start'] as String? ?? '';
+    final end24   = schedule['end']   as String? ?? '';
+    final updated = List<dynamic>.from(currentSchedules)..removeAt(index);
+    // If this schedule is currently active, also clear the lock
+    final Map<String, dynamic> patch = {'lockSchedules': updated};
+    if (_isNowInWindow(start24, end24)) {
+      patch['locked'] = false;
+      patch['lockReason'] = null;
+      patch['lockedUntil'] = null;
+    }
+    await FirebaseFirestore.instance.collection('devices').doc(widget.deviceId).update(patch);
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(patch.containsKey('locked') ? 'Schedule deleted & device unlocked.' : 'Schedule deleted.'),
+      backgroundColor: const Color(0xFFEF4444),
+    ));
   }
 
   @override
@@ -1947,7 +1985,14 @@ class _ScheduleLockSheetState extends State<_ScheduleLockSheet> {
     final textColor = widget.isDark ? Colors.white : const Color(0xFF1E293B);
     final subColor = widget.isDark ? Colors.white54 : const Color(0xFF64748B);
     final cardBg = widget.isDark ? const Color(0xFF060D1F) : const Color(0xFFF8FAFC);
-    final existing = _schedules;
+
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance.collection('devices').doc(widget.deviceId).snapshots(),
+      builder: (context, snap) {
+        final liveData = snap.data?.data() as Map<String, dynamic>? ?? widget.deviceData;
+        final existing = (liveData['lockSchedules'] as List<dynamic>? ?? [])
+            .map((s) => Map<String, dynamic>.from(s as Map)).toList();
+
     return Container(
       margin: const EdgeInsets.fromLTRB(15, 0, 15, 15),
       height: h * 0.78,
@@ -2012,10 +2057,13 @@ class _ScheduleLockSheetState extends State<_ScheduleLockSheet> {
             ]),
             const SizedBox(height: 16),
             GestureDetector(
-              onTap: _saving ? null : _addSchedule,
+              onTap: _saving ? null : () => _addSchedule(existing),
               child: Container(
                 width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 15),
-                decoration: BoxDecoration(color: const Color(0xFF6366F1), borderRadius: BorderRadius.circular(14)),
+                decoration: BoxDecoration(
+                  color: _saving ? const Color(0xFF6366F1).withOpacity(0.6) : const Color(0xFF6366F1),
+                  borderRadius: BorderRadius.circular(14),
+                ),
                 child: Center(child: _saving
                   ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                   : Row(mainAxisSize: MainAxisSize.min, children: [
@@ -2028,25 +2076,58 @@ class _ScheduleLockSheetState extends State<_ScheduleLockSheet> {
             ),
             if (existing.isNotEmpty) ...[
               const SizedBox(height: 24),
-              Text('Active Schedules', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: textColor)),
+              Row(children: [
+                Text('Active Schedules', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: textColor)),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(color: const Color(0xFF6366F1).withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+                  child: Text('${existing.length}', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, color: const Color(0xFF6366F1))),
+                ),
+              ]),
               const SizedBox(height: 10),
               ...existing.asMap().entries.map((e) {
                 final s = e.value;
+                final start24 = s['start'] as String? ?? '';
+                final end24   = s['end']   as String? ?? '';
+                final activeNow = _isNowInWindow(start24, end24);
+                final borderCol = activeNow
+                    ? const Color(0xFFEF4444).withOpacity(0.6)
+                    : const Color(0xFF6366F1).withOpacity(0.25);
                 return Container(
                   margin: const EdgeInsets.only(bottom: 8),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.25))),
+                  decoration: BoxDecoration(
+                    color: activeNow ? const Color(0xFFEF4444).withOpacity(0.06) : cardBg,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: borderCol),
+                  ),
                   child: Row(children: [
-                    const Icon(Icons.lock_clock_rounded, color: Color(0xFF6366F1), size: 20),
+                    Icon(activeNow ? Icons.lock_rounded : Icons.lock_clock_rounded,
+                        color: activeNow ? const Color(0xFFEF4444) : const Color(0xFF6366F1), size: 20),
                     const SizedBox(width: 12),
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text('${_to12h(s['start'] ?? '')} → ${_to12h(s['end'] ?? '')}', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700, color: textColor)),
-                      Text('Device locked during this period', style: GoogleFonts.outfit(fontSize: 11, color: subColor)),
+                      Text('${_to12h(start24)} → ${_to12h(end24)}',
+                          style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700, color: textColor)),
+                      const SizedBox(height: 3),
+                      if (activeNow)
+                        Row(children: [
+                          Container(width: 7, height: 7,
+                              decoration: const BoxDecoration(color: Color(0xFFEF4444), shape: BoxShape.circle)),
+                          const SizedBox(width: 5),
+                          Text('Locking right now', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFFEF4444), fontWeight: FontWeight.w700)),
+                        ])
+                      else
+                        Text('Device locked during this period',
+                            style: GoogleFonts.outfit(fontSize: 11, color: subColor)),
                     ])),
                     GestureDetector(
-                      onTap: () => _deleteSchedule(e.key),
-                      child: Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: const Color(0xFFEF4444).withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                        child: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 16)),
+                      onTap: () => _deleteSchedule(existing, e.key),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(color: const Color(0xFFEF4444).withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
+                        child: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 18),
+                      ),
                     ),
                   ]),
                 );
@@ -2056,6 +2137,8 @@ class _ScheduleLockSheetState extends State<_ScheduleLockSheet> {
         )),
       ]),
     );
+    },  // closes StreamBuilder builder
+  );   // closes StreamBuilder
   }
 }
 
