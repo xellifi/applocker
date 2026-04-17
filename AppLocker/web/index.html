@@ -49,15 +49,38 @@
     (function () {
       window._pwaPrompt = null;
       window._pwaPromptCallback = null;
+      window._pwaInstallLastState = 'initializing';
 
-      // Already installed? mark it.
-      if (localStorage.getItem('pwa_installed') === 'true') {
+      function isStandalone() {
+        return window.matchMedia('(display-mode: standalone)').matches ||
+          window.matchMedia('(display-mode: fullscreen)').matches ||
+          window.navigator.standalone === true;
+      }
+
+      function isEmbedded() {
+        try {
+          return window.self !== window.top;
+        } catch (e) {
+          return true;
+        }
+      }
+
+      function directInstallUrl() {
+        if (window.location.pathname.indexOf('/__replco/') === 0) {
+          return window.location.origin + '/';
+        }
+        return window.location.origin + window.location.pathname + window.location.search;
+      }
+
+      if (isStandalone()) {
         window._pwaInstalled = true;
+        localStorage.setItem('pwa_installed', 'true');
       }
 
       window.addEventListener('beforeinstallprompt', function (e) {
         e.preventDefault();
         window._pwaPrompt = e;
+        window._pwaInstallLastState = 'ready';
         if (typeof window._pwaPromptCallback === 'function') {
           window._pwaPromptCallback();
         }
@@ -75,7 +98,7 @@
       // Called by Dart on install button tap.
       // Runs entirely in JS so the Promise chain works reliably.
       window.triggerPwaInstall = function () {
-        if (!window._pwaPrompt) return 'no_prompt';
+        if (!window._pwaPrompt) return 'no_prompt:' + window.getPwaInstallReason();
         var p = window._pwaPrompt;
         window._pwaPrompt = null;           // consume it
         p.prompt();
@@ -89,6 +112,7 @@
           } else {
             // User dismissed — restore so they can try again
             window._pwaPrompt = p;
+            window._pwaInstallLastState = 'dismissed';
           }
         });
         return 'prompted';
@@ -96,6 +120,38 @@
 
       window.hasPwaPrompt = function () {
         return window._pwaPrompt !== null;
+      };
+
+      window.getPwaInstallReason = function () {
+        if (isStandalone() || window._pwaInstalled === true) return 'installed';
+        if (window._pwaPrompt) return 'ready';
+        if (isEmbedded()) return 'embedded_preview';
+        if (!window.isSecureContext && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+          return 'insecure_context';
+        }
+        if (!('serviceWorker' in navigator)) return 'service_worker_unavailable';
+        return window._pwaInstallLastState || 'waiting_for_browser';
+      };
+
+      window.getPwaInstallDebug = function () {
+        return JSON.stringify({
+          reason: window.getPwaInstallReason(),
+          hasPrompt: window._pwaPrompt !== null,
+          embedded: isEmbedded(),
+          standalone: isStandalone(),
+          secureContext: window.isSecureContext,
+          serviceWorkerSupported: 'serviceWorker' in navigator,
+          serviceWorkerControlled: !!(navigator.serviceWorker && navigator.serviceWorker.controller),
+          manifestHref: document.querySelector('link[rel="manifest"]') ? document.querySelector('link[rel="manifest"]').href : '',
+          directInstallUrl: directInstallUrl(),
+          userAgent: navigator.userAgent
+        });
+      };
+
+      window.openPwaInstallTarget = function () {
+        var url = directInstallUrl();
+        window.open(url, '_blank', 'noopener,noreferrer');
+        return url;
       };
 
       // Disable pull-to-refresh on Chrome Android

@@ -10,6 +10,7 @@ import '../firebase_options.dart';
 import 'dashboard_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'dart:convert';
 import 'dart:math';
 // ignore: avoid_web_libraries_in_flutter
 import 'dart:html' as html;
@@ -100,12 +101,6 @@ class _PwaInstallManager {
   static bool _sessionDismissed = false;
 
   static void init(VoidCallback onPromptAvailable) {
-    // Already installed? Never show again.
-    if (html.window.localStorage['pwa_installed'] == 'true' ||
-        js.context['_pwaInstalled'] == true) {
-      _installed = true;
-      return;
-    }
     // Running as installed PWA (standalone/fullscreen)? Never show banner.
     try {
       final isStandalone = js.context.callMethod('eval', [
@@ -151,15 +146,42 @@ class _PwaInstallManager {
       js.context['_pwaPrompt'] != null && !_installed;
 
   static bool get isInstalled =>
-      _installed || html.window.localStorage['pwa_installed'] == 'true';
+      _installed;
 
-  static Future<bool> prompt() async {
+  static String get installReason {
+    try {
+      return js.context.callMethod('getPwaInstallReason', [])?.toString() ??
+          'unknown';
+    } catch (_) {
+      return 'unknown';
+    }
+  }
+
+  static Map<String, dynamic> get installDebug {
+    try {
+      final raw = js.context.callMethod('getPwaInstallDebug', [])?.toString();
+      if (raw == null || raw.isEmpty) return const {};
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) return decoded;
+    } catch (_) {}
+    return const {};
+  }
+
+  static String openInstallTarget() {
+    try {
+      return js.context.callMethod('openPwaInstallTarget', [])?.toString() ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  static Future<String> prompt() async {
     try {
       final result = js.context.callMethod('triggerPwaInstall', []);
-      return result == 'prompted';
+      return result?.toString() ?? 'no_prompt:unknown';
     } catch (e) {
       js.context['_pwaPrompt'] = null;
-      return false;
+      return 'no_prompt:js_error';
     }
   }
 
@@ -303,17 +325,109 @@ class _PwaInstallBannerState extends State<_PwaInstallBanner>
   }
 
   void _handleInstall() {
-    final hasPrompt = js.context.callMethod('hasPwaPrompt', []) == true;
-    if (!hasPrompt) {
-      _showManualInstallGuide();
-      return;
-    }
-    _PwaInstallManager.prompt().then((triggered) {
-      if (triggered && mounted) widget.onInstall();
+    _PwaInstallManager.prompt().then((result) {
+      if (!mounted) return;
+      if (result == 'prompted') return;
+      final reason = result.startsWith('no_prompt:')
+          ? result.substring('no_prompt:'.length)
+          : _PwaInstallManager.installReason;
+      if (reason == 'embedded_preview') {
+        _showDirectInstallDialog();
+      } else {
+        _showManualInstallGuide(reason: reason);
+      }
     });
   }
 
-  void _showManualInstallGuide() {
+  void _showDirectInstallDialog() {
+    final debug = _PwaInstallManager.installDebug;
+    final targetUrl = (debug['directInstallUrl'] ?? '').toString();
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.75),
+      builder: (_) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 60),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 400),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E293B),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.4), width: 1.5),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.6), blurRadius: 32)],
+          ),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Container(
+                  width: 40, height: 40,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)]),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.open_in_new_rounded, color: Colors.white, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(child: Text('Open AppLocker to install',
+                  style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white, decoration: TextDecoration.none))),
+                GestureDetector(
+                  onTap: () => Navigator.of(context, rootNavigator: true).pop(),
+                  child: const Icon(Icons.close_rounded, color: Colors.white38, size: 20),
+                ),
+              ]),
+              const SizedBox(height: 10),
+              Text('The app-style install prompt cannot appear inside this preview window. Open AppLocker directly, then tap Install App again to trigger the native browser install popup.',
+                style: GoogleFonts.outfit(fontSize: 12, color: Colors.white70, height: 1.5, decoration: TextDecoration.none)),
+              if (targetUrl.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(targetUrl,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.outfit(fontSize: 11, color: Colors.white38, height: 1.4, decoration: TextDecoration.none)),
+              ],
+              const SizedBox(height: 22),
+              GestureDetector(
+                onTap: () {
+                  _PwaInstallManager.openInstallTarget();
+                  Navigator.of(context, rootNavigator: true).pop();
+                },
+                child: Container(
+                  width: double.infinity, height: 46,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)]),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Center(child: Text('Open Install Page',
+                    style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15, decoration: TextDecoration.none))),
+                ),
+              ),
+              const SizedBox(height: 12),
+              GestureDetector(
+                onTap: () {
+                  Navigator.of(context, rootNavigator: true).pop();
+                  _showManualInstallGuide(reason: 'embedded_preview');
+                },
+                child: Center(child: Text('Show manual steps instead',
+                  style: GoogleFonts.outfit(color: Colors.white54, fontWeight: FontWeight.w600, fontSize: 12, decoration: TextDecoration.none))),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showManualInstallGuide({String reason = 'waiting_for_browser'}) {
+    final message = switch (reason) {
+      'insecure_context' => 'The browser requires a secure HTTPS page before it can show the app install popup.',
+      'service_worker_unavailable' => 'This browser does not support the service worker needed for app installation.',
+      'dismissed' => 'Chrome paused the native popup after it was dismissed. You can still install from the browser menu.',
+      'embedded_preview' => 'The preview window cannot show the native install popup. Open the app directly or use these steps.',
+      _ => 'Chrome is not ready to show the app install popup yet. Use this quick method instead:',
+    };
     showDialog(
       context: context,
       barrierColor: Colors.black.withOpacity(0.75),
@@ -351,7 +465,7 @@ class _PwaInstallBannerState extends State<_PwaInstallBanner>
                 ),
               ]),
               const SizedBox(height: 8),
-              Text('Chrome is not ready to install right now. Use this quick method instead:',
+              Text(message,
                 style: GoogleFonts.outfit(fontSize: 12, color: Colors.white54, height: 1.5, decoration: TextDecoration.none)),
               const SizedBox(height: 20),
               _guideStep('1', Icons.more_vert_rounded, 'Tap the menu (⋮)',
