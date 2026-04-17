@@ -49,7 +49,7 @@ These are configurable in the "UNLOCK PAGE CUSTOMISATION" section in Settings.
 ## Running the App
 
 ### Development
-The workflow "AppLocker Dashboard" serves the pre-built Flutter web app on port 5000 using `serve`.
+The workflow "Start application" serves the pre-built Flutter web app on port 5000 using Python's static HTTP server.
 
 ### Building
 To rebuild the Flutter web app:
@@ -60,7 +60,7 @@ flutter build web --target lib/dashboard/main_web.dart --release
 
 ### Workflow Command
 ```
-npx serve -s AppLocker/build/web -l 5000 --no-clipboard
+python3 -m http.server 5000 --directory AppLocker/build/web
 ```
 
 ## Deployment
@@ -94,3 +94,8 @@ Configured as a static deployment:
 6. **Subscriptions**: `_upgradePlan` replaced with full payment flow — GCash/Maya/Bank Transfer selection, QR code display, proof-of-payment URL input, transaction saved to `transactions` Firestore collection with `pending` status for admin approval
 7. **Settings**: Initialization bug fixed — uses `_settingsInitialized` flag with `addPostFrameCallback` + `setState` to avoid duplicate calls
 8. **Profile (Mobile + Desktop)**: Photo URL field added; avatar renders `NetworkImage` when URL present; camera icon toggles URL input; saves `photoURL` to Firestore `users` collection and Firebase Auth
+
+## Replit Migration Notes
+- Dependencies are restored with `flutter pub get` inside `AppLocker/`.
+- The Replit workflow serves the built dashboard from `AppLocker/build/web` on port 5000.
+- A missing `web/favicon.png` was restored from the existing Flutter icon assets to prevent unnecessary 404s in the preview logs.
