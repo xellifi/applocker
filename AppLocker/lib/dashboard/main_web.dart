@@ -797,6 +797,7 @@ class _PwaInstallBannerState extends State<_PwaInstallBanner>
                 children: [
                   // ── Main row ──────────────────────────────────────────
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Container(
                         width: 46,
@@ -844,6 +845,19 @@ class _PwaInstallBannerState extends State<_PwaInstallBanner>
                               ),
                             ),
                           ],
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: widget.onDismiss,
+                        child: Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.close_rounded,
+                              color: Colors.white54, size: 16),
                         ),
                       ),
                     ],
