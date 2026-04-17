@@ -96,15 +96,16 @@ class _BrowserInfo {
 class _PwaInstallManager {
   static bool _installed = false;
 
+  // Session-only dismissed flag (resets on every page load)
+  static bool _sessionDismissed = false;
+
   static void init(VoidCallback onPromptAvailable) {
-    // Already installed via previous session?
+    // Already installed? Never show again.
     if (html.window.localStorage['pwa_installed'] == 'true' ||
         js.context['_pwaInstalled'] == true) {
       _installed = true;
       return;
     }
-    // Already dismissed?
-    if (wasDismissed) return;
 
     // In-app browsers will never have the prompt — show banner with guidance.
     if (_BrowserInfo.isInAppBrowser) {
@@ -119,7 +120,7 @@ class _PwaInstallManager {
 
     // Register callback so if it fires after Flutter loads (rare), we handle it.
     js.context['_pwaPromptCallback'] = js.allowInterop(() {
-      if (!wasDismissed && !_installed) onPromptAvailable();
+      if (!_sessionDismissed && !_installed) onPromptAvailable();
     });
 
     // Listen for install completion
@@ -127,9 +128,9 @@ class _PwaInstallManager {
       _installed = true;
     });
 
-    // Fallback: if no prompt in 4s and browser supports it, show instructions anyway
-    Future.delayed(const Duration(seconds: 4), () {
-      if (js.context['_pwaPrompt'] == null && !_installed && !wasDismissed) {
+    // Fallback: always show the banner after 3s so users know they can install
+    Future.delayed(const Duration(seconds: 3), () {
+      if (!_sessionDismissed && !_installed) {
         onPromptAvailable();
       }
     });
@@ -140,9 +141,6 @@ class _PwaInstallManager {
 
   static bool get isInstalled =>
       _installed || html.window.localStorage['pwa_installed'] == 'true';
-
-  static bool get wasDismissed =>
-      html.window.localStorage['pwa_install_dismissed'] == 'true';
 
   static Future<bool> prompt() async {
     final p = js.context['_pwaPrompt'];
@@ -157,9 +155,10 @@ class _PwaInstallManager {
     }
   }
 
+  // Dismiss only for this session — banner returns on next visit
   static void dismiss() {
     js.context['_pwaPrompt'] = null;
-    html.window.localStorage['pwa_install_dismissed'] = 'true';
+    _sessionDismissed = true;
   }
 }
 
@@ -177,9 +176,7 @@ class _ParentDashboardAppState extends State<ParentDashboardApp> {
   void initState() {
     super.initState();
     _PwaInstallManager.init(() {
-      if (mounted && !_PwaInstallManager.wasDismissed) {
-        setState(() => _showInstallBanner = true);
-      }
+      if (mounted) setState(() => _showInstallBanner = true);
     });
   }
 
@@ -200,18 +197,11 @@ class _ParentDashboardAppState extends State<ParentDashboardApp> {
       home: Builder(
         builder: (context) => Stack(
           children: [
-            _AppShell(
-              onInstallReady: () {
-                if (!_PwaInstallManager.wasDismissed) {
-                  setState(() => _showInstallBanner = true);
-                }
-              },
-            ),
+            const _AppShell(),
             if (_showInstallBanner)
               _PwaInstallBanner(
-                onInstall: () async {
+                onInstall: () {
                   setState(() => _showInstallBanner = false);
-                  await _PwaInstallManager.prompt();
                 },
                 onDismiss: () {
                   _PwaInstallManager.dismiss();
@@ -227,24 +217,22 @@ class _ParentDashboardAppState extends State<ParentDashboardApp> {
 
 // ─── App shell (onboarding → login / dashboard) ───────────────────────────────
 class _AppShell extends StatefulWidget {
-  final VoidCallback onInstallReady;
-  const _AppShell({required this.onInstallReady});
+  const _AppShell();
 
   @override
   State<_AppShell> createState() => _AppShellState();
 }
 
 class _AppShellState extends State<_AppShell> {
+  // Always show onboarding on every fresh visit — skip button is available.
   bool _onboardingDone = false;
 
   @override
   void initState() {
     super.initState();
-    _onboardingDone = html.window.localStorage['onboarding_complete'] == 'true';
   }
 
   void _finishOnboarding() {
-    html.window.localStorage['onboarding_complete'] = 'true';
     setState(() => _onboardingDone = true);
   }
 
