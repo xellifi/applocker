@@ -58,7 +58,6 @@
       window.addEventListener('beforeinstallprompt', function (e) {
         e.preventDefault();
         window._pwaPrompt = e;
-        // If Flutter is already running, call the Dart-registered callback
         if (typeof window._pwaPromptCallback === 'function') {
           window._pwaPromptCallback();
         }
@@ -72,6 +71,32 @@
           window._pwaInstalledCallback();
         }
       });
+
+      // Called by Dart on install button tap.
+      // Runs entirely in JS so the Promise chain works reliably.
+      window.triggerPwaInstall = function () {
+        if (!window._pwaPrompt) return 'no_prompt';
+        var p = window._pwaPrompt;
+        window._pwaPrompt = null;           // consume it
+        p.prompt();
+        p.userChoice.then(function (result) {
+          if (result.outcome === 'accepted') {
+            localStorage.setItem('pwa_installed', 'true');
+            window._pwaInstalled = true;
+            if (typeof window._pwaInstalledCallback === 'function') {
+              window._pwaInstalledCallback();
+            }
+          } else {
+            // User dismissed — restore so they can try again
+            window._pwaPrompt = p;
+          }
+        });
+        return 'prompted';
+      };
+
+      window.hasPwaPrompt = function () {
+        return window._pwaPrompt !== null;
+      };
     })();
   </script>
 

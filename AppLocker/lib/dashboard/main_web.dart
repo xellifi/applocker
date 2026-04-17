@@ -143,12 +143,9 @@ class _PwaInstallManager {
       _installed || html.window.localStorage['pwa_installed'] == 'true';
 
   static Future<bool> prompt() async {
-    final p = js.context['_pwaPrompt'];
-    if (p == null) return false;
     try {
-      (p as js.JsObject).callMethod('prompt', []);
-      js.context['_pwaPrompt'] = null;
-      return true;
+      final result = js.context.callMethod('triggerPwaInstall', []);
+      return result == 'prompted';
     } catch (e) {
       js.context['_pwaPrompt'] = null;
       return false;
@@ -157,7 +154,6 @@ class _PwaInstallManager {
 
   // Dismiss only for this session — banner returns on next visit
   static void dismiss() {
-    js.context['_pwaPrompt'] = null;
     _sessionDismissed = true;
   }
 }
@@ -296,8 +292,25 @@ class _PwaInstallBannerState extends State<_PwaInstallBanner>
   }
 
   void _handleInstall() {
-    _PwaInstallManager.prompt().then((_) {
-      if (mounted) widget.onInstall();
+    final hasPrompt = js.context.callMethod('hasPwaPrompt', []) == true;
+    if (!hasPrompt) {
+      // Browser hasn't provided an install prompt yet — guide the user
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF1E293B),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          content: Text(
+            'To install: tap the browser menu (⋮) and choose "Add to Home screen".',
+            style: GoogleFonts.outfit(color: Colors.white, fontSize: 13),
+          ),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+      return;
+    }
+    _PwaInstallManager.prompt().then((triggered) {
+      if (triggered && mounted) widget.onInstall();
     });
   }
 
