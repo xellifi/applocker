@@ -106,6 +106,17 @@ class _PwaInstallManager {
       _installed = true;
       return;
     }
+    // Running as installed PWA (standalone/fullscreen)? Never show banner.
+    try {
+      final isStandalone = js.context.callMethod('eval', [
+        "window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(display-mode: fullscreen)').matches || window.navigator.standalone === true"
+      ]);
+      if (isStandalone == true) {
+        _installed = true;
+        html.window.localStorage['pwa_installed'] = 'true';
+        return;
+      }
+    } catch (_) {}
 
     // In-app browsers will never have the prompt — show banner with guidance.
     if (_BrowserInfo.isInAppBrowser) {
@@ -718,91 +729,49 @@ class _PwaInstallBannerState extends State<_PwaInstallBanner>
                           ],
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      GestureDetector(
-                        onTap: widget.onDismiss,
-                        child: Container(
-                          width: 28,
-                          height: 28,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.08),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.close_rounded,
-                              color: Colors.white38, size: 16),
-                        ),
-                      ),
                     ],
                   ),
 
                   // ── Install button ─────────────────────────────────────
                   if (showInstallBtn) ...[
                     const SizedBox(height: 16),
-                    Row(children: [
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: widget.onDismiss,
-                          child: Container(
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.07),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.white.withOpacity(0.1)),
+                    GestureDetector(
+                      onTap: _handleInstall,
+                      child: Container(
+                        width: double.infinity,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                          ),
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF6366F1).withOpacity(0.45),
+                              blurRadius: 16,
+                              offset: const Offset(0, 4),
                             ),
-                            child: Center(
-                              child: Text('Not now',
-                                style: GoogleFonts.outfit(
-                                  color: Colors.white38,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
-                                  decoration: TextDecoration.none,
-                                ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.download_rounded,
+                                color: Colors.white, size: 20),
+                            const SizedBox(width: 10),
+                            Text(
+                              'Install App',
+                              style: GoogleFonts.outfit(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 16,
+                                decoration: TextDecoration.none,
                               ),
                             ),
-                          ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        flex: 2,
-                        child: GestureDetector(
-                          onTap: _handleInstall,
-                          child: Container(
-                            height: 44,
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
-                              ),
-                              borderRadius: BorderRadius.circular(12),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: const Color(0xFF6366F1).withOpacity(0.45),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(Icons.download_rounded,
-                                    color: Colors.white, size: 18),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Install App',
-                                  style: GoogleFonts.outfit(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 15,
-                                    decoration: TextDecoration.none,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ]),
+                    ),
                   ],
                 ],
               ),

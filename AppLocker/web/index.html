@@ -97,15 +97,32 @@
       window.hasPwaPrompt = function () {
         return window._pwaPrompt !== null;
       };
+
+      // Disable pull-to-refresh on Chrome Android
+      var _touchStartY = 0;
+      document.addEventListener('touchstart', function (e) {
+        _touchStartY = e.touches[0].clientY;
+      }, { passive: true });
+      document.addEventListener('touchmove', function (e) {
+        var y = e.touches[0].clientY;
+        // Block downward swipe at the top of the page
+        if (y > _touchStartY && window.scrollY === 0) {
+          e.preventDefault();
+        }
+      }, { passive: false });
     })();
   </script>
 
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
+    html, body {
       background: #060D1F;
       font-family: 'Outfit', sans-serif;
       overflow: hidden;
+      /* Disable pull-to-refresh and overscroll bounce */
+      overscroll-behavior: none;
+      overscroll-behavior-y: none;
+      touch-action: pan-x pan-y;
     }
     #loading {
       position: fixed;
