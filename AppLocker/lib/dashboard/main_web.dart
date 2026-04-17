@@ -208,18 +208,18 @@ class _PwaInstallBanner extends StatefulWidget {
 class _PwaInstallBannerState extends State<_PwaInstallBanner>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
-  late final Animation<Offset> _slideAnim;
+  late final Animation<double> _scaleAnim;
   late final Animation<double> _fadeAnim;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
-    _slideAnim = Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero)
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 400));
+    _scaleAnim = Tween<double>(begin: 0.92, end: 1.0)
         .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
     _fadeAnim = Tween<double>(begin: 0, end: 1)
         .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
-    Future.delayed(const Duration(milliseconds: 800), () {
+    Future.delayed(const Duration(milliseconds: 600), () {
       if (mounted) _ctrl.forward();
     });
   }
@@ -230,25 +230,153 @@ class _PwaInstallBannerState extends State<_PwaInstallBanner>
     super.dispose();
   }
 
+  void _handleInstall(BuildContext context) async {
+    if (_PwaInstallManager.canInstall) {
+      widget.onInstall();
+    } else {
+      _showInstallInstructions(context);
+    }
+  }
+
+  void _showInstallInstructions(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.7),
+      builder: (_) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 400),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
+            ),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: const Color(0xFF6366F1).withOpacity(0.4),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF6366F1).withOpacity(0.2),
+                blurRadius: 40,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.install_mobile_rounded,
+                        color: Colors.white, size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'How to Install',
+                      style: GoogleFonts.outfit(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.of(context).pop(),
+                    child: Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.08),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.close_rounded,
+                          color: Colors.white54, size: 16),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              _InstructionStep(
+                icon: Icons.desktop_windows_rounded,
+                label: 'Chrome / Edge (Desktop)',
+                detail: 'Click the install icon (⊕) in the address bar, or open the browser menu and select "Install AppLocker".',
+              ),
+              const SizedBox(height: 12),
+              _InstructionStep(
+                icon: Icons.phone_android_rounded,
+                label: 'Chrome (Android)',
+                detail: 'Tap the 3-dot menu then tap "Add to Home screen" or "Install app".',
+              ),
+              const SizedBox(height: 12),
+              _InstructionStep(
+                icon: Icons.phone_iphone_rounded,
+                label: 'Safari (iPhone / iPad)',
+                detail: 'Tap the Share button (□↑), then scroll down and tap "Add to Home Screen".',
+              ),
+              const SizedBox(height: 20),
+              GestureDetector(
+                onTap: () => Navigator.of(context).pop(),
+                child: Container(
+                  width: double.infinity,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF6366F1).withOpacity(0.4),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: Text(
+                      'Got it',
+                      style: GoogleFonts.outfit(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 600;
-
-    return Positioned(
-      bottom: 0, left: 0, right: 0,
+    return Positioned.fill(
       child: FadeTransition(
         opacity: _fadeAnim,
-        child: SlideTransition(
-          position: _slideAnim,
-          child: Align(
-            alignment: isMobile ? Alignment.bottomCenter : Alignment.bottomRight,
+        child: ScaleTransition(
+          scale: _scaleAnim,
+          child: Center(
             child: Container(
-              margin: EdgeInsets.only(
-                left: isMobile ? 16 : 0,
-                right: isMobile ? 16 : 24,
-                bottom: isMobile ? 20 : 24,
-              ),
-              constraints: BoxConstraints(maxWidth: isMobile ? double.infinity : 380),
+              margin: const EdgeInsets.symmetric(horizontal: 24),
+              constraints: const BoxConstraints(maxWidth: 400),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
                   begin: Alignment.topLeft,
@@ -263,18 +391,18 @@ class _PwaInstallBannerState extends State<_PwaInstallBanner>
                 boxShadow: [
                   BoxShadow(
                     color: const Color(0xFF6366F1).withOpacity(0.25),
-                    blurRadius: 32,
+                    blurRadius: 40,
                     offset: const Offset(0, 8),
                   ),
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.4),
-                    blurRadius: 24,
+                    color: Colors.black.withOpacity(0.5),
+                    blurRadius: 32,
                     offset: const Offset(0, 4),
                   ),
                 ],
               ),
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 18, 16, 18),
+                padding: const EdgeInsets.fromLTRB(20, 20, 16, 20),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -347,16 +475,6 @@ class _PwaInstallBannerState extends State<_PwaInstallBanner>
                     const SizedBox(height: 16),
                     Row(
                       children: [
-                        _InstallFeatureChip(Icons.notifications_active_rounded, 'Live Alerts'),
-                        const SizedBox(width: 8),
-                        _InstallFeatureChip(Icons.wifi_off_rounded, 'Works Offline'),
-                        const SizedBox(width: 8),
-                        _InstallFeatureChip(Icons.speed_rounded, 'Fast Launch'),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
                         Expanded(
                           child: GestureDetector(
                             onTap: widget.onDismiss,
@@ -384,38 +502,40 @@ class _PwaInstallBannerState extends State<_PwaInstallBanner>
                         const SizedBox(width: 10),
                         Expanded(
                           flex: 2,
-                          child: GestureDetector(
-                            onTap: widget.onInstall,
-                            child: Container(
-                              height: 44,
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
-                                ),
-                                borderRadius: BorderRadius.circular(12),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(0xFF6366F1).withOpacity(0.4),
-                                    blurRadius: 12,
-                                    offset: const Offset(0, 4),
+                          child: Builder(
+                            builder: (ctx) => GestureDetector(
+                              onTap: () => _handleInstall(ctx),
+                              child: Container(
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
                                   ),
-                                ],
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const Icon(Icons.download_rounded,
-                                      color: Colors.white, size: 18),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'Install App',
-                                    style: GoogleFonts.outfit(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 14,
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFF6366F1).withOpacity(0.4),
+                                      blurRadius: 12,
+                                      offset: const Offset(0, 4),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.download_rounded,
+                                        color: Colors.white, size: 18),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Install App',
+                                      style: GoogleFonts.outfit(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -433,33 +553,52 @@ class _PwaInstallBannerState extends State<_PwaInstallBanner>
   }
 }
 
-class _InstallFeatureChip extends StatelessWidget {
+class _InstructionStep extends StatelessWidget {
   final IconData icon;
   final String label;
-  const _InstallFeatureChip(this.icon, this.label);
+  final String detail;
+  const _InstructionStep({required this.icon, required this.label, required this.detail});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: const Color(0xFF6366F1).withOpacity(0.12),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-            color: const Color(0xFF6366F1).withOpacity(0.25), width: 1),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: const Color(0xFF818CF8)),
-          const SizedBox(width: 5),
-          Text(label,
-              style: GoogleFonts.outfit(
-                  fontSize: 10,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: const Color(0xFF6366F1).withOpacity(0.15),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 16, color: const Color(0xFF818CF8)),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: GoogleFonts.outfit(
+                  fontSize: 13,
                   fontWeight: FontWeight.w700,
-                  color: const Color(0xFF818CF8))),
-        ],
-      ),
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                detail,
+                style: GoogleFonts.outfit(
+                  fontSize: 12,
+                  color: Colors.white54,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
