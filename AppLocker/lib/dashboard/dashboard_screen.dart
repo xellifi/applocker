@@ -2564,6 +2564,26 @@ class _MobileAppControlsViewState extends State<_MobileAppControlsView> {
         final apps = data['installedApps'] as List<dynamic>? ?? [];
         final blockedApps = (data['blockedApps'] as List<dynamic>? ?? []).map((e) => e.toString()).toSet();
         final hiddenApps = (data['hiddenApps'] as List<dynamic>? ?? []).map((e) => e.toString()).toSet();
+        final appSchedulesMap = data['appSchedules'] as Map<String, dynamic>? ?? {};
+        // Helper: is a schedule entry currently active?
+        bool isSchedActive(Map<String, dynamic> s) {
+          if (s['alwaysBlocked'] == true) return true;
+          final sp = (s['start'] as String? ?? '').split(':');
+          final ep = (s['end']   as String? ?? '').split(':');
+          if (sp.length < 2 || ep.length < 2) return false;
+          final now = TimeOfDay.now();
+          final nowMin = now.hour * 60 + now.minute;
+          final sMin = (int.tryParse(sp[0]) ?? 0) * 60 + (int.tryParse(sp[1]) ?? 0);
+          final eMin = (int.tryParse(ep[0]) ?? 0) * 60 + (int.tryParse(ep[1]) ?? 0);
+          return sMin <= eMin ? nowMin >= sMin && nowMin < eMin : nowMin >= sMin || nowMin < eMin;
+        }
+        // All packages that are blocked either explicitly or via active schedule
+        final effectivelyBlocked = <String>{
+          ...blockedApps,
+          ...appSchedulesMap.entries
+              .where((e) => e.value is Map && isSchedActive(Map<String, dynamic>.from(e.value as Map)))
+              .map((e) => e.key),
+        };
         // Build a lookup map from packageName -> app data for enrichment
         final installedMap = <String, Map<String, dynamic>>{};
         for (final a in apps) {
@@ -2573,8 +2593,8 @@ class _MobileAppControlsViewState extends State<_MobileAppControlsView> {
         }
         List<Map<String, dynamic>> filtered;
         if (_filterMode == 'blocked') {
-          // Show all blocked packages; enrich with installedApps data where available
-          filtered = blockedApps.map<Map<String, dynamic>>((pkg) =>
+          // Show all effectively-blocked packages; enrich with installedApps data where available
+          filtered = effectivelyBlocked.map<Map<String, dynamic>>((pkg) =>
             installedMap[pkg] ?? {'packageName': pkg, 'appName': '', 'name': '', 'label': ''}
           ).where((app) {
             final pkg = (app['packageName'] ?? '').toString();
@@ -2599,7 +2619,7 @@ class _MobileAppControlsViewState extends State<_MobileAppControlsView> {
             final d = app as Map<String, dynamic>;
             final pkg = (d['packageName'] ?? '').toString();
             final name = (d['appName'] ?? d['name'] ?? d['label'] ?? pkg).toString().toLowerCase();
-            if (_filterMode == 'allowed') { if (blockedApps.contains(pkg) || hiddenApps.contains(pkg)) return false; }
+            if (_filterMode == 'allowed') { if (effectivelyBlocked.contains(pkg) || hiddenApps.contains(pkg)) return false; }
             if (_searchQuery.isNotEmpty && !name.contains(_searchQuery) && !pkg.toLowerCase().contains(_searchQuery)) return false;
             return true;
           }).cast<Map<String, dynamic>>().toList();
@@ -2677,22 +2697,24 @@ class _MobileAppControlsViewState extends State<_MobileAppControlsView> {
                     final tColors = [const Color(0xFFD97706), const Color(0xFF1D4ED8), const Color(0xFFBE185D), const Color(0xFF065F46), const Color(0xFF3730A3)];
                     final ci = displayName.isNotEmpty ? displayName.codeUnitAt(0) % circleColors.length : 0;
                     final borderCol = isBlocked ? const Color(0xFFEF4444).withOpacity(0.4) : isHidden ? const Color(0xFFFBBF24).withOpacity(0.4) : borderColor;
-                    // Check for active block schedule on this app
-                    final allBlockSchedules = (data['appBlockSchedules'] as List<dynamic>? ?? []);
-                    final appSchedules = allBlockSchedules.where((s) => (s as Map)['pkg'] == pkg).toList();
-                    final hasSchedule = appSchedules.isNotEmpty;
-                    final bool scheduleActiveNow = appSchedules.any((s) {
-                      final sm = s as Map;
-                      final sp = (sm['start'] as String? ?? '').split(':');
-                      final ep = (sm['end']   as String? ?? '').split(':');
-                      if (sp.length < 2 || ep.length < 2) return false;
-                      final now = TimeOfDay.now();
-                      final nowMin = now.hour * 60 + now.minute;
-                      final startMin = (int.tryParse(sp[0]) ?? 0) * 60 + (int.tryParse(sp[1]) ?? 0);
-                      final endMin   = (int.tryParse(ep[0]) ?? 0) * 60 + (int.tryParse(ep[1]) ?? 0);
-                      if (startMin <= endMin) return nowMin >= startMin && nowMin < endMin;
-                      return nowMin >= startMin || nowMin < endMin;
-                    });
+                    // Check for block schedule on this app (stored in appSchedules map)
+                    final appScheduleMapAll = data['appSchedules'] as Map<String, dynamic>? ?? {};
+                    final appSchedEntry = appScheduleMapAll[pkg] as Map<String, dynamic>?;
+                    final hasSchedule = appSchedEntry != null;
+                    bool scheduleActiveNow = false;
+                    if (appSchedEntry != null) {
+                      final sp = (appSchedEntry['start'] as String? ?? '').split(':');
+                      final ep = (appSchedEntry['end']   as String? ?? '').split(':');
+                      if (sp.length >= 2 && ep.length >= 2) {
+                        final now = TimeOfDay.now();
+                        final nowMin = now.hour * 60 + now.minute;
+                        final startMin = (int.tryParse(sp[0]) ?? 0) * 60 + (int.tryParse(sp[1]) ?? 0);
+                        final endMin   = (int.tryParse(ep[0]) ?? 0) * 60 + (int.tryParse(ep[1]) ?? 0);
+                        scheduleActiveNow = startMin <= endMin
+                            ? nowMin >= startMin && nowMin < endMin
+                            : nowMin >= startMin || nowMin < endMin;
+                      }
+                    }
                     final effectiveBorderCol = scheduleActiveNow
                         ? const Color(0xFFEF4444).withOpacity(0.6)
                         : borderCol;
@@ -2713,7 +2735,7 @@ class _MobileAppControlsViewState extends State<_MobileAppControlsView> {
                             if (hasSchedule) ...[
                               const SizedBox(width: 6),
                               _AppStatusBadge(
-                                scheduleActiveNow ? '⏱ Blocking Now' : '⏱ ${appSchedules.length} Schedule${appSchedules.length > 1 ? 's' : ''}',
+                                scheduleActiveNow ? '⏱ Blocking Now' : '⏱ Scheduled',
                                 scheduleActiveNow ? const Color(0xFFEF4444) : const Color(0xFF6366F1),
                               ),
                             ],
@@ -2843,41 +2865,42 @@ class _AppBlockScheduleSheetState extends State<_AppBlockScheduleSheet> {
     if (t != null) setState(() { if (isStart) _startTime = t; else _endTime = t; });
   }
 
-  Future<void> _add(List<dynamic> current) async {
+  Future<void> _save() async {
     setState(() => _saving = true);
     try {
-      final updated = List<dynamic>.from(current)
-        ..add({'pkg': widget.pkg, 'start': _fmt24(_startTime), 'end': _fmt24(_endTime)});
-      final activeNow = _isNowInWindow(_fmt24(_startTime), _fmt24(_endTime));
-      final Map<String, dynamic> patch = {'appBlockSchedules': updated};
-      // If schedule is active right now, also add to blockedApps immediately
+      final start = _fmt24(_startTime);
+      final end = _fmt24(_endTime);
+      final activeNow = _isNowInWindow(start, end);
+      final snap = await FirebaseFirestore.instance.collection('devices').doc(widget.deviceId).get();
+      final scheduleMap = Map<String, dynamic>.from(snap.data()?['appSchedules'] ?? {});
+      scheduleMap[widget.pkg] = {'start': start, 'end': end, 'alwaysBlocked': false};
+      final Map<String, dynamic> patch = {'appSchedules': scheduleMap};
       if (activeNow) {
-        final snap = await FirebaseFirestore.instance.collection('devices').doc(widget.deviceId).get();
         final blocked = List<dynamic>.from(snap.data()?['blockedApps'] ?? []);
         if (!blocked.contains(widget.pkg)) blocked.add(widget.pkg);
         patch['blockedApps'] = blocked;
       }
       await FirebaseFirestore.instance.collection('devices').doc(widget.deviceId).update(patch);
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(activeNow ? 'Schedule added & app blocked now!' : 'Block schedule added!'),
+        content: Text(activeNow ? 'Schedule saved & app blocked now!' : 'Block schedule saved!'),
         backgroundColor: const Color(0xFF22C55E),
       ));
     } finally { if (mounted) setState(() => _saving = false); }
   }
 
-  Future<void> _delete(List<dynamic> current, int index) async {
-    final s = Map<String, dynamic>.from(current[index] as Map);
-    final updated = List<dynamic>.from(current)..removeAt(index);
-    final Map<String, dynamic> patch = {'appBlockSchedules': updated};
-    // If currently active, also unblock the app
-    if (_isNowInWindow(s['start'] as String? ?? '', s['end'] as String? ?? '')) {
-      final snap = await FirebaseFirestore.instance.collection('devices').doc(widget.deviceId).get();
+  Future<void> _deleteSchedule() async {
+    final snap = await FirebaseFirestore.instance.collection('devices').doc(widget.deviceId).get();
+    final scheduleMap = Map<String, dynamic>.from(snap.data()?['appSchedules'] ?? {});
+    final entry = scheduleMap[widget.pkg] as Map<String, dynamic>?;
+    scheduleMap.remove(widget.pkg);
+    final Map<String, dynamic> patch = {'appSchedules': scheduleMap};
+    if (entry != null && _isNowInWindow(entry['start'] as String? ?? '', entry['end'] as String? ?? '')) {
       final blocked = List<dynamic>.from(snap.data()?['blockedApps'] ?? [])..remove(widget.pkg);
       patch['blockedApps'] = blocked;
     }
     await FirebaseFirestore.instance.collection('devices').doc(widget.deviceId).update(patch);
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-      content: Text('Block schedule deleted.'), backgroundColor: Color(0xFFEF4444),
+      content: Text('Block schedule removed.'), backgroundColor: Color(0xFFEF4444),
     ));
   }
 
@@ -2893,9 +2916,8 @@ class _AppBlockScheduleSheetState extends State<_AppBlockScheduleSheet> {
       stream: FirebaseFirestore.instance.collection('devices').doc(widget.deviceId).snapshots(),
       builder: (context, snap) {
         final liveData  = snap.data?.data() as Map<String, dynamic>? ?? {};
-        final existing  = (liveData['appBlockSchedules'] as List<dynamic>? ?? [])
-            .where((s) => (s as Map)['pkg'] == widget.pkg)
-            .toList();
+        final appScheduleMap = liveData['appSchedules'] as Map<String, dynamic>? ?? {};
+        final existingEntry = appScheduleMap[widget.pkg] as Map<String, dynamic>?;
 
         return Container(
           margin: const EdgeInsets.fromLTRB(15, 0, 15, 15),
@@ -2965,8 +2987,7 @@ class _AppBlockScheduleSheetState extends State<_AppBlockScheduleSheet> {
                 ]),
                 const SizedBox(height: 16),
                 GestureDetector(
-                  onTap: _saving ? null : () => _add(
-                      (liveData['appBlockSchedules'] as List<dynamic>? ?? [])),
+                  onTap: _saving ? null : _save,
                   child: Container(
                     width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 15),
                     decoration: BoxDecoration(
@@ -2976,31 +2997,22 @@ class _AppBlockScheduleSheetState extends State<_AppBlockScheduleSheet> {
                     child: Center(child: _saving
                       ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                       : Row(mainAxisSize: MainAxisSize.min, children: [
-                          const Icon(Icons.add_rounded, color: Colors.white, size: 20),
+                          Icon(existingEntry != null ? Icons.save_rounded : Icons.add_rounded, color: Colors.white, size: 20),
                           const SizedBox(width: 8),
-                          Text('Add Block Schedule', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
+                          Text(existingEntry != null ? 'Update Schedule' : 'Add Block Schedule',
+                              style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
                         ])),
                   ),
                 ),
-                if (existing.isNotEmpty) ...[
+                if (existingEntry != null) ...[
                   const SizedBox(height: 24),
-                  Row(children: [
-                    Text('Active Schedules', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: textColor)),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(color: const Color(0xFF6366F1).withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
-                      child: Text('${existing.length}', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, color: const Color(0xFF6366F1))),
-                    ),
-                  ]),
+                  Text('Current Schedule', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: textColor)),
                   const SizedBox(height: 10),
-                  ...existing.asMap().entries.map((e) {
-                    final s = Map<String, dynamic>.from(e.value as Map);
-                    final s24 = s['start'] as String? ?? '';
-                    final e24 = s['end']   as String? ?? '';
+                  () {
+                    final s24 = existingEntry['start'] as String? ?? '';
+                    final e24 = existingEntry['end']   as String? ?? '';
                     final activeNow = _isNowInWindow(s24, e24);
                     return Container(
-                      margin: const EdgeInsets.only(bottom: 8),
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
                         color: activeNow ? const Color(0xFFEF4444).withOpacity(0.06) : cardBg,
@@ -3022,11 +3034,10 @@ class _AppBlockScheduleSheetState extends State<_AppBlockScheduleSheet> {
                               Text('Blocking right now', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFFEF4444), fontWeight: FontWeight.w700)),
                             ])
                           else
-                            Text('App blocked during this period', style: GoogleFonts.outfit(fontSize: 11, color: subColor)),
+                            Text('App blocked during this time window', style: GoogleFonts.outfit(fontSize: 11, color: subColor)),
                         ])),
                         GestureDetector(
-                          onTap: () => _delete(
-                              List<dynamic>.from(liveData['appBlockSchedules'] ?? []), e.key),
+                          onTap: _deleteSchedule,
                           child: Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(color: const Color(0xFFEF4444).withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
@@ -3035,7 +3046,7 @@ class _AppBlockScheduleSheetState extends State<_AppBlockScheduleSheet> {
                         ),
                       ]),
                     );
-                  }),
+                  }(),
                 ],
               ]),
             )),
@@ -4953,6 +4964,25 @@ class _AppControlsState extends State<_AppControls> {
         final blockedApps = (data['blockedApps'] as List<dynamic>? ?? []).map((e) => e.toString()).toList();
         final hiddenApps = (data['hiddenApps'] as List<dynamic>? ?? []).map((e) => e.toString()).toList();
         final appSchedules = data['appSchedules'] as Map<String, dynamic>? ?? {};
+        // Helper: is a schedule entry currently active?
+        bool isSchedActiveDesktop(Map<String, dynamic> s) {
+          if (s['alwaysBlocked'] == true) return true;
+          final sp = (s['start'] as String? ?? '').split(':');
+          final ep = (s['end']   as String? ?? '').split(':');
+          if (sp.length < 2 || ep.length < 2) return false;
+          final now = TimeOfDay.now();
+          final nowMin = now.hour * 60 + now.minute;
+          final sMin = (int.tryParse(sp[0]) ?? 0) * 60 + (int.tryParse(sp[1]) ?? 0);
+          final eMin = (int.tryParse(ep[0]) ?? 0) * 60 + (int.tryParse(ep[1]) ?? 0);
+          return sMin <= eMin ? nowMin >= sMin && nowMin < eMin : nowMin >= sMin || nowMin < eMin;
+        }
+        // All packages blocked explicitly or via active schedule
+        final effectivelyBlockedDesktop = <String>{
+          ...blockedApps,
+          ...appSchedules.entries
+              .where((e) => e.value is Map && isSchedActiveDesktop(Map<String, dynamic>.from(e.value as Map)))
+              .map((e) => e.key),
+        };
 
         // Build a lookup map from packageName -> app data for enrichment
         final installedMapDesktop = <String, Map<String, dynamic>>{};
@@ -4965,7 +4995,7 @@ class _AppControlsState extends State<_AppControls> {
 
         List<Map<String, dynamic>> filteredApps;
         if (_filterMode == 'blocked') {
-          filteredApps = blockedApps.map<Map<String, dynamic>>((pkg) =>
+          filteredApps = effectivelyBlockedDesktop.map<Map<String, dynamic>>((pkg) =>
             installedMapDesktop[pkg] ?? {'packageName': pkg, 'appName': '', 'name': '', 'label': ''}
           ).where((app) {
             final pkg = (app['packageName'] ?? '').toString();
@@ -4989,7 +5019,7 @@ class _AppControlsState extends State<_AppControls> {
             final name = (d['appName'] ?? d['name'] ?? d['label'] ?? '').toString().toLowerCase();
             final matchesSearch = name.contains(query) || pkg.toLowerCase().contains(query);
             if (!matchesSearch) return false;
-            if (_filterMode == 'allowed') return !blockedApps.contains(pkg) && !hiddenApps.contains(pkg);
+            if (_filterMode == 'allowed') return !effectivelyBlockedDesktop.contains(pkg) && !hiddenApps.contains(pkg);
             return true; // 'all' mode
           }).cast<Map<String, dynamic>>().toList();
         }
