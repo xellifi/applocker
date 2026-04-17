@@ -22,7 +22,7 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../shared/firebase_service.dart';
-enum _DashboardMenu { dashboard, devices, apps, schedules, location, monitoring, reports, subscriptions, settings, users }
+enum _DashboardMenu { dashboard, devices, apps, schedules, location, monitoring, reports, subscriptions, settings, users, profile }
 
 // GLOBAL HELPER FOR PAIRING DIALOG
 void showAppLockerPairingDialog(BuildContext context, Color cardColor, Color textColor) async {
@@ -313,6 +313,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case _DashboardMenu.subscriptions: return 'Subscription';
       case _DashboardMenu.settings: return 'Settings';
       case _DashboardMenu.users: return 'Users Admin';
+      case _DashboardMenu.profile: return 'My Profile';
     }
   }
 
@@ -329,6 +330,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         case _DashboardMenu.subscriptions: return _MobileSubscriptionView(isDark: _isDark, userRole: userRole);
         case _DashboardMenu.settings: return _MobileSettingsView(isDark: _isDark);
         case _DashboardMenu.users: return SingleChildScrollView(child: _UsersList(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor, isMobile: true));
+        case _DashboardMenu.profile: return _MobileProfileView(isDark: _isDark);
       }
     }
     switch (_selectedMenu) {
@@ -342,6 +344,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case _DashboardMenu.subscriptions: return SingleChildScrollView(child: _SubscriptionView(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor, userRole: userRole));
       case _DashboardMenu.settings: return SingleChildScrollView(child: _SettingsView(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor));
       case _DashboardMenu.users: return SingleChildScrollView(child: _UsersList(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor, isMobile: isMobile));
+      case _DashboardMenu.profile: return SingleChildScrollView(child: _ProfileView(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor));
     }
   }
 }
@@ -373,6 +376,7 @@ class _Sidebar extends StatelessWidget {
           _buildSidebarItem(_DashboardMenu.reports, 'Activity Reports', HeroIcons.chartBar),
           _buildSidebarItem(_DashboardMenu.subscriptions, 'Subscription', HeroIcons.creditCard),
           _buildSidebarItem(_DashboardMenu.settings, 'Settings', HeroIcons.cog6Tooth),
+          _buildSidebarItem(_DashboardMenu.profile, 'My Profile', HeroIcons.user),
         ])),
         Padding(padding: const EdgeInsets.all(16.0), child: _SidebarItem(icon: HeroIcons.arrowLeftOnRectangle, label: 'Logout', isSelected: false, onTap: () => FirebaseAuth.instance.signOut(), color: Colors.redAccent, isCollapsed: isCollapsed, isDark: isDark)),
         const SizedBox(height: 16),
@@ -904,6 +908,24 @@ class _MobileDashboardHome extends StatelessWidget {
                           color: textColor,
                         ),
                       ),
+                      const Spacer(),
+                      Builder(builder: (ctx) => GestureDetector(
+                        onTap: () {
+                          final cardColor = isDark ? const Color(0xFF18181B) : Colors.white;
+                          showAppLockerPairingDialog(ctx, cardColor, textColor);
+                        },
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 26, height: 26,
+                              decoration: BoxDecoration(color: const Color(0xFF6366F1), shape: BoxShape.circle),
+                              child: const Icon(Icons.add_rounded, color: Colors.white, size: 16),
+                            ),
+                            const SizedBox(width: 6),
+                            Text('Add New Device', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF6366F1))),
+                          ],
+                        ),
+                      )),
                     ],
                   ),
                 ),
@@ -934,17 +956,21 @@ class _MobileDashboardHome extends StatelessWidget {
                     final isOnline = status == 'online';
 
                     String timeLabel;
-                    if (isOnline) {
-                      timeLabel = 'Last Seen: Just now';
-                    } else if (lastSeen != null) {
+                    if (lastSeen != null) {
                       final diff = DateTime.now().difference(lastSeen.toDate());
-                      if (diff.inMinutes < 60) {
-                        timeLabel = 'Last Sync: ${diff.inMinutes} min ago';
+                      if (diff.inSeconds < 60) {
+                        timeLabel = isOnline ? 'Active: Just now' : 'Last Sync: ${diff.inSeconds}s ago';
+                      } else if (diff.inMinutes < 60) {
+                        timeLabel = isOnline ? 'Active: ${diff.inMinutes}m ago' : 'Last Sync: ${diff.inMinutes}m ago';
                       } else if (diff.inHours < 24) {
                         timeLabel = 'Last Sync: ${diff.inHours}h ago';
+                      } else if (diff.inDays < 7) {
+                        timeLabel = 'Last Sync: ${diff.inDays}d ago';
                       } else {
-                        timeLabel = 'Last Sync: Yesterday';
+                        timeLabel = 'Last Sync: ${DateFormat('MMM d').format(lastSeen.toDate())}';
                       }
+                    } else if (isOnline) {
+                      timeLabel = 'Active: Online now';
                     } else {
                       timeLabel = 'Last Sync: Unknown';
                     }
@@ -1124,44 +1150,54 @@ class _MobileQuickStat extends StatelessWidget {
   Widget build(BuildContext context) {
     final bg = isDark ? const Color(0xFF0F1A35) : const Color(0xFFE8EFFF);
     final labelColor = isDark ? Colors.white54 : const Color(0xFF64748B);
-    final valueColor = isDark ? Colors.white : const Color(0xFF1E293B);
 
     return Column(
       children: [
-        Container(
-          width: 68,
-          height: 68,
-          decoration: BoxDecoration(
-            color: bg,
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: iconColor.withOpacity(0.2),
-              width: 1,
-            ),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: iconColor, size: 22),
-              const SizedBox(height: 2),
-              Text(
-                value.toString(),
-                style: GoogleFonts.outfit(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: valueColor,
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                color: bg,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: iconColor.withOpacity(0.25),
+                  width: 1.5,
                 ),
               ),
-            ],
-          ),
+              child: Icon(icon, color: iconColor, size: 26),
+            ),
+            Positioned(
+              top: -6,
+              right: -8,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: iconColor,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [BoxShadow(color: iconColor.withOpacity(0.4), blurRadius: 6, offset: const Offset(0, 2))],
+                ),
+                child: Text(
+                  value.toString(),
+                  style: GoogleFonts.outfit(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 8),
         Text(
           label,
           style: GoogleFonts.outfit(
             fontSize: 12,
             color: labelColor,
-            fontWeight: FontWeight.w500,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ],
@@ -1417,6 +1453,7 @@ class _MobileMoreSheet extends StatelessWidget {
       (_DashboardMenu.reports, Icons.bar_chart_rounded, 'Reports', 'Usage statistics', const Color(0xFFF59E0B)),
       (_DashboardMenu.subscriptions, Icons.workspace_premium_rounded, 'Subscription', 'Plan & billing', const Color(0xFFEC4899)),
       (_DashboardMenu.settings, Icons.settings_rounded, 'Settings', 'App configuration', const Color(0xFF94A3B8)),
+      (_DashboardMenu.profile, Icons.person_rounded, 'My Profile', 'Manage your account', const Color(0xFF6366F1)),
       if (userRole == 'super_admin')
         (_DashboardMenu.users, Icons.admin_panel_settings_rounded, 'Users Admin', 'Global user management', const Color(0xFFEF4444)),
     ];
@@ -1552,7 +1589,14 @@ class _MobileDevicesViewState extends State<_MobileDevicesView> {
               Row(children: [
                 Text('Device list', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: textColor)),
                 const Spacer(),
-                Text('See All', style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF6366F1), fontWeight: FontWeight.w600)),
+                GestureDetector(
+                  onTap: () => Navigator.of(context).maybePop(),
+                  child: Row(children: [
+                    const Icon(Icons.arrow_back_ios_new_rounded, size: 14, color: Color(0xFF6366F1)),
+                    const SizedBox(width: 4),
+                    Text('Back', style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF6366F1), fontWeight: FontWeight.w700)),
+                  ]),
+                ),
               ]),
               const SizedBox(height: 10),
               if (devices.isEmpty)
@@ -2083,9 +2127,55 @@ class _MobileScheduleCard extends StatelessWidget {
           Row(children: [Icon(Icons.schedule_rounded, size: 13, color: subColor), const SizedBox(width: 4), Text(rule['time'] ?? '', style: GoogleFonts.outfit(fontSize: 12, color: subColor))]),
         ])),
         Column(children: [
-          Container(width: 36, height: 36, decoration: BoxDecoration(color: const Color(0xFF6366F1).withOpacity(0.12), shape: BoxShape.circle), child: const Icon(Icons.edit_rounded, color: Color(0xFF6366F1), size: 16)),
+          GestureDetector(
+            onTap: () async {
+              final deviceId = rule['deviceId'] as String?;
+              if (deviceId == null) return;
+              final isLock = rule['isLock'] == true;
+              if (isLock) {
+                // Show edit schedule bottom sheet
+                final data = await FirebaseFirestore.instance.collection('devices').doc(deviceId).get();
+                if (context.mounted) {
+                  showModalBottomSheet(
+                    context: context, isScrollControlled: true, backgroundColor: Colors.transparent,
+                    builder: (_) => _ScheduleLockSheet(deviceId: deviceId, deviceData: data.data() ?? {}, isDark: isDark),
+                  );
+                }
+              } else {
+                // Show a snack indicating app schedule editing happens in App Controls
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Edit app schedules from App Controls page.'), backgroundColor: Color(0xFF6366F1)));
+              }
+            },
+            child: Container(width: 36, height: 36, decoration: BoxDecoration(color: const Color(0xFF6366F1).withOpacity(0.12), shape: BoxShape.circle), child: const Icon(Icons.edit_rounded, color: Color(0xFF6366F1), size: 16)),
+          ),
           const SizedBox(height: 6),
-          Container(width: 36, height: 36, decoration: BoxDecoration(color: const Color(0xFFEF4444).withOpacity(0.12), shape: BoxShape.circle), child: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 16)),
+          GestureDetector(
+            onTap: () async {
+              final deviceId = rule['deviceId'] as String?;
+              if (deviceId == null) return;
+              final isLock = rule['isLock'] == true;
+              if (isLock) {
+                final snap = await FirebaseFirestore.instance.collection('devices').doc(deviceId).get();
+                final list = List<Map<String, dynamic>>.from((snap.data()?['lockSchedules'] ?? []).map((s) => Map<String, dynamic>.from(s)));
+                final ruleTime = rule['time'] as String? ?? '';
+                list.removeWhere((s) {
+                  String _to12h(String t24) { final parts = t24.split(':'); if (parts.length < 2) return t24; int h = int.tryParse(parts[0]) ?? 0; final m = int.tryParse(parts[1]) ?? 0; final p = h < 12 ? 'AM' : 'PM'; h = h % 12; if (h == 0) h = 12; return '$h:${m.toString().padLeft(2,'0')} $p'; }
+                  return '${_to12h(s['start'] ?? '')} - ${_to12h(s['end'] ?? '')}' == ruleTime;
+                });
+                await FirebaseFirestore.instance.collection('devices').doc(deviceId).update({'lockSchedules': list});
+              } else {
+                final pkg = rule['pkg'] ?? '';
+                if (pkg.isNotEmpty) {
+                  final snap = await FirebaseFirestore.instance.collection('devices').doc(deviceId).get();
+                  final schedules = Map<String, dynamic>.from(snap.data()?['appSchedules'] ?? {});
+                  schedules.remove(pkg);
+                  await FirebaseFirestore.instance.collection('devices').doc(deviceId).update({'appSchedules': schedules});
+                }
+              }
+              if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Schedule deleted.'), backgroundColor: Color(0xFFEF4444)));
+            },
+            child: Container(width: 36, height: 36, decoration: BoxDecoration(color: const Color(0xFFEF4444).withOpacity(0.12), shape: BoxShape.circle), child: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 16)),
+          ),
         ]),
       ]),
     );
@@ -2100,6 +2190,21 @@ class _MobileAppControlsView extends StatefulWidget {
 }
 class _MobileAppControlsViewState extends State<_MobileAppControlsView> {
   String? _selDeviceId; String _filterMode = 'all';
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _searchCtrl.addListener(() => setState(() => _searchQuery = _searchCtrl.text.toLowerCase()));
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final bg = widget.isDark ? const Color(0xFF060D1F) : const Color(0xFFF8FAFC);
@@ -2122,9 +2227,11 @@ class _MobileAppControlsViewState extends State<_MobileAppControlsView> {
         final filtered = apps.where((app) {
           final d = app as Map<String, dynamic>;
           final pkg = (d['packageName'] ?? '').toString();
-          if (_filterMode == 'blocked') return blockedApps.contains(pkg);
-          if (_filterMode == 'hidden') return hiddenApps.contains(pkg);
-          if (_filterMode == 'allowed') return !blockedApps.contains(pkg) && !hiddenApps.contains(pkg);
+          final name = (d['appName'] ?? d['name'] ?? d['label'] ?? pkg).toString().toLowerCase();
+          if (_filterMode == 'blocked') { if (!blockedApps.contains(pkg)) return false; }
+          else if (_filterMode == 'hidden') { if (!hiddenApps.contains(pkg)) return false; }
+          else if (_filterMode == 'allowed') { if (blockedApps.contains(pkg) || hiddenApps.contains(pkg)) return false; }
+          if (_searchQuery.isNotEmpty && !name.contains(_searchQuery) && !pkg.toLowerCase().contains(_searchQuery)) return false;
           return true;
         }).toList();
         return Container(
@@ -2138,42 +2245,69 @@ class _MobileAppControlsViewState extends State<_MobileAppControlsView> {
                 const SizedBox(width: 10),
                 Expanded(child: _MobileDropBox(value: _filterMode, items: const ['all', 'blocked', 'hidden', 'allowed'], icon: Icons.apps_rounded, isDark: widget.isDark, onChanged: (v) => setState(() => _filterMode = v))),
               ]),
-              const SizedBox(height: 16),
+              const SizedBox(height: 10),
+              // Search field
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(12), border: Border.all(color: borderColor)),
+                child: TextField(
+                  controller: _searchCtrl,
+                  style: GoogleFonts.outfit(fontSize: 13, color: textColor),
+                  decoration: InputDecoration(
+                    hintText: 'Search apps...', hintStyle: GoogleFonts.outfit(fontSize: 13, color: subColor),
+                    border: InputBorder.none, icon: Icon(Icons.search_rounded, color: subColor, size: 18),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                    suffixIcon: _searchQuery.isNotEmpty ? IconButton(icon: Icon(Icons.clear_rounded, size: 16, color: subColor), onPressed: () => _searchCtrl.clear()) : null,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
               Row(children: [
-                Text('Apps', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: textColor)),
+                Text('Apps (${filtered.length})', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: textColor)),
                 const Spacer(),
-                Text('See All', style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF6366F1), fontWeight: FontWeight.w600)),
+                GestureDetector(
+                  onTap: () => Navigator.of(context).maybePop(),
+                  child: Row(children: [
+                    const Icon(Icons.arrow_back_ios_new_rounded, size: 14, color: Color(0xFF6366F1)),
+                    const SizedBox(width: 4),
+                    Text('Back', style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF6366F1), fontWeight: FontWeight.w700)),
+                  ]),
+                ),
               ]),
               const SizedBox(height: 10),
               if (filtered.isEmpty)
                 Padding(padding: const EdgeInsets.symmetric(vertical: 32), child: Center(child: Text('No apps found.', style: GoogleFonts.outfit(color: subColor))))
               else
-                GridView.builder(
+                ListView.builder(
                   shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 10, mainAxisSpacing: 10, childAspectRatio: 2.0),
                   itemCount: filtered.length,
                   itemBuilder: (context, i) {
                     final app = filtered[i] as Map<String, dynamic>;
                     final name = (app['appName'] ?? app['name'] ?? app['label'] ?? '').toString();
                     final pkg = (app['packageName'] ?? '').toString();
+                    // Derive friendly package name as fallback
+                    final pkgParts = pkg.split('.');
+                    final friendlyPkg = pkgParts.isNotEmpty ? pkgParts.last.split('_').map((w) => w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1)}' : '').join(' ') : pkg;
+                    final displayName = name.isNotEmpty ? name : friendlyPkg;
                     final isBlocked = blockedApps.contains(pkg);
                     final isHidden = hiddenApps.contains(pkg);
-                    final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
+                    final initial = displayName.isNotEmpty ? displayName[0].toUpperCase() : '?';
                     final circleColors = [const Color(0xFFFDE68A), const Color(0xFFBFDBFE), const Color(0xFFFCE7F3), const Color(0xFFD1FAE5), const Color(0xFFE0E7FF)];
                     final tColors = [const Color(0xFFD97706), const Color(0xFF1D4ED8), const Color(0xFFBE185D), const Color(0xFF065F46), const Color(0xFF3730A3)];
-                    final ci = name.isNotEmpty ? name.codeUnitAt(0) % circleColors.length : 0;
+                    final ci = displayName.isNotEmpty ? displayName.codeUnitAt(0) % circleColors.length : 0;
                     final borderCol = isBlocked ? const Color(0xFFEF4444).withOpacity(0.4) : isHidden ? const Color(0xFFFBBF24).withOpacity(0.4) : borderColor;
                     return Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                       decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(14), border: Border.all(color: borderCol)),
                       child: Row(children: [
-                        Container(width: 38, height: 38, decoration: BoxDecoration(color: circleColors[ci], shape: BoxShape.circle), child: Center(child: Text(initial, style: GoogleFonts.outfit(color: tColors[ci], fontSize: 17, fontWeight: FontWeight.w900)))),
-                        const SizedBox(width: 8),
+                        Container(width: 42, height: 42, decoration: BoxDecoration(color: circleColors[ci], shape: BoxShape.circle), child: Center(child: Text(initial, style: GoogleFonts.outfit(color: tColors[ci], fontSize: 18, fontWeight: FontWeight.w900)))),
+                        const SizedBox(width: 12),
                         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-                          Text(name, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: textColor), maxLines: 1, overflow: TextOverflow.ellipsis),
-                          if (isBlocked) Text('Blocked', style: GoogleFonts.outfit(fontSize: 9, color: const Color(0xFFEF4444), fontWeight: FontWeight.w600))
-                          else if (isHidden) Text('Hidden', style: GoogleFonts.outfit(fontSize: 9, color: const Color(0xFFFBBF24), fontWeight: FontWeight.w600))
-                          else Text('Allowed', style: GoogleFonts.outfit(fontSize: 9, color: const Color(0xFF22C55E), fontWeight: FontWeight.w600)),
+                          Text(displayName, style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700, color: textColor), softWrap: true),
+                          if (isBlocked) Text('Blocked', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFFEF4444), fontWeight: FontWeight.w600))
+                          else if (isHidden) Text('Hidden', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFFFBBF24), fontWeight: FontWeight.w600))
+                          else Text('Allowed', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF22C55E), fontWeight: FontWeight.w600)),
                         ])),
                         PopupMenuButton<String>(
                           icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF94A3B8), size: 18),
@@ -2234,13 +2368,55 @@ class _MobileDropBox extends StatelessWidget {
 }
 
 // ─── Location ─────────────────────────────────────────────────────────────────
-class _MobileLocationView extends StatelessWidget {
+class _MobileLocationView extends StatefulWidget {
   final bool isDark;
   const _MobileLocationView({required this.isDark});
+  @override State<_MobileLocationView> createState() => _MobileLocationViewState();
+}
+
+class _MobileLocationViewState extends State<_MobileLocationView> with SingleTickerProviderStateMixin {
+  bool _syncing = false;
+  late AnimationController _pulseCtrl;
+  late Animation<double> _pulseAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))
+      ..repeat(reverse: true);
+    _pulseAnim = Tween<double>(begin: 0.6, end: 1.0).animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _pulseCtrl.dispose();
+    super.dispose();
+  }
+
+  void _triggerSync() {
+    setState(() => _syncing = true);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(children: [
+          const Icon(Icons.my_location_rounded, color: Colors.white, size: 18),
+          const SizedBox(width: 10),
+          Text('Live sync active — fetching latest GPS coordinates...', style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+        ]),
+        backgroundColor: const Color(0xFF22C55E),
+        duration: const Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+    );
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _syncing = false);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final bg = isDark ? const Color(0xFF060D1F) : const Color(0xFFF8FAFC);
-    final textColor = isDark ? Colors.white : const Color(0xFF1E293B);
+    final bg = widget.isDark ? const Color(0xFF060D1F) : const Color(0xFFF8FAFC);
+    final textColor = widget.isDark ? Colors.white : const Color(0xFF1E293B);
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseService.instance.streamAdminDevices(),
       builder: (context, snap) {
@@ -2251,13 +2427,14 @@ class _MobileLocationView extends StatelessWidget {
         LatLng center = const LatLng(14.5995, 120.9842);
         for (var doc in devices) {
           final data = doc.data() as Map<String, dynamic>;
+          final deviceName = (data['deviceName'] ?? data['model'] ?? data['name'] ?? doc.id).toString();
           final lat = (data['lat'] as num?)?.toDouble() ?? 0.0;
           final lng = (data['lng'] as num?)?.toDouble() ?? 0.0;
           if (lat != 0.0 || lng != 0.0) {
             center = LatLng(lat, lng);
-            markers.add(Marker(point: LatLng(lat, lng), width: 60, height: 60, child: Column(mainAxisSize: MainAxisSize.min, children: [
+            markers.add(Marker(point: LatLng(lat, lng), width: 80, height: 70, child: Column(mainAxisSize: MainAxisSize.min, children: [
               Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(6), border: Border.all(color: const Color(0xFF22C55E))),
-                child: Text(doc.id.length > 8 ? doc.id.substring(0, 8) : doc.id, style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.bold, color: const Color(0xFF1E293B)))),
+                child: Text(deviceName.length > 12 ? '${deviceName.substring(0, 10)}...' : deviceName, style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.bold, color: const Color(0xFF1E293B)))),
               const Icon(Icons.location_on_rounded, color: Colors.red, size: 28),
             ])));
           }
@@ -2268,24 +2445,70 @@ class _MobileLocationView extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
-                Expanded(child: Text('Tracking $active active device${active == 1 ? '' : 's'}', style: GoogleFonts.outfit(fontSize: 13, color: textColor, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis, maxLines: 1)),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Tracking $active active device${active == 1 ? '' : 's'}', style: GoogleFonts.outfit(fontSize: 13, color: textColor, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis),
+                  if (_syncing) Text('Syncing location data...', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF22C55E), fontWeight: FontWeight.w500)),
+                ])),
                 const SizedBox(width: 8),
-                Container(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(color: const Color(0xFFF0FDF4), borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFF22C55E))),
-                  child: Row(children: [const Icon(Icons.refresh_rounded, color: Color(0xFF22C55E), size: 16), const SizedBox(width: 6), Text('Live Sync', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF22C55E)))])),
+                GestureDetector(
+                  onTap: _triggerSync,
+                  child: AnimatedBuilder(
+                    animation: _pulseAnim,
+                    builder: (_, __) => Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: _syncing ? const Color(0xFF22C55E) : const Color(0xFFF0FDF4),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFF22C55E), width: _syncing ? 0 : 1),
+                        boxShadow: _syncing ? [BoxShadow(color: const Color(0xFF22C55E).withOpacity(_pulseAnim.value * 0.5), blurRadius: 12, spreadRadius: 2)] : [],
+                      ),
+                      child: Row(children: [
+                        _syncing
+                          ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.my_location_rounded, color: Color(0xFF22C55E), size: 16),
+                        const SizedBox(width: 6),
+                        Text('Live Sync', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: _syncing ? Colors.white : const Color(0xFF22C55E))),
+                      ]),
+                    ),
+                  ),
+                ),
               ]),
               const SizedBox(height: 14),
-              Expanded(child: Container(
-                decoration: BoxDecoration(borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFF22C55E).withOpacity(0.5), width: 2)),
-                clipBehavior: Clip.hardEdge,
-                child: FlutterMap(
-                  options: MapOptions(initialCenter: center, initialZoom: 13),
-                  children: [
-                    TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.parentalcontrol.applocker'),
-                    MarkerLayer(markers: markers),
-                  ],
+              Expanded(child: Stack(children: [
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFF22C55E).withOpacity(_syncing ? 1.0 : 0.5), width: _syncing ? 3 : 2),
+                  ),
+                  clipBehavior: Clip.hardEdge,
+                  child: FlutterMap(
+                    options: MapOptions(initialCenter: center, initialZoom: 13),
+                    children: [
+                      TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.parentalcontrol.applocker'),
+                      MarkerLayer(markers: markers),
+                    ],
+                  ),
                 ),
-              )),
+                if (_syncing)
+                  Positioned(
+                    top: 12, left: 0, right: 0,
+                    child: Center(child: AnimatedBuilder(
+                      animation: _pulseAnim,
+                      builder: (_, __) => Opacity(
+                        opacity: _pulseAnim.value,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(color: const Color(0xFF22C55E), borderRadius: BorderRadius.circular(20)),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            const Icon(Icons.wifi_tethering_rounded, color: Colors.white, size: 16),
+                            const SizedBox(width: 6),
+                            Text('Fetching live GPS data...', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
+                          ]),
+                        ),
+                      ),
+                    )),
+                  ),
+              ])),
             ]),
           ),
         );
@@ -2436,7 +2659,21 @@ class _MobileMonitoringViewState extends State<_MobileMonitoringView> {
                         if (allDocs.isEmpty)
                           Padding(padding: const EdgeInsets.symmetric(vertical: 40), child: Center(child: Text('No activity recorded yet.', style: GoogleFonts.outfit(color: subColor))))
                         else
-                          ...allDocs.map((doc) => _buildActivityCard(doc, cardBg, textColor, subColor, border, context)),
+                          ...allDocs.where((doc) {
+                            final d = doc.data() as Map<String, dynamic>;
+                            // Exclude chathead/bubble notifications from Social Messages
+                            if (_category == 'Social Messages') {
+                              final source = (d['source'] ?? d['packageName'] ?? d['pkg'] ?? '').toString().toLowerCase();
+                              final notifTitle = (d['title'] ?? '').toString().toLowerCase();
+                              if (source.contains('chathead') || source.contains('bubble') ||
+                                  notifTitle.contains('chathead') || notifTitle.contains('bubble')) return false;
+                              // Exclude entries with no real sender info
+                              final sender = (d['sender'] ?? d['contact'] ?? d['from'] ?? '').toString().trim();
+                              final body = (d['content'] ?? d['body'] ?? d['message'] ?? '').toString().trim();
+                              if (sender.isEmpty && body.isEmpty) return false;
+                            }
+                            return true;
+                          }).map((doc) => _buildActivityCard(doc, cardBg, textColor, subColor, border, context)),
                       ]),
                     );
                   },
@@ -2869,8 +3106,63 @@ class _MobileSettingsViewState extends State<_MobileSettingsView> {
                 child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: const Color(0xFFFBBF24), borderRadius: BorderRadius.circular(8)),
                   child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.upload_rounded, color: Colors.white, size: 14), const SizedBox(width: 4), Text('Choose Img', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white))]))),
               const SizedBox(height: 4),
-              Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: const Color(0xFF22C55E), borderRadius: BorderRadius.circular(8)),
-                child: Text('Preview', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white))),
+              GestureDetector(
+                onTap: () {
+                  final imgUrl = _imageUrlCtrl.text;
+                  final quote = _quoteCtrl.text;
+                  final greeting = _greetingCtrl.text;
+                  showDialog(
+                    context: context,
+                    builder: (ctx) => Dialog(
+                      backgroundColor: Colors.transparent,
+                      child: Container(
+                        width: 300, padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: widget.isDark ? const Color(0xFF0F1A35) : Colors.white,
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.4)),
+                        ),
+                        child: Column(mainAxisSize: MainAxisSize.min, children: [
+                          Text('Child Screen Preview', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: widget.isDark ? Colors.white : const Color(0xFF1E293B))),
+                          const SizedBox(height: 16),
+                          // Mock phone
+                          Container(
+                            width: 180, height: 320,
+                            decoration: BoxDecoration(color: const Color(0xFF060D1F), borderRadius: BorderRadius.circular(24), border: Border.all(color: const Color(0xFF6366F1), width: 2)),
+                            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                              Container(
+                                width: 80, height: 80,
+                                decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: const Color(0xFF6366F1), width: 2)),
+                                clipBehavior: Clip.hardEdge,
+                                child: imgUrl.isNotEmpty
+                                  ? Image.network(imgUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.person_rounded, size: 40, color: Colors.white30))
+                                  : const Icon(Icons.person_rounded, size: 40, color: Colors.white30),
+                              ),
+                              const SizedBox(height: 12),
+                              if (greeting.isNotEmpty) Text(greeting, style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white), textAlign: TextAlign.center),
+                              const SizedBox(height: 8),
+                              if (quote.isNotEmpty) Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                child: Text('"$quote"', style: GoogleFonts.outfit(fontSize: 10, color: Colors.white60, fontStyle: FontStyle.italic), textAlign: TextAlign.center),
+                              ),
+                              const Spacer(),
+                              Padding(padding: const EdgeInsets.only(bottom: 20), child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                                decoration: BoxDecoration(color: const Color(0xFF6366F1), borderRadius: BorderRadius.circular(14)),
+                                child: Text('LOCKED', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 3)),
+                              )),
+                            ]),
+                          ),
+                          const SizedBox(height: 16),
+                          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Close', style: GoogleFonts.outfit(color: const Color(0xFF6366F1), fontWeight: FontWeight.w700))),
+                        ]),
+                      ),
+                    ),
+                  );
+                },
+                child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: const Color(0xFF22C55E), borderRadius: BorderRadius.circular(8)),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.preview_rounded, color: Colors.white, size: 14), const SizedBox(width: 4), Text('Preview', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white))])),
+              ),
             ]),
           ])),
 
@@ -6268,5 +6560,444 @@ class _MonitoringTelephonyTabState extends State<_MonitoringTelephonyTab> with S
         ),
       ],
     );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MOBILE PROFILE VIEW
+// ─────────────────────────────────────────────────────────────────────────────
+class _MobileProfileView extends StatefulWidget {
+  final bool isDark;
+  const _MobileProfileView({required this.isDark});
+  @override State<_MobileProfileView> createState() => _MobileProfileViewState();
+}
+
+class _MobileProfileViewState extends State<_MobileProfileView> {
+  bool _saving = false;
+  late TextEditingController _nameCtrl;
+  late TextEditingController _emailCtrl;
+  late TextEditingController _phoneCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    final user = FirebaseAuth.instance.currentUser;
+    _nameCtrl = TextEditingController(text: user?.displayName ?? '');
+    _emailCtrl = TextEditingController(text: user?.email ?? '');
+    _phoneCtrl = TextEditingController(text: user?.phoneNumber ?? '');
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose(); _emailCtrl.dispose(); _phoneCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    try {
+      await FirebaseAuth.instance.currentUser?.updateDisplayName(_nameCtrl.text.trim());
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        await FirebaseFirestore.instance.collection('users').doc(uid).set({
+          'displayName': _nameCtrl.text.trim(),
+          'phone': _phoneCtrl.text.trim(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile updated!'), backgroundColor: Color(0xFF22C55E)));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = widget.isDark ? const Color(0xFF060D1F) : const Color(0xFFF8FAFC);
+    final cardBg = widget.isDark ? const Color(0xFF0F1A35) : Colors.white;
+    final textColor = widget.isDark ? Colors.white : const Color(0xFF1E293B);
+    final subColor = widget.isDark ? Colors.white54 : const Color(0xFF64748B);
+    final border = const Color(0xFF6366F1).withOpacity(0.25);
+    final user = FirebaseAuth.instance.currentUser;
+    final initial = (_nameCtrl.text.isNotEmpty ? _nameCtrl.text[0] : (user?.email?[0] ?? 'P')).toUpperCase();
+
+    return StreamBuilder<DocumentSnapshot>(
+      stream: user != null ? FirebaseFirestore.instance.collection('users').doc(user.uid).snapshots() : const Stream.empty(),
+      builder: (context, snap) {
+        final extraData = snap.data?.data() as Map<String, dynamic>? ?? {};
+        final role = (extraData['role'] ?? 'parent').toString();
+        final plan = (extraData['plan'] ?? extraData['subscription'] ?? 'Free').toString();
+        final joined = extraData['createdAt'] as Timestamp?;
+        final joinedStr = joined != null ? DateFormat('MMM d, yyyy').format(joined.toDate()) : 'N/A';
+
+        return Container(
+          color: bg,
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              // Avatar + info
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(20), border: Border.all(color: border)),
+                child: Row(children: [
+                  Container(
+                    width: 72, height: 72,
+                    decoration: BoxDecoration(shape: BoxShape.circle, gradient: const LinearGradient(colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)], begin: Alignment.topLeft, end: Alignment.bottomRight)),
+                    child: Center(child: Text(initial, style: GoogleFonts.outfit(fontSize: 30, fontWeight: FontWeight.w900, color: Colors.white))),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(user?.displayName ?? user?.email?.split('@').first ?? 'Parent', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, color: textColor)),
+                    const SizedBox(height: 4),
+                    Text(user?.email ?? '', style: GoogleFonts.outfit(fontSize: 12, color: subColor)),
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: const Color(0xFF6366F1).withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: Text(role.toUpperCase(), style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w800, color: const Color(0xFF6366F1)))),
+                      const SizedBox(width: 6),
+                      Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: const Color(0xFF22C55E).withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: Text(plan, style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w700, color: const Color(0xFF22C55E)))),
+                    ]),
+                  ])),
+                ]),
+              ),
+              const SizedBox(height: 16),
+
+              // Stats row
+              Row(children: [
+                _ProfileStat(label: 'Member Since', value: joinedStr, icon: Icons.calendar_today_rounded, isDark: widget.isDark),
+                const SizedBox(width: 10),
+                StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseService.instance.streamAdminDevices(),
+                  builder: (context, dSnap) {
+                    final count = dSnap.data?.docs.length ?? 0;
+                    return _ProfileStat(label: 'Devices', value: '$count', icon: Icons.phone_android_rounded, isDark: widget.isDark);
+                  },
+                ),
+              ]),
+              const SizedBox(height: 16),
+
+              // Edit form
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(20), border: Border.all(color: border)),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Edit Profile', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: textColor)),
+                  const SizedBox(height: 14),
+                  _ProfileField(label: 'Full Name', controller: _nameCtrl, icon: Icons.person_rounded, isDark: widget.isDark),
+                  const SizedBox(height: 10),
+                  _ProfileField(label: 'Email', controller: _emailCtrl, icon: Icons.email_rounded, isDark: widget.isDark, readOnly: true),
+                  const SizedBox(height: 10),
+                  _ProfileField(label: 'Phone Number', controller: _phoneCtrl, icon: Icons.phone_rounded, isDark: widget.isDark),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _saving ? null : _save,
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6366F1), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), padding: const EdgeInsets.symmetric(vertical: 14)),
+                      child: _saving ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : Text('Save Changes', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w800)),
+                    ),
+                  ),
+                ]),
+              ),
+              const SizedBox(height: 16),
+
+              // Account actions
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(20), border: Border.all(color: border)),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Account', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: textColor)),
+                  const SizedBox(height: 12),
+                  ListTile(
+                    dense: true, contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.lock_rounded, color: Color(0xFF6366F1), size: 22),
+                    title: Text('Change Password', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: textColor)),
+                    trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFF94A3B8)),
+                    onTap: () {
+                      if (user?.email != null) {
+                        FirebaseAuth.instance.sendPasswordResetEmail(email: user!.email!);
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password reset email sent!'), backgroundColor: Color(0xFF6366F1)));
+                      }
+                    },
+                  ),
+                  Divider(color: border, height: 1),
+                  ListTile(
+                    dense: true, contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.logout_rounded, color: Color(0xFFEF4444), size: 22),
+                    title: Text('Sign Out', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: const Color(0xFFEF4444))),
+                    onTap: () => FirebaseAuth.instance.signOut(),
+                  ),
+                ]),
+              ),
+            ]),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ProfileStat extends StatelessWidget {
+  final String label, value; final IconData icon; final bool isDark;
+  const _ProfileStat({required this.label, required this.value, required this.icon, required this.isDark});
+  @override
+  Widget build(BuildContext context) {
+    final cardBg = isDark ? const Color(0xFF0F1A35) : Colors.white;
+    final textColor = isDark ? Colors.white : const Color(0xFF1E293B);
+    final subColor = isDark ? Colors.white54 : const Color(0xFF64748B);
+    return Expanded(child: Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.25))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(icon, color: const Color(0xFF6366F1), size: 22),
+        const SizedBox(height: 6),
+        Text(value, style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: textColor)),
+        Text(label, style: GoogleFonts.outfit(fontSize: 11, color: subColor, fontWeight: FontWeight.w500)),
+      ]),
+    ));
+  }
+}
+
+class _ProfileField extends StatelessWidget {
+  final String label; final TextEditingController controller; final IconData icon; final bool isDark; final bool readOnly;
+  const _ProfileField({required this.label, required this.controller, required this.icon, required this.isDark, this.readOnly = false});
+  @override
+  Widget build(BuildContext context) {
+    final textColor = isDark ? Colors.white : const Color(0xFF1E293B);
+    final subColor = isDark ? Colors.white54 : const Color(0xFF64748B);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w700, color: subColor, letterSpacing: 0.5)),
+      const SizedBox(height: 6),
+      TextField(
+        controller: controller, readOnly: readOnly,
+        style: GoogleFonts.outfit(fontSize: 13, color: readOnly ? subColor : textColor),
+        decoration: InputDecoration(
+          prefixIcon: Icon(icon, color: const Color(0xFF6366F1), size: 18),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          filled: true, fillColor: isDark ? Colors.white.withOpacity(readOnly ? 0.04 : 0.07) : (readOnly ? const Color(0xFFF1F5F9) : Colors.white),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: const Color(0xFF6366F1).withOpacity(0.3))),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: const Color(0xFF6366F1).withOpacity(0.25))),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF6366F1), width: 1.5)),
+        ),
+      ),
+    ]);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DESKTOP PROFILE VIEW
+// ─────────────────────────────────────────────────────────────────────────────
+class _ProfileView extends StatefulWidget {
+  final bool isDark; final Color cardColor, textColor, borderColor;
+  const _ProfileView({required this.isDark, required this.cardColor, required this.textColor, required this.borderColor});
+  @override State<_ProfileView> createState() => _ProfileViewState();
+}
+
+class _ProfileViewState extends State<_ProfileView> {
+  bool _saving = false;
+  late TextEditingController _nameCtrl;
+  late TextEditingController _emailCtrl;
+  late TextEditingController _phoneCtrl;
+  late TextEditingController _bioCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    final user = FirebaseAuth.instance.currentUser;
+    _nameCtrl = TextEditingController(text: user?.displayName ?? '');
+    _emailCtrl = TextEditingController(text: user?.email ?? '');
+    _phoneCtrl = TextEditingController(text: user?.phoneNumber ?? '');
+    _bioCtrl = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose(); _emailCtrl.dispose(); _phoneCtrl.dispose(); _bioCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    try {
+      await FirebaseAuth.instance.currentUser?.updateDisplayName(_nameCtrl.text.trim());
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        await FirebaseFirestore.instance.collection('users').doc(uid).set({
+          'displayName': _nameCtrl.text.trim(),
+          'phone': _phoneCtrl.text.trim(),
+          'bio': _bioCtrl.text.trim(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile updated!'), backgroundColor: Color(0xFF22C55E)));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    final initial = (_nameCtrl.text.isNotEmpty ? _nameCtrl.text[0] : (user?.email?[0] ?? 'P')).toUpperCase();
+
+    return StreamBuilder<DocumentSnapshot>(
+      stream: user != null ? FirebaseFirestore.instance.collection('users').doc(user.uid).snapshots() : const Stream.empty(),
+      builder: (context, snap) {
+        final extraData = snap.data?.data() as Map<String, dynamic>? ?? {};
+        final role = (extraData['role'] ?? 'parent').toString();
+        final plan = (extraData['plan'] ?? extraData['subscription'] ?? 'Free').toString();
+        final joined = extraData['createdAt'] as Timestamp?;
+        final joinedStr = joined != null ? DateFormat('MMM d, yyyy').format(joined.toDate()) : 'N/A';
+        if (_bioCtrl.text.isEmpty && extraData['bio'] != null) _bioCtrl.text = extraData['bio'].toString();
+
+        return Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('My Profile', style: GoogleFonts.outfit(fontSize: 28, fontWeight: FontWeight.w900, color: widget.textColor)),
+            const SizedBox(height: 6),
+            Text('Manage your account information and preferences.', style: GoogleFonts.outfit(fontSize: 14, color: const Color(0xFF94A3B8))),
+            const SizedBox(height: 28),
+
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              // Left: avatar + stats
+              SizedBox(width: 260, child: Column(children: [
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(color: widget.cardColor, borderRadius: BorderRadius.circular(24), border: Border.all(color: widget.borderColor)),
+                  child: Column(children: [
+                    Container(
+                      width: 88, height: 88,
+                      decoration: BoxDecoration(shape: BoxShape.circle, gradient: const LinearGradient(colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)])),
+                      child: Center(child: Text(initial, style: GoogleFonts.outfit(fontSize: 38, fontWeight: FontWeight.w900, color: Colors.white))),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(user?.displayName ?? user?.email?.split('@').first ?? 'Parent', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, color: widget.textColor), textAlign: TextAlign.center),
+                    const SizedBox(height: 4),
+                    Text(user?.email ?? '', style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF94A3B8)), textAlign: TextAlign.center),
+                    const SizedBox(height: 12),
+                    Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: const Color(0xFF6366F1).withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: Text(role.toUpperCase(), style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF6366F1)))),
+                      const SizedBox(width: 8),
+                      Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: const Color(0xFF22C55E).withOpacity(0.1), borderRadius: BorderRadius.circular(10)), child: Text(plan, style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF22C55E)))),
+                    ]),
+                  ]),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(color: widget.cardColor, borderRadius: BorderRadius.circular(20), border: Border.all(color: widget.borderColor)),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('Account Details', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w800, color: widget.textColor)),
+                    const SizedBox(height: 12),
+                    _InfoRow(icon: Icons.calendar_today_rounded, label: 'Member Since', value: joinedStr, isDark: widget.isDark),
+                    const SizedBox(height: 8),
+                    StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseService.instance.streamAdminDevices(),
+                      builder: (context, dSnap) => _InfoRow(icon: Icons.phone_android_rounded, label: 'Devices', value: '${dSnap.data?.docs.length ?? 0}', isDark: widget.isDark),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        if (user?.email != null) {
+                          FirebaseAuth.instance.sendPasswordResetEmail(email: user!.email!);
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password reset email sent!'), backgroundColor: Color(0xFF6366F1)));
+                        }
+                      },
+                      icon: const Icon(Icons.lock_reset_rounded, size: 16),
+                      label: Text('Reset Password', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700)),
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6366F1), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), minimumSize: const Size(double.infinity, 40)),
+                    ),
+                    const SizedBox(height: 8),
+                    ElevatedButton.icon(
+                      onPressed: () => FirebaseAuth.instance.signOut(),
+                      icon: const Icon(Icons.logout_rounded, size: 16),
+                      label: Text('Sign Out', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700)),
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), minimumSize: const Size(double.infinity, 40)),
+                    ),
+                  ]),
+                ),
+              ])),
+              const SizedBox(width: 24),
+
+              // Right: edit form
+              Expanded(child: Container(
+                padding: const EdgeInsets.all(28),
+                decoration: BoxDecoration(color: widget.cardColor, borderRadius: BorderRadius.circular(24), border: Border.all(color: widget.borderColor)),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Edit Information', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: widget.textColor)),
+                  const SizedBox(height: 6),
+                  Text('Changes are saved to your account.', style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF94A3B8))),
+                  const SizedBox(height: 24),
+                  Row(children: [
+                    Expanded(child: _DesktopProfileField(label: 'Full Name', controller: _nameCtrl, icon: Icons.person_rounded, isDark: widget.isDark)),
+                    const SizedBox(width: 16),
+                    Expanded(child: _DesktopProfileField(label: 'Email Address', controller: _emailCtrl, icon: Icons.email_rounded, isDark: widget.isDark, readOnly: true)),
+                  ]),
+                  const SizedBox(height: 16),
+                  Row(children: [
+                    Expanded(child: _DesktopProfileField(label: 'Phone Number', controller: _phoneCtrl, icon: Icons.phone_rounded, isDark: widget.isDark)),
+                    const SizedBox(width: 16),
+                    Expanded(child: _DesktopProfileField(label: 'Bio / Notes', controller: _bioCtrl, icon: Icons.notes_rounded, isDark: widget.isDark, maxLines: 1)),
+                  ]),
+                  const SizedBox(height: 24),
+                  Row(children: [
+                    const Spacer(),
+                    ElevatedButton(
+                      onPressed: _saving ? null : _save,
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6366F1), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14)),
+                      child: _saving ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : Text('Save Changes', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w800)),
+                    ),
+                  ]),
+                ]),
+              )),
+            ]),
+          ]),
+        );
+      },
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  final IconData icon; final String label, value; final bool isDark;
+  const _InfoRow({required this.icon, required this.label, required this.value, required this.isDark});
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      Icon(icon, size: 16, color: const Color(0xFF6366F1)),
+      const SizedBox(width: 8),
+      Text('$label: ', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: isDark ? Colors.white54 : const Color(0xFF64748B))),
+      Expanded(child: Text(value, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: isDark ? Colors.white : const Color(0xFF1E293B)), overflow: TextOverflow.ellipsis)),
+    ]);
+  }
+}
+
+class _DesktopProfileField extends StatelessWidget {
+  final String label; final TextEditingController controller; final IconData icon; final bool isDark; final bool readOnly; final int maxLines;
+  const _DesktopProfileField({required this.label, required this.controller, required this.icon, required this.isDark, this.readOnly = false, this.maxLines = 1});
+  @override
+  Widget build(BuildContext context) {
+    final textColor = isDark ? Colors.white : const Color(0xFF1E293B);
+    final subColor = isDark ? Colors.white54 : const Color(0xFF64748B);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label.toUpperCase(), style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w800, color: subColor, letterSpacing: 1)),
+      const SizedBox(height: 8),
+      TextField(
+        controller: controller, readOnly: readOnly, maxLines: maxLines,
+        style: GoogleFonts.outfit(fontSize: 14, color: readOnly ? subColor : textColor),
+        decoration: InputDecoration(
+          prefixIcon: Icon(icon, color: const Color(0xFF6366F1), size: 18),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          filled: true, fillColor: isDark ? Colors.white.withOpacity(readOnly ? 0.04 : 0.07) : (readOnly ? const Color(0xFFF1F5F9) : Colors.white),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: const Color(0xFF6366F1).withOpacity(0.25))),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: const Color(0xFF6366F1).withOpacity(0.25))),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFF6366F1), width: 1.5)),
+        ),
+      ),
+    ]);
   }
 }
