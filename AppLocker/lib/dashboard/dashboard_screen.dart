@@ -1699,13 +1699,15 @@ class _MobileChatSheetState extends State<_MobileChatSheet> {
     final bg = widget.isDark ? const Color(0xFF0F1A35) : Colors.white;
     final msgAreaBg = widget.isDark ? const Color(0xFF060D1F) : const Color(0xFFFAFAFA);
     return Container(
+      margin: const EdgeInsets.fromLTRB(15, 0, 15, 15),
       height: h * 0.88,
-      decoration: BoxDecoration(color: bg, borderRadius: const BorderRadius.vertical(top: Radius.circular(28))),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(28)),
+      clipBehavior: Clip.hardEdge,
       child: Column(children: [
         // ── Header ──
         Container(
           padding: const EdgeInsets.fromLTRB(20, 20, 16, 20),
-          decoration: const BoxDecoration(color: Color(0xFFFBBF24), borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+          decoration: const BoxDecoration(color: Color(0xFFFBBF24)),
           child: Row(children: [
             Container(
               padding: const EdgeInsets.all(10),
@@ -1841,7 +1843,24 @@ class _ScheduleLockSheetState extends State<_ScheduleLockSheet> {
   List<Map<String, dynamic>> get _schedules =>
       (widget.deviceData['lockSchedules'] as List<dynamic>? ?? []).map((s) => Map<String, dynamic>.from(s as Map)).toList();
 
-  String _fmtTime(TimeOfDay t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+  String _fmtTimeStore(TimeOfDay t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+  String _fmtTime(TimeOfDay t) {
+    final h = t.hourOfPeriod == 0 ? 12 : t.hourOfPeriod;
+    final m = t.minute.toString().padLeft(2, '0');
+    final period = t.period == DayPeriod.am ? 'AM' : 'PM';
+    return '$h:$m $period';
+  }
+
+  String _to12h(String t24) {
+    final parts = t24.split(':');
+    if (parts.length < 2) return t24;
+    int h = int.tryParse(parts[0]) ?? 0;
+    final m = int.tryParse(parts[1]) ?? 0;
+    final period = h < 12 ? 'AM' : 'PM';
+    h = h % 12; if (h == 0) h = 12;
+    return '$h:${m.toString().padLeft(2, '0')} $period';
+  }
 
   Future<void> _pickTime(bool isStart) async {
     final picked = await showTimePicker(context: context, initialTime: isStart ? _startTime : _endTime,
@@ -1852,7 +1871,7 @@ class _ScheduleLockSheetState extends State<_ScheduleLockSheet> {
   Future<void> _addSchedule() async {
     setState(() => _saving = true);
     final current = List<dynamic>.from(widget.deviceData['lockSchedules'] ?? []);
-    current.add({'start': _fmtTime(_startTime), 'end': _fmtTime(_endTime)});
+    current.add({'start': _fmtTimeStore(_startTime), 'end': _fmtTimeStore(_endTime)});
     await FirebaseFirestore.instance.collection('devices').doc(widget.deviceId).update({'lockSchedules': current});
     setState(() => _saving = false);
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Schedule added!'), backgroundColor: Color(0xFF22C55E)));
@@ -1873,12 +1892,14 @@ class _ScheduleLockSheetState extends State<_ScheduleLockSheet> {
     final cardBg = widget.isDark ? const Color(0xFF060D1F) : const Color(0xFFF8FAFC);
     final existing = _schedules;
     return Container(
-      height: h * 0.72,
-      decoration: BoxDecoration(color: bg, borderRadius: const BorderRadius.vertical(top: Radius.circular(28))),
+      margin: const EdgeInsets.fromLTRB(15, 0, 15, 15),
+      height: h * 0.78,
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(28)),
+      clipBehavior: Clip.hardEdge,
       child: Column(children: [
         Container(
           padding: const EdgeInsets.fromLTRB(20, 20, 16, 20),
-          decoration: const BoxDecoration(color: Color(0xFF6366F1), borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+          decoration: const BoxDecoration(color: Color(0xFF6366F1)),
           child: Row(children: [
             Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(14)),
               child: const Icon(Icons.calendar_month_rounded, color: Colors.white, size: 24)),
@@ -1962,7 +1983,7 @@ class _ScheduleLockSheetState extends State<_ScheduleLockSheet> {
                     const Icon(Icons.lock_clock_rounded, color: Color(0xFF6366F1), size: 20),
                     const SizedBox(width: 12),
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text('${s['start']} → ${s['end']}', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700, color: textColor)),
+                      Text('${_to12h(s['start'] ?? '')} → ${_to12h(s['end'] ?? '')}', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700, color: textColor)),
                       Text('Device locked during this period', style: GoogleFonts.outfit(fontSize: 11, color: subColor)),
                     ])),
                     GestureDetector(
@@ -1998,7 +2019,8 @@ class _MobileSchedulesView extends StatelessWidget {
         for (var doc in docs) {
           final data = doc.data() as Map<String, dynamic>;
           for (var s in (data['lockSchedules'] as List<dynamic>? ?? [])) {
-            rules.add({'deviceId': doc.id, 'type': 'Device Lock', 'target': 'Full Device', 'time': '${s['start']} - ${s['end']}', 'isLock': true});
+            String _to12h(String t24) { final parts = t24.split(':'); if (parts.length < 2) return t24; int h = int.tryParse(parts[0]) ?? 0; final m = int.tryParse(parts[1]) ?? 0; final p = h < 12 ? 'AM' : 'PM'; h = h % 12; if (h == 0) h = 12; return '$h:${m.toString().padLeft(2,'0')} $p'; }
+            rules.add({'deviceId': doc.id, 'type': 'Device Lock', 'target': 'Full Device', 'time': '${_to12h(s['start'] ?? '')} - ${_to12h(s['end'] ?? '')}', 'isLock': true});
           }
           (data['appSchedules'] as Map<String, dynamic>? ?? {}).forEach((pkg, sched) {
             final s = sched as Map<String, dynamic>;
@@ -2283,6 +2305,27 @@ class _MobileMonitoringViewState extends State<_MobileMonitoringView> {
   String? _selDeviceId;
   static const _cats = ['App Opened', 'Web Activity', 'Social Messages', 'Calls & SMS'];
 
+  Future<void> _clearHistory(BuildContext context, String deviceId) async {
+    final confirm = await showDialog<bool>(context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Text('Clear History', style: GoogleFonts.outfit(fontWeight: FontWeight.w900)),
+        content: Text('Delete all $_category records for this device? This cannot be undone.', style: GoogleFonts.outfit()),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Cancel', style: GoogleFonts.outfit())),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Clear All', style: GoogleFonts.outfit(color: const Color(0xFFEF4444), fontWeight: FontWeight.w700))),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    final types = _category == 'Calls & SMS' ? [_activityType, 'sms'] : [_activityType];
+    for (final type in types) {
+      final snap = await FirebaseFirestore.instance.collection('devices').doc(deviceId).collection('activity').where('type', isEqualTo: type).get();
+      for (final doc in snap.docs) await doc.reference.delete();
+    }
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('History cleared!'), backgroundColor: Color(0xFF22C55E)));
+  }
+
   String get _activityType {
     switch (_category) {
       case 'Web Activity': return 'url';
@@ -2315,22 +2358,42 @@ class _MobileMonitoringViewState extends State<_MobileMonitoringView> {
           child: Column(children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(14), border: Border.all(color: border)),
-                child: Row(children: [
-                  Container(width: 44, height: 44, decoration: BoxDecoration(color: const Color(0xFF6366F1).withOpacity(0.1), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.touch_app_rounded, color: Color(0xFF6366F1), size: 22)),
-                  const SizedBox(width: 12),
-                  Expanded(child: DropdownButton<String>(
-                    value: _category, isExpanded: true, underline: const SizedBox(),
-                    dropdownColor: widget.isDark ? const Color(0xFF0F1A35) : Colors.white,
-                    style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: textColor),
-                    icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF6366F1)),
-                    items: _cats.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-                    onChanged: (v) { if (v != null) setState(() => _category = v); },
-                  )),
-                ]),
-              ),
+              child: Column(children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(14), border: Border.all(color: border)),
+                  child: Row(children: [
+                    Container(width: 40, height: 40, decoration: BoxDecoration(color: const Color(0xFF6366F1).withOpacity(0.1), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.touch_app_rounded, color: Color(0xFF6366F1), size: 20)),
+                    const SizedBox(width: 10),
+                    Expanded(child: DropdownButton<String>(
+                      value: _category, isExpanded: true, underline: const SizedBox(),
+                      dropdownColor: widget.isDark ? const Color(0xFF0F1A35) : Colors.white,
+                      style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w800, color: textColor),
+                      icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF6366F1)),
+                      items: _cats.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                      onChanged: (v) { if (v != null) setState(() => _category = v); },
+                    )),
+                  ]),
+                ),
+                const SizedBox(height: 8),
+                if (devices.length > 1) Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(12), border: Border.all(color: border)),
+                  child: Row(children: [
+                    const Icon(Icons.smartphone_rounded, color: Color(0xFF22C55E), size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(child: DropdownButton<String>(
+                      value: devices.any((d) => d.id == _selDeviceId) ? _selDeviceId : devices.first.id,
+                      isExpanded: true, underline: const SizedBox(),
+                      dropdownColor: widget.isDark ? const Color(0xFF0F1A35) : Colors.white,
+                      style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600, color: textColor),
+                      icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF22C55E), size: 18),
+                      items: devices.map((d) { final n = ((d.data() as Map)['model'] ?? (d.data() as Map)['name'] ?? d.id).toString(); return DropdownMenuItem(value: d.id, child: Text(n, overflow: TextOverflow.ellipsis)); }).toList(),
+                      onChanged: (v) => setState(() => _selDeviceId = v),
+                    )),
+                  ]),
+                ),
+              ]),
             ),
             const SizedBox(height: 10),
             Expanded(child: StreamBuilder<QuerySnapshot>(
@@ -2356,7 +2419,18 @@ class _MobileMonitoringViewState extends State<_MobileMonitoringView> {
                         Row(children: [
                           Text(_listLabel, style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, color: textColor)),
                           const Spacer(),
-                          Text('See All', style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF6366F1), fontWeight: FontWeight.w600)),
+                          GestureDetector(
+                            onTap: () => _clearHistory(context, deviceId),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(color: const Color(0xFFEF4444).withOpacity(0.1), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFEF4444).withOpacity(0.3))),
+                              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                const Icon(Icons.delete_sweep_rounded, color: Color(0xFFEF4444), size: 15),
+                                const SizedBox(width: 4),
+                                Text('Clear', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFFEF4444), fontWeight: FontWeight.w700)),
+                              ]),
+                            ),
+                          ),
                         ]),
                         const SizedBox(height: 10),
                         if (allDocs.isEmpty)
@@ -2671,7 +2745,11 @@ class _MobileSettingsViewState extends State<_MobileSettingsView> {
   String? _selDevice;
   bool _loaded = false, _saving = false;
 
-  @override void initState() { super.initState(); _load(); }
+  @override void initState() {
+    super.initState();
+    _imageUrlCtrl.addListener(() => setState(() {}));
+    _load();
+  }
   @override void dispose() {
     for (var c in [_imageUrlCtrl, _quoteCtrl, _greetingCtrl, _headingCtrl, _titleCtrl, _tasksCtrl, _rHeadCtrl, _rMsgCtrl, _rTasksCtrl, _pinCtrl]) c.dispose();
     super.dispose();
@@ -4604,6 +4682,12 @@ class _SettingsViewState extends State<_SettingsView> {
   final TextEditingController _unlockGreetingCtrl = TextEditingController();
   bool _isLoading = false;
   bool _uploadingImage = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _profileImageUrlCtrl.addListener(() => setState(() {}));
+  }
 
   Future<void> _pickAndUploadImage() async {
     if (_selectedDeviceId == null) return;
