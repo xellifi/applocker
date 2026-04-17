@@ -320,7 +320,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (isMobile) {
       switch (_selectedMenu) {
         case _DashboardMenu.dashboard: return _MobileDashboardHome(isDark: _isDark, userRole: userRole);
-        case _DashboardMenu.devices: return _MobileDevicesView(isDark: _isDark, userRole: userRole);
+        case _DashboardMenu.devices: return _MobileDevicesView(isDark: _isDark, userRole: userRole, onNavigate: (menu) => setState(() => _selectedMenu = menu));
         case _DashboardMenu.apps: return _MobileAppControlsView(isDark: _isDark);
         case _DashboardMenu.schedules: return _MobileSchedulesView(isDark: _isDark);
         case _DashboardMenu.location: return _MobileLocationView(isDark: _isDark);
@@ -1514,7 +1514,8 @@ class _MobileMoreSheet extends StatelessWidget {
 // ─── Devices ────────────────────────────────────────────────────────────────
 class _MobileDevicesView extends StatefulWidget {
   final bool isDark; final String userRole;
-  const _MobileDevicesView({required this.isDark, required this.userRole});
+  final Function(_DashboardMenu)? onNavigate;
+  const _MobileDevicesView({required this.isDark, required this.userRole, this.onNavigate});
   @override State<_MobileDevicesView> createState() => _MobileDevicesViewState();
 }
 class _MobileDevicesViewState extends State<_MobileDevicesView> {
@@ -1555,11 +1556,14 @@ class _MobileDevicesViewState extends State<_MobileDevicesView> {
                 final isOnline = (data['status'] ?? 'offline') == 'online';
                 final battery = ((data['battery'] ?? 0) as num).toInt();
                 final isLocked = data['locked'] == true;
+                final deviceName = (data['model'] ?? data['name'] ?? doc.id).toString();
                 return _MobileDeviceListCard(
-                  name: doc.id, isOnline: isOnline, battery: battery,
+                  name: deviceName, deviceId: doc.id, isOnline: isOnline, battery: battery,
                   isDark: widget.isDark, isLocked: isLocked,
                   onChat: () => _openChat(context, doc.id),
                   onLock: () => _toggleLock(doc.id, isLocked),
+                  onLocation: () => widget.onNavigate?.call(_DashboardMenu.location),
+                  onMonitoring: () => widget.onNavigate?.call(_DashboardMenu.monitoring),
                 );
               }),
               const SizedBox(height: 12),
@@ -1580,14 +1584,16 @@ class _MobileDevicesViewState extends State<_MobileDevicesView> {
 }
 
 class _MobileDeviceListCard extends StatelessWidget {
-  final String name; final bool isOnline; final int battery; final bool isDark; final bool isLocked;
+  final String name; final String deviceId; final bool isOnline; final int battery; final bool isDark; final bool isLocked;
   final VoidCallback onChat; final VoidCallback onLock;
-  const _MobileDeviceListCard({required this.name, required this.isOnline, required this.battery, required this.isDark, required this.isLocked, required this.onChat, required this.onLock});
+  final VoidCallback? onLocation; final VoidCallback? onMonitoring;
+  const _MobileDeviceListCard({required this.name, required this.deviceId, required this.isOnline, required this.battery, required this.isDark, required this.isLocked, required this.onChat, required this.onLock, this.onLocation, this.onMonitoring});
 
   @override
   Widget build(BuildContext context) {
     final bg = isDark ? const Color(0xFF0F1A35) : Colors.white;
     final textColor = isDark ? Colors.white : const Color(0xFF1E293B);
+    final subColor = isDark ? Colors.white54 : const Color(0xFF64748B);
     final circleColor = isOnline ? const Color(0xFF22C55E) : const Color(0xFF94A3B8);
     final borderColor = isOnline ? const Color(0xFF22C55E).withOpacity(0.4) : const Color(0xFF94A3B8).withOpacity(0.3);
     final batColor = battery > 50 ? const Color(0xFF22C55E) : battery > 20 ? const Color(0xFFFBBF24) : const Color(0xFFEF4444);
@@ -1595,25 +1601,24 @@ class _MobileDeviceListCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(16), border: Border.all(color: borderColor, width: 1.5)),
-      child: Row(children: [
-        Container(width: 58, height: 58, decoration: BoxDecoration(color: circleColor, shape: BoxShape.circle),
-          child: const Icon(Icons.smartphone_rounded, color: Colors.white, size: 26)),
-        const SizedBox(width: 10),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [Icon(Icons.battery_charging_full_rounded, size: 12, color: batColor), const SizedBox(width: 2), Text('$battery%', style: GoogleFonts.outfit(fontSize: 11, color: batColor, fontWeight: FontWeight.w700))]),
-          Text(name, style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: textColor), maxLines: 1, overflow: TextOverflow.ellipsis),
-          Text('Status: ${isOnline ? "online" : "offline"}', style: GoogleFonts.outfit(fontSize: 11, color: isOnline ? const Color(0xFF22C55E) : const Color(0xFF94A3B8))),
-        ])),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          _DevActCircle(icon: Icons.calendar_month_rounded, color: const Color(0xFF22C55E), onTap: () {}),
-          const SizedBox(width: 5),
-          _DevActCircle(icon: Icons.chat_bubble_rounded, color: const Color(0xFFFBBF24), onTap: onChat, badge: true),
-          const SizedBox(width: 5),
-          _DevActCircle(icon: Icons.location_on_rounded, color: const Color(0xFFEF4444), onTap: () {}),
-          const SizedBox(width: 5),
-          _DevActCircle(icon: Icons.history_rounded, color: const Color(0xFF818CF8), onTap: () {}),
-          const SizedBox(width: 5),
+          Container(width: 52, height: 52, decoration: BoxDecoration(color: circleColor, shape: BoxShape.circle),
+            child: const Icon(Icons.smartphone_rounded, color: Colors.white, size: 24)),
+          const SizedBox(width: 10),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [Icon(Icons.battery_charging_full_rounded, size: 12, color: batColor), const SizedBox(width: 2), Text('$battery%', style: GoogleFonts.outfit(fontSize: 11, color: batColor, fontWeight: FontWeight.w700))]),
+            Text(name, style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: textColor), maxLines: 1, overflow: TextOverflow.ellipsis),
+            Text(deviceId.length > 16 ? deviceId.substring(0, 16) + '…' : deviceId, style: GoogleFonts.outfit(fontSize: 10, color: subColor), maxLines: 1, overflow: TextOverflow.ellipsis),
+            Text(isOnline ? 'Online' : 'Offline', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w700, color: isOnline ? const Color(0xFF22C55E) : const Color(0xFF94A3B8))),
+          ])),
           _DevActCircle(icon: isLocked ? Icons.lock_rounded : Icons.lock_open_rounded, color: const Color(0xFFEF4444), onTap: onLock),
+        ]),
+        const SizedBox(height: 10),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+          _DevActCircle(icon: Icons.location_on_rounded, color: const Color(0xFFEF4444), label: 'Location', onTap: onLocation ?? () {}),
+          _DevActCircle(icon: Icons.chat_bubble_rounded, color: const Color(0xFFFBBF24), label: 'Chat', onTap: onChat, badge: true),
+          _DevActCircle(icon: Icons.history_rounded, color: const Color(0xFF818CF8), label: 'Monitoring', onTap: onMonitoring ?? () {}),
         ]),
       ]),
     );
@@ -1621,14 +1626,17 @@ class _MobileDeviceListCard extends StatelessWidget {
 }
 
 class _DevActCircle extends StatelessWidget {
-  final IconData icon; final Color color; final VoidCallback onTap; final bool badge;
-  const _DevActCircle({required this.icon, required this.color, required this.onTap, this.badge = false});
+  final IconData icon; final Color color; final VoidCallback onTap; final bool badge; final String? label;
+  const _DevActCircle({required this.icon, required this.color, required this.onTap, this.badge = false, this.label});
   @override
   Widget build(BuildContext context) => GestureDetector(
     onTap: onTap,
-    child: Stack(children: [
-      Container(width: 34, height: 34, decoration: BoxDecoration(color: color.withOpacity(0.15), shape: BoxShape.circle), child: Icon(icon, color: color, size: 16)),
-      if (badge) Positioned(top: 0, right: 0, child: Container(width: 13, height: 13, decoration: const BoxDecoration(color: Color(0xFFEF4444), shape: BoxShape.circle), child: const Center(child: Text('1', style: TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.bold))))),
+    child: Column(mainAxisSize: MainAxisSize.min, children: [
+      Stack(children: [
+        Container(width: 40, height: 40, decoration: BoxDecoration(color: color.withOpacity(0.15), shape: BoxShape.circle), child: Icon(icon, color: color, size: 18)),
+        if (badge) Positioned(top: 0, right: 0, child: Container(width: 13, height: 13, decoration: const BoxDecoration(color: Color(0xFFEF4444), shape: BoxShape.circle), child: const Center(child: Text('1', style: TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.bold))))),
+      ]),
+      if (label != null) ...[const SizedBox(height: 3), Text(label!, style: GoogleFonts.outfit(fontSize: 9, color: color, fontWeight: FontWeight.w700))],
     ]),
   );
 }
@@ -1881,29 +1889,51 @@ class _MobileAppControlsViewState extends State<_MobileAppControlsView> {
               else
                 GridView.builder(
                   shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 10, mainAxisSpacing: 10, childAspectRatio: 2.5),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 10, mainAxisSpacing: 10, childAspectRatio: 2.0),
                   itemCount: filtered.length,
                   itemBuilder: (context, i) {
                     final app = filtered[i] as Map<String, dynamic>;
                     final name = (app['appName'] ?? app['name'] ?? app['label'] ?? '').toString();
                     final pkg = (app['packageName'] ?? '').toString();
                     final isBlocked = blockedApps.contains(pkg);
+                    final isHidden = hiddenApps.contains(pkg);
                     final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
                     final circleColors = [const Color(0xFFFDE68A), const Color(0xFFBFDBFE), const Color(0xFFFCE7F3), const Color(0xFFD1FAE5), const Color(0xFFE0E7FF)];
                     final tColors = [const Color(0xFFD97706), const Color(0xFF1D4ED8), const Color(0xFFBE185D), const Color(0xFF065F46), const Color(0xFF3730A3)];
                     final ci = name.isNotEmpty ? name.codeUnitAt(0) % circleColors.length : 0;
+                    final borderCol = isBlocked ? const Color(0xFFEF4444).withOpacity(0.4) : isHidden ? const Color(0xFFFBBF24).withOpacity(0.4) : borderColor;
                     return Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                      decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(14), border: Border.all(color: isBlocked ? const Color(0xFFEF4444).withOpacity(0.4) : borderColor)),
+                      decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(14), border: Border.all(color: borderCol)),
                       child: Row(children: [
                         Container(width: 38, height: 38, decoration: BoxDecoration(color: circleColors[ci], shape: BoxShape.circle), child: Center(child: Text(initial, style: GoogleFonts.outfit(color: tColors[ci], fontSize: 17, fontWeight: FontWeight.w900)))),
                         const SizedBox(width: 8),
-                        Expanded(child: Text(name, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: textColor), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                        Column(mainAxisAlignment: MainAxisAlignment.center, children: const [
-                          Icon(Icons.circle, size: 4, color: Color(0xFF94A3B8)), SizedBox(height: 3),
-                          Icon(Icons.circle, size: 4, color: Color(0xFF94A3B8)), SizedBox(height: 3),
-                          Icon(Icons.circle, size: 4, color: Color(0xFF94A3B8)),
-                        ]),
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+                          Text(name, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: textColor), maxLines: 1, overflow: TextOverflow.ellipsis),
+                          if (isBlocked) Text('Blocked', style: GoogleFonts.outfit(fontSize: 9, color: const Color(0xFFEF4444), fontWeight: FontWeight.w600))
+                          else if (isHidden) Text('Hidden', style: GoogleFonts.outfit(fontSize: 9, color: const Color(0xFFFBBF24), fontWeight: FontWeight.w600))
+                          else Text('Allowed', style: GoogleFonts.outfit(fontSize: 9, color: const Color(0xFF22C55E), fontWeight: FontWeight.w600)),
+                        ])),
+                        PopupMenuButton<String>(
+                          icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF94A3B8), size: 18),
+                          color: cardBg,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          padding: EdgeInsets.zero,
+                          onSelected: (action) async {
+                            final ref = FirebaseFirestore.instance.collection('devices').doc(selDoc.id);
+                            final List<dynamic> blocked = List.from(data['blockedApps'] ?? []);
+                            final List<dynamic> hidden = List.from(data['hiddenApps'] ?? []);
+                            if (action == 'block') { blocked.add(pkg); hidden.remove(pkg); }
+                            else if (action == 'hide') { hidden.add(pkg); blocked.remove(pkg); }
+                            else if (action == 'allow') { blocked.remove(pkg); hidden.remove(pkg); }
+                            await ref.update({'blockedApps': blocked, 'hiddenApps': hidden});
+                          },
+                          itemBuilder: (_) => [
+                            PopupMenuItem(value: 'allow', child: Row(children: [const Icon(Icons.check_circle_rounded, color: Color(0xFF22C55E), size: 16), const SizedBox(width: 8), Text('Allow', style: GoogleFonts.outfit(fontSize: 13, color: textColor))])),
+                            PopupMenuItem(value: 'block', child: Row(children: [const Icon(Icons.block_rounded, color: Color(0xFFEF4444), size: 16), const SizedBox(width: 8), Text('Block', style: GoogleFonts.outfit(fontSize: 13, color: textColor))])),
+                            PopupMenuItem(value: 'hide', child: Row(children: [const Icon(Icons.visibility_off_rounded, color: Color(0xFFFBBF24), size: 16), const SizedBox(width: 8), Text('Hide', style: GoogleFonts.outfit(fontSize: 13, color: textColor))])),
+                          ],
+                        ),
                       ]),
                     );
                   },
@@ -1977,7 +2007,8 @@ class _MobileLocationView extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
-                Expanded(child: Text('Tracking $active active devices locations', style: GoogleFonts.outfit(fontSize: 13, color: textColor, fontWeight: FontWeight.w600))),
+                Expanded(child: Text('Tracking $active active device${active == 1 ? '' : 's'}', style: GoogleFonts.outfit(fontSize: 13, color: textColor, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis, maxLines: 1)),
+                const SizedBox(width: 8),
                 Container(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(color: const Color(0xFFF0FDF4), borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFF22C55E))),
                   child: Row(children: [const Icon(Icons.refresh_rounded, color: Color(0xFF22C55E), size: 16), const SizedBox(width: 6), Text('Live Sync', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF22C55E)))])),
@@ -2021,7 +2052,7 @@ class _MobileMonitoringViewState extends State<_MobileMonitoringView> {
       default: return 'app_usage';
     }
   }
-  String get _listLabel { switch (_category) { case 'Web Activity': return 'Websites'; case 'Social Messages': return 'Social Messages'; case 'Calls & SMS': return 'Calls'; default: return 'Apps'; } }
+  String get _listLabel { switch (_category) { case 'Web Activity': return 'Websites'; case 'Social Messages': return 'Messages'; case 'Calls & SMS': return 'Calls & SMS'; default: return 'Apps'; } }
 
   @override
   Widget build(BuildContext context) {
@@ -2127,28 +2158,28 @@ class _MobileMonitoringViewState extends State<_MobileMonitoringView> {
         break;
       }
       case 'Web Activity': {
-        final url = (data['url'] ?? data['domain'] ?? '').toString();
-        final dMin = (((data['duration'] as int?) ?? 0) / 60000).round();
+        final url = (data['content'] ?? data['url'] ?? data['domain'] ?? '').toString();
+        final dMin = (((data['duration'] as num?) ?? 0) / 60000).round();
         leading = Container(width: 48, height: 48, decoration: const BoxDecoration(color: Color(0xFFD1FAE5), shape: BoxShape.circle), child: const Icon(Icons.language_rounded, color: Color(0xFF059669), size: 24));
         title = url.isEmpty ? 'Unknown site' : url; subtitle = 'Chrome · $dateStr';
         trailing = Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: const Color(0xFF1D4ED8), borderRadius: BorderRadius.circular(20)), child: Text('${dMin}m', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white)));
         break;
       }
       case 'Social Messages': {
-        final contact = (data['contact'] ?? data['from'] ?? 'Unknown').toString();
-        final body = (data['body'] ?? data['message'] ?? '').toString();
+        final contact = (data['sender'] ?? data['title'] ?? data['contact'] ?? data['from'] ?? 'Unknown').toString();
+        final body = (data['content'] ?? data['body'] ?? data['message'] ?? '').toString();
         final isIn = (data['direction'] ?? 'incoming') == 'incoming';
         leading = Container(width: 48, height: 48, decoration: const BoxDecoration(color: Color(0xFFD1FAE5), shape: BoxShape.circle), child: Icon(isIn ? Icons.south_west_rounded : Icons.north_east_rounded, color: const Color(0xFF1D4ED8), size: 24));
-        title = '${isIn ? "Incoming" : "Outgoing"} ($contact)'; subtitle = body; trailing2 = dateStr;
+        title = contact.isEmpty ? (isIn ? 'Incoming' : 'Outgoing') : contact; subtitle = body; trailing2 = dateStr;
         break;
       }
       default: {
-        final contact = (data['contact'] ?? data['from'] ?? 'Unknown').toString();
-        final body = (data['body'] ?? data['number'] ?? '').toString();
+        final contact = (data['sender'] ?? data['title'] ?? data['contact'] ?? data['from'] ?? 'Unknown').toString();
+        final body = (data['content'] ?? data['body'] ?? data['number'] ?? '').toString();
         final isIn = (data['direction'] ?? 'incoming') == 'incoming';
         leading = Container(width: 48, height: 48, decoration: const BoxDecoration(color: Color(0xFFD1FAE5), shape: BoxShape.circle), child: Icon(isIn ? Icons.south_west_rounded : Icons.north_east_rounded, color: const Color(0xFF1D4ED8), size: 24));
-        title = '${isIn ? "Incoming" : "Outgoing"} ($contact)'; subtitle = body.isEmpty ? 'No content' : body;
-        badge = type == 'sms' ? 'Messages' : 'Phone Manager'; trailing2 = dateStr;
+        title = contact.isEmpty ? (isIn ? 'Incoming' : 'Outgoing') : contact; subtitle = body.isEmpty ? 'No content' : body;
+        badge = type == 'sms' ? 'SMS' : 'Call'; trailing2 = dateStr;
         break;
       }
     }
@@ -2437,7 +2468,12 @@ class _MobileSettingsViewState extends State<_MobileSettingsView> {
     } else if (section == 'restrict') {
       payload = {'restrictedHeadline': _rHeadCtrl.text.trim(), 'restrictedMessage': _rMsgCtrl.text.trim(), 'restrictedTasks': _rTasksCtrl.text.trim().split('\n').where((l) => l.trim().isNotEmpty).toList()};
     } else if (section == 'pin') {
-      payload = {'masterPin': _pinCtrl.text.trim()};
+      final pin = _pinCtrl.text.trim();
+      payload = {'masterPin': pin};
+      final devices = await FirebaseFirestore.instance.collection('devices').where('parentUid', isEqualTo: uid).get();
+      for (final d in devices.docs) {
+        await d.reference.update({'pin': pin}).catchError((_) {});
+      }
     }
     await FirebaseFirestore.instance.collection('users').doc(uid).update(payload);
     setState(() => _saving = false);
