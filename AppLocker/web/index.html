@@ -41,7 +41,7 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      background: #0F172A;
+      background: #060D1F;
       font-family: 'Outfit', sans-serif;
       overflow: hidden;
     }
@@ -52,62 +52,126 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      background: #F9FAFB;
+      background: linear-gradient(160deg, #060D1F 0%, #0F1A35 50%, #1a1050 100%);
       z-index: 9999;
-      transition: opacity 0.4s ease;
+      transition: opacity 0.5s ease;
+    }
+    /* Background orbs */
+    #loading::before, #loading::after {
+      content: '';
+      position: absolute;
+      border-radius: 50%;
+      pointer-events: none;
+    }
+    #loading::before {
+      width: 400px;
+      height: 400px;
+      background: radial-gradient(circle, rgba(99,102,241,0.15) 0%, transparent 70%);
+      top: -100px;
+      right: -80px;
+    }
+    #loading::after {
+      width: 300px;
+      height: 300px;
+      background: radial-gradient(circle, rgba(139,92,246,0.1) 0%, transparent 70%);
+      bottom: -60px;
+      left: -60px;
+    }
+    .logo-wrap {
+      position: relative;
+      margin-bottom: 28px;
+    }
+    .logo-ring {
+      position: absolute;
+      inset: -14px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(99,102,241,0.25);
+      animation: ring-pulse 2s ease-in-out infinite;
+    }
+    .logo-ring-2 {
+      inset: -24px;
+      border-color: rgba(99,102,241,0.12);
+      animation-delay: 0.3s;
     }
     .logo {
-      width: 72px;
-      height: 72px;
-      background: #6366F1;
-      border-radius: 20px;
+      width: 80px;
+      height: 80px;
+      background: linear-gradient(135deg, #6366F1, #8B5CF6);
+      border-radius: 22px;
       display: flex;
       align-items: center;
       justify-content: center;
-      margin-bottom: 24px;
-      box-shadow: 0 16px 32px rgba(99,102,241,0.25);
-      animation: pulse 2s infinite;
+      box-shadow: 0 0 40px rgba(99,102,241,0.45), 0 16px 32px rgba(0,0,0,0.3);
+      animation: pulse 2.5s ease-in-out infinite;
+      position: relative;
+      z-index: 1;
     }
-    .logo svg { width: 40px; height: 40px; fill: white; }
+    .logo svg { width: 42px; height: 42px; fill: white; }
     .app-name {
-      color: white;
-      font-size: 28px;
+      font-size: 30px;
       font-weight: 900;
       letter-spacing: -1px;
       margin-bottom: 6px;
     }
+    .app-name span:first-child { color: #ffffff; }
+    .app-name span:last-child  { color: #6366F1; }
     .app-sub {
-      color: rgba(255,255,255,0.4);
-      font-size: 14px;
-      font-weight: 500;
-      margin-bottom: 40px;
+      color: rgba(255,255,255,0.35);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 3.5px;
+      text-transform: uppercase;
+      margin-bottom: 48px;
+    }
+    .spinner-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
     }
     .spinner {
-      width: 36px;
-      height: 36px;
-      border: 3px solid rgba(99,102,241,0.1);
+      width: 38px;
+      height: 38px;
+      border: 3px solid rgba(99,102,241,0.15);
       border-top-color: #6366F1;
       border-radius: 50%;
-      animation: spin 0.8s cubic-bezier(0.68, -0.55, 0.27, 1.55) infinite;
+      animation: spin 0.9s linear infinite;
+    }
+    .loading-text {
+      color: rgba(255,255,255,0.25);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 1px;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
     @keyframes pulse {
-      0%, 100% { box-shadow: 0 0 40px rgba(108,63,197,0.5); }
-      50% { box-shadow: 0 0 60px rgba(108,63,197,0.8); }
+      0%, 100% { box-shadow: 0 0 40px rgba(99,102,241,0.45), 0 16px 32px rgba(0,0,0,0.3); }
+      50%       { box-shadow: 0 0 64px rgba(99,102,241,0.7), 0 16px 32px rgba(0,0,0,0.3); }
+    }
+    @keyframes ring-pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50%       { transform: scale(1.08); opacity: 0.5; }
     }
   </style>
 </head>
 <body>
   <!-- Loading screen -->
   <div id="loading">
-    <div class="logo">
-      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
-      </svg>
+    <div class="logo-wrap">
+      <div class="logo-ring logo-ring-2"></div>
+      <div class="logo-ring"></div>
+      <div class="logo">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
+        </svg>
+      </div>
     </div>
-    <div class="app-name">AppLocker</div>
-    <div class="app-sub">Parent Control Dashboard</div>
-    <div class="spinner"></div>
+    <div class="app-name"><span>App</span><span>Locker</span></div>
+    <div class="app-sub">Parental Control</div>
+    <div class="spinner-wrap">
+      <div class="spinner"></div>
+      <div class="loading-text">Loading dashboard...</div>
+    </div>
   </div>
 
   <script>
