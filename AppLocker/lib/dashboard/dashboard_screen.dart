@@ -1591,8 +1591,19 @@ class _MobileDevicesViewState extends State<_MobileDevicesView> {
               Row(children: [
                 Text('Device list', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: textColor)),
                 const Spacer(),
+                // Add new device
                 GestureDetector(
-                  onTap: () => Navigator.of(context).maybePop(),
+                  onTap: () => showAppLockerPairingDialog(context, cardColor, textColor),
+                  child: Container(
+                    width: 30, height: 30,
+                    margin: const EdgeInsets.only(right: 10),
+                    decoration: const BoxDecoration(color: Color(0xFF6366F1), shape: BoxShape.circle),
+                    child: const Icon(Icons.add_rounded, color: Colors.white, size: 18),
+                  ),
+                ),
+                // Back → Dashboard
+                GestureDetector(
+                  onTap: () => widget.onNavigate?.call(_DashboardMenu.dashboard),
                   child: Row(children: [
                     const Icon(Icons.arrow_back_ios_new_rounded, size: 14, color: Color(0xFF6366F1)),
                     const SizedBox(width: 4),
