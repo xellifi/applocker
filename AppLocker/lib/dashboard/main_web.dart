@@ -27,6 +27,66 @@ Future<void> main() async {
   }
 }
 
+// ─── Browser Detection ────────────────────────────────────────────────────────
+class _BrowserInfo {
+  static String? _ua;
+  static String get _userAgent {
+    _ua ??= html.window.navigator.userAgent.toLowerCase();
+    return _ua!;
+  }
+
+  /// Messenger / Facebook in-app browser (FBAN / FBAV / FB_IAB)
+  static bool get isMessengerBrowser {
+    final ua = _userAgent;
+    return ua.contains('fban') ||
+        ua.contains('fbav') ||
+        ua.contains('fb_iab') ||
+        ua.contains('messenger');
+  }
+
+  /// Any Meta in-app browser (Facebook, Instagram, WhatsApp WebView)
+  static bool get isMetaInAppBrowser {
+    final ua = _userAgent;
+    return isMessengerBrowser ||
+        ua.contains('instagram') ||
+        ua.contains('facebookexternalhit');
+  }
+
+  /// Generic in-app browser / WebView that blocks PWA install
+  static bool get isInAppBrowser {
+    final ua = _userAgent;
+    return isMetaInAppBrowser ||
+        ua.contains('wv)') || // Android WebView
+        ua.contains('; wv') ||
+        ua.contains('micromessenger') || // WeChat
+        ua.contains('line/') || // LINE
+        ua.contains('snapchat');
+  }
+
+  static bool get isIOS {
+    final ua = _userAgent;
+    return ua.contains('iphone') || ua.contains('ipad') || ua.contains('ipod');
+  }
+
+  static bool get isSafari {
+    final ua = _userAgent;
+    return ua.contains('safari') &&
+        !ua.contains('chrome') &&
+        !ua.contains('crios') &&
+        !ua.contains('fxios');
+  }
+
+  static bool get isChrome {
+    final ua = _userAgent;
+    return (ua.contains('chrome') || ua.contains('crios')) &&
+        !ua.contains('edg/') &&
+        !ua.contains('opr/');
+  }
+
+  static bool get supportsInstallPrompt =>
+      !isInAppBrowser && !isSafari && !isIOS;
+}
+
 // ─── PWA Install helper (JS interop) ──────────────────────────────────────────
 //
 // beforeinstallprompt fires at page-load time — before Flutter even downloads.
@@ -46,6 +106,12 @@ class _PwaInstallManager {
     // Already dismissed?
     if (wasDismissed) return;
 
+    // In-app browsers will never have the prompt — show banner with guidance.
+    if (_BrowserInfo.isInAppBrowser) {
+      onPromptAvailable();
+      return;
+    }
+
     // If the event was captured by index.html JS before Flutter loaded, fire now.
     if (js.context['_pwaPrompt'] != null) {
       onPromptAvailable();
@@ -60,6 +126,13 @@ class _PwaInstallManager {
     js.context['_pwaInstalledCallback'] = js.allowInterop(() {
       _installed = true;
     });
+
+    // Fallback: if no prompt in 4s and browser supports it, show instructions anyway
+    Future.delayed(const Duration(seconds: 4), () {
+      if (js.context['_pwaPrompt'] == null && !_installed && !wasDismissed) {
+        onPromptAvailable();
+      }
+    });
   }
 
   static bool get canInstall =>
@@ -71,13 +144,17 @@ class _PwaInstallManager {
   static bool get wasDismissed =>
       html.window.localStorage['pwa_install_dismissed'] == 'true';
 
-  static Future<void> prompt() async {
+  static Future<bool> prompt() async {
     final p = js.context['_pwaPrompt'];
-    if (p == null) return;
+    if (p == null) return false;
     try {
       (p as js.JsObject).callMethod('prompt', []);
-    } catch (_) {}
-    js.context['_pwaPrompt'] = null;
+      js.context['_pwaPrompt'] = null;
+      return true;
+    } catch (e) {
+      js.context['_pwaPrompt'] = null;
+      return false;
+    }
   }
 
   static void dismiss() {
@@ -231,11 +308,24 @@ class _PwaInstallBannerState extends State<_PwaInstallBanner>
   }
 
   void _handleInstall(BuildContext context) {
+    // If the native install prompt is available, trigger it directly.
+    // This must happen within a user-gesture, so we call it immediately here.
+    if (_PwaInstallManager.canInstall) {
+      _PwaInstallManager.prompt().then((_) {
+        if (mounted) widget.onInstall();
+      });
+      return;
+    }
+    // Otherwise show the instructions / guidance dialog.
     _showInstallInstructions(context);
   }
 
   void _showInstallInstructions(BuildContext context) {
-    final canInstall = _PwaInstallManager.canInstall;
+    final isInApp = _BrowserInfo.isInAppBrowser;
+    final isMessenger = _BrowserInfo.isMessengerBrowser;
+    final isIOS = _BrowserInfo.isIOS;
+    final isSafari = _BrowserInfo.isSafari;
+
     showDialog(
       context: context,
       useRootNavigator: true,
@@ -269,6 +359,7 @@ class _PwaInstallBannerState extends State<_PwaInstallBanner>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // ── Header ───────────────────────────────────────────────
               Row(
                 children: [
                   Container(
@@ -310,80 +401,112 @@ class _PwaInstallBannerState extends State<_PwaInstallBanner>
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              if (canInstall) ...[
-                GestureDetector(
-                  onTap: () {
-                    Navigator.of(dialogCtx, rootNavigator: true).pop();
-                    widget.onInstall();
-                  },
-                  child: Container(
-                    width: double.infinity,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
-                      ),
-                      borderRadius: BorderRadius.circular(14),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF6366F1).withOpacity(0.45),
-                          blurRadius: 16,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.download_rounded,
-                            color: Colors.white, size: 20),
-                        const SizedBox(width: 10),
+              const SizedBox(height: 20),
+
+              // ── In-App Browser Notice (Messenger / FB / Instagram etc.) ──
+              if (isInApp) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF59E0B).withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                        color: const Color(0xFFF59E0B).withOpacity(0.35)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        const Icon(Icons.warning_amber_rounded,
+                            color: Color(0xFFF59E0B), size: 18),
+                        const SizedBox(width: 8),
                         Text(
-                          'Install Now',
+                          isMessenger
+                              ? 'Messenger Browser Detected'
+                              : 'In-App Browser Detected',
                           style: GoogleFonts.outfit(
-                            color: Colors.white,
+                            fontSize: 13,
                             fontWeight: FontWeight.w800,
-                            fontSize: 16,
+                            color: const Color(0xFFF59E0B),
                             decoration: TextDecoration.none,
                           ),
                         ),
-                      ],
-                    ),
+                      ]),
+                      const SizedBox(height: 8),
+                      Text(
+                        isMessenger
+                            ? 'Messenger\'s browser cannot install apps. Please open this page in Chrome or Safari to install AppLocker.'
+                            : 'This in-app browser cannot install PWAs. Open this page in Chrome or Safari to install AppLocker.',
+                        style: GoogleFonts.outfit(
+                          fontSize: 12,
+                          color: Colors.white70,
+                          height: 1.5,
+                          decoration: TextDecoration.none,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 16),
-                Row(children: [
-                  Expanded(child: Divider(color: Colors.white.withOpacity(0.12))),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Text('or install manually',
-                        style: GoogleFonts.outfit(
-                            fontSize: 11,
-                            color: Colors.white38,
-                            decoration: TextDecoration.none)),
+                _InstructionStep(
+                  icon: Icons.open_in_browser_rounded,
+                  label: 'Step 1 — Copy the link',
+                  detail: 'Tap the 3-dot menu (⋮) or the share icon and choose "Open in browser" or "Open in Chrome".',
+                ),
+                const SizedBox(height: 12),
+                _InstructionStep(
+                  icon: Icons.download_rounded,
+                  label: 'Step 2 — Install from Chrome',
+                  detail: 'Once in Chrome, tap the 3-dot menu → "Add to Home screen" or "Install app".',
+                ),
+              ] else ...[
+                // ── Normal install instructions ───────────────────────
+                if (isIOS && isSafari) ...[
+                  _InstructionStep(
+                    icon: Icons.ios_share_rounded,
+                    label: 'Safari (iPhone / iPad)',
+                    detail: 'Tap the Share button (□↑) at the bottom → scroll down → tap "Add to Home Screen".',
                   ),
-                  Expanded(child: Divider(color: Colors.white.withOpacity(0.12))),
-                ]),
-                const SizedBox(height: 16),
+                  const SizedBox(height: 12),
+                  _InstructionStep(
+                    icon: Icons.info_outline_rounded,
+                    label: 'Tip',
+                    detail: 'If you\'re on iPhone, make sure to use Safari — other browsers on iOS cannot install apps.',
+                  ),
+                ] else if (isIOS) ...[
+                  _InstructionStep(
+                    icon: Icons.open_in_browser_rounded,
+                    label: 'Open in Safari',
+                    detail: 'iOS only allows app installation from Safari. Copy the link and open it in Safari.',
+                  ),
+                  const SizedBox(height: 12),
+                  _InstructionStep(
+                    icon: Icons.ios_share_rounded,
+                    label: 'Then tap Share → "Add to Home Screen"',
+                    detail: 'Tap the Share button (□↑) at the bottom of Safari → "Add to Home Screen".',
+                  ),
+                ] else ...[
+                  _InstructionStep(
+                    icon: Icons.desktop_windows_rounded,
+                    label: 'Chrome / Edge (Desktop)',
+                    detail: 'Click the install icon (⊕) in the address bar, or open the menu → "Install AppLocker".',
+                  ),
+                  const SizedBox(height: 12),
+                  _InstructionStep(
+                    icon: Icons.phone_android_rounded,
+                    label: 'Chrome (Android)',
+                    detail: 'Tap the 3-dot menu (⋮) → "Add to Home screen" or "Install app".',
+                  ),
+                  const SizedBox(height: 12),
+                  _InstructionStep(
+                    icon: Icons.phone_iphone_rounded,
+                    label: 'Safari (iPhone / iPad)',
+                    detail: 'Tap the Share button (□↑) → scroll down → "Add to Home Screen".',
+                  ),
+                ],
               ],
-              _InstructionStep(
-                icon: Icons.desktop_windows_rounded,
-                label: 'Chrome / Edge (Desktop)',
-                detail: 'Click the install icon (⊕) in the address bar, or open the browser menu → "Install AppLocker".',
-              ),
-              const SizedBox(height: 12),
-              _InstructionStep(
-                icon: Icons.phone_android_rounded,
-                label: 'Chrome (Android)',
-                detail: 'Tap the 3-dot menu → "Add to Home screen" or "Install app".',
-              ),
-              const SizedBox(height: 12),
-              _InstructionStep(
-                icon: Icons.phone_iphone_rounded,
-                label: 'Safari (iPhone / iPad)',
-                detail: 'Tap the Share button (□↑) → scroll down → "Add to Home Screen".',
-              ),
+
               const SizedBox(height: 20),
               GestureDetector(
                 onTap: () => Navigator.of(dialogCtx, rootNavigator: true).pop(),
@@ -397,7 +520,7 @@ class _PwaInstallBannerState extends State<_PwaInstallBanner>
                   ),
                   child: Center(
                     child: Text(
-                      'Close',
+                      'Got it',
                       style: GoogleFonts.outfit(
                         color: Colors.white54,
                         fontWeight: FontWeight.w600,
@@ -417,6 +540,42 @@ class _PwaInstallBannerState extends State<_PwaInstallBanner>
 
   @override
   Widget build(BuildContext context) {
+    final isInApp = _BrowserInfo.isInAppBrowser;
+    final isMessenger = _BrowserInfo.isMessengerBrowser;
+    final isIOS = _BrowserInfo.isIOS;
+    final isSafari = _BrowserInfo.isSafari;
+    final canInstall = _PwaInstallManager.canInstall;
+
+    final String bannerTitle = isInApp
+        ? (isMessenger ? 'Open in Chrome to Install' : 'Open in Chrome to Install')
+        : (isIOS && isSafari)
+            ? 'Add to Home Screen'
+            : 'Install AppLocker';
+
+    final String bannerSubtitle = isInApp
+        ? (isMessenger
+            ? 'Messenger\'s browser can\'t install apps. Tap "How?" to open this in Chrome.'
+            : 'This in-app browser can\'t install apps. Open in Chrome or Safari instead.')
+        : (isIOS && isSafari)
+            ? 'Tap Share (□↑) → "Add to Home Screen" for quick access.'
+            : canInstall
+                ? 'Tap Install App and confirm — it only takes one tap!'
+                : 'Add to home screen for quick access — works offline too.';
+
+    final String buttonLabel = isInApp
+        ? 'How?'
+        : (isIOS && isSafari)
+            ? 'How to add'
+            : canInstall
+                ? 'Install App'
+                : 'How to install';
+
+    final IconData buttonIcon = isInApp
+        ? Icons.open_in_browser_rounded
+        : (isIOS && isSafari)
+            ? Icons.ios_share_rounded
+            : Icons.download_rounded;
+
     return Positioned.fill(
       child: FadeTransition(
         opacity: _fadeAnim,
@@ -455,6 +614,39 @@ class _PwaInstallBannerState extends State<_PwaInstallBanner>
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // ── In-app browser warning strip ──────────────────
+                    if (isInApp) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        margin: const EdgeInsets.only(bottom: 14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF59E0B).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                              color: const Color(0xFFF59E0B).withOpacity(0.3)),
+                        ),
+                        child: Row(children: [
+                          const Icon(Icons.warning_amber_rounded,
+                              color: Color(0xFFF59E0B), size: 15),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              isMessenger
+                                  ? 'Messenger browser — can\'t install PWAs'
+                                  : 'In-app browser — can\'t install PWAs',
+                              style: GoogleFonts.outfit(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFFF59E0B),
+                                decoration: TextDecoration.none,
+                              ),
+                            ),
+                          ),
+                        ]),
+                      ),
+                    ],
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -476,8 +668,13 @@ class _PwaInstallBannerState extends State<_PwaInstallBanner>
                               ),
                             ],
                           ),
-                          child: const Icon(Icons.shield_rounded,
-                              color: Colors.white, size: 26),
+                          child: Icon(
+                            isInApp
+                                ? Icons.open_in_browser_rounded
+                                : Icons.shield_rounded,
+                            color: Colors.white,
+                            size: 26,
+                          ),
                         ),
                         const SizedBox(width: 14),
                         Expanded(
@@ -485,7 +682,7 @@ class _PwaInstallBannerState extends State<_PwaInstallBanner>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Install AppLocker',
+                                bannerTitle,
                                 style: GoogleFonts.outfit(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w800,
@@ -496,7 +693,7 @@ class _PwaInstallBannerState extends State<_PwaInstallBanner>
                               ),
                               const SizedBox(height: 3),
                               Text(
-                                'Add to home screen for quick access — works offline too.',
+                                bannerSubtitle,
                                 style: GoogleFonts.outfit(
                                   fontSize: 12,
                                   color: Colors.white60,
@@ -575,11 +772,11 @@ class _PwaInstallBannerState extends State<_PwaInstallBanner>
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    const Icon(Icons.download_rounded,
+                                    Icon(buttonIcon,
                                         color: Colors.white, size: 18),
                                     const SizedBox(width: 8),
                                     Text(
-                                      'Install App',
+                                      buttonLabel,
                                       style: GoogleFonts.outfit(
                                         color: Colors.white,
                                         fontWeight: FontWeight.w800,
