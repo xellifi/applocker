@@ -2280,12 +2280,28 @@ class _MobileSchedulesView extends StatelessWidget {
         for (var doc in docs) {
           final data = doc.data() as Map<String, dynamic>;
           for (var s in (data['lockSchedules'] as List<dynamic>? ?? [])) {
+            final sm = s as Map;
             String _to12h(String t24) { final parts = t24.split(':'); if (parts.length < 2) return t24; int h = int.tryParse(parts[0]) ?? 0; final m = int.tryParse(parts[1]) ?? 0; final p = h < 12 ? 'AM' : 'PM'; h = h % 12; if (h == 0) h = 12; return '$h:${m.toString().padLeft(2,'0')} $p'; }
-            rules.add({'deviceId': doc.id, 'type': 'Device Lock', 'target': 'Full Device', 'time': '${_to12h(s['start'] ?? '')} - ${_to12h(s['end'] ?? '')}', 'isLock': true});
+            rules.add({
+              'deviceId': doc.id, 'type': 'Device Lock', 'target': 'Full Device',
+              'time': '${_to12h(sm['start'] ?? '')} - ${_to12h(sm['end'] ?? '')}',
+              'rawStart': sm['start'] ?? '', 'rawEnd': sm['end'] ?? '',
+              'isLock': true,
+            });
           }
           (data['appSchedules'] as Map<String, dynamic>? ?? {}).forEach((pkg, sched) {
             final s = sched as Map<String, dynamic>;
-            rules.add({'deviceId': doc.id, 'type': 'App Restriction', 'target': pkg.split('.').last, 'time': (s['alwaysBlocked'] == true) ? 'Always Blocked' : '${s['start']} - ${s['end']}', 'isLock': false});
+            final alwaysBlocked = s['alwaysBlocked'] == true;
+            rules.add({
+              'deviceId': doc.id, 'type': 'App Restriction',
+              'target': pkg.split('.').last,
+              'pkg': pkg,
+              'rawStart': s['start'] ?? '',
+              'rawEnd': s['end'] ?? '',
+              'alwaysBlocked': alwaysBlocked,
+              'time': alwaysBlocked ? 'Always Blocked' : '${s['start']} - ${s['end']}',
+              'isLock': false,
+            });
           });
         }
         return Container(
@@ -2323,6 +2339,145 @@ class _MobileSchedulesView extends StatelessWidget {
 class _MobileScheduleCard extends StatelessWidget {
   final Map<String, dynamic> rule; final bool isDark;
   const _MobileScheduleCard({required this.rule, required this.isDark});
+
+  Future<void> _handleDelete(BuildContext context) async {
+    final deviceId = rule['deviceId'] as String? ?? '';
+    if (deviceId.isEmpty) return;
+    final isLock = rule['isLock'] == true;
+    final snap = await FirebaseFirestore.instance.collection('devices').doc(deviceId).get();
+    if (!snap.exists) return;
+    final data = snap.data() as Map<String, dynamic>;
+    if (isLock) {
+      final rawStart = rule['rawStart'] as String? ?? '';
+      final rawEnd   = rule['rawEnd']   as String? ?? '';
+      final list = List<Map<String, dynamic>>.from(
+        (data['lockSchedules'] ?? []).map((s) => Map<String, dynamic>.from(s as Map))
+      );
+      list.removeWhere((s) => s['start'] == rawStart && s['end'] == rawEnd);
+      await FirebaseFirestore.instance.collection('devices').doc(deviceId).update({'lockSchedules': list});
+    } else {
+      final pkg = rule['pkg'] as String? ?? '';
+      if (pkg.isEmpty) return;
+      final schedules = Map<String, dynamic>.from(data['appSchedules'] ?? {});
+      schedules.remove(pkg);
+      await FirebaseFirestore.instance.collection('devices').doc(deviceId).update({'appSchedules': schedules});
+    }
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Schedule deleted.'), backgroundColor: Color(0xFFEF4444),
+      ));
+    }
+  }
+
+  Future<void> _handleEdit(BuildContext context) async {
+    final deviceId = rule['deviceId'] as String? ?? '';
+    if (deviceId.isEmpty) return;
+    final isLock = rule['isLock'] == true;
+
+    if (isLock) {
+      // Device Lock: open ScheduleLockSheet to manage lock schedules
+      final data = await FirebaseFirestore.instance.collection('devices').doc(deviceId).get();
+      if (context.mounted) {
+        showModalBottomSheet(
+          context: context, isScrollControlled: true, backgroundColor: Colors.transparent,
+          builder: (_) => _ScheduleLockSheet(deviceId: deviceId, deviceData: data.data() ?? {}, isDark: isDark),
+        );
+      }
+    } else {
+      // App Restriction: show inline edit dialog
+      final pkg = rule['pkg'] as String? ?? '';
+      if (pkg.isEmpty) return;
+      final target = rule['target'] as String? ?? pkg;
+      bool alwaysBlocked = rule['alwaysBlocked'] == true;
+      TimeOfDay startTime = const TimeOfDay(hour: 22, minute: 0);
+      TimeOfDay endTime   = const TimeOfDay(hour: 6,  minute: 0);
+
+      String fmt(TimeOfDay t) => '${t.hour.toString().padLeft(2,'0')}:${t.minute.toString().padLeft(2,'0')}';
+      String fmtDisplay(TimeOfDay t) {
+        final h = t.hourOfPeriod == 0 ? 12 : t.hourOfPeriod;
+        final p = t.period == DayPeriod.am ? 'AM' : 'PM';
+        return '$h:${t.minute.toString().padLeft(2,'0')} $p';
+      }
+
+      // Try to parse existing raw start/end
+      final rawStart = rule['rawStart'] as String? ?? '';
+      final rawEnd   = rule['rawEnd']   as String? ?? '';
+      final sp = rawStart.split(':');
+      final ep = rawEnd.split(':');
+      if (sp.length >= 2) startTime = TimeOfDay(hour: int.tryParse(sp[0]) ?? 22, minute: int.tryParse(sp[1]) ?? 0);
+      if (ep.length >= 2) endTime   = TimeOfDay(hour: int.tryParse(ep[0]) ?? 6,  minute: int.tryParse(ep[1]) ?? 0);
+
+      if (!context.mounted) return;
+      await showDialog(
+        context: context,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setS) => AlertDialog(
+            backgroundColor: isDark ? const Color(0xFF0F1A35) : Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            title: Text('Edit App Rule', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: isDark ? Colors.white : const Color(0xFF1E293B))),
+            content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(target.toUpperCase(), style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w700)),
+              const SizedBox(height: 16),
+              SwitchListTile(
+                title: Text('Always Blocked', style: GoogleFonts.outfit(color: isDark ? Colors.white : const Color(0xFF1E293B), fontSize: 13, fontWeight: FontWeight.bold)),
+                subtitle: Text('Block 24/7', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 11)),
+                value: alwaysBlocked,
+                activeColor: const Color(0xFFEF4444),
+                onChanged: (v) => setS(() => alwaysBlocked = v),
+              ),
+              if (!alwaysBlocked) ...[
+                const SizedBox(height: 8),
+                GestureDetector(
+                  onTap: () async {
+                    final s = await showTimePicker(context: ctx, initialTime: startTime, helpText: 'Lock Start Time');
+                    if (s == null) return;
+                    final e = await showTimePicker(context: ctx, initialTime: endTime, helpText: 'Unlock Time');
+                    if (e == null) return;
+                    setS(() { startTime = s; endTime = e; });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.04),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.4)),
+                    ),
+                    child: Row(children: [
+                      const Icon(Icons.access_time_rounded, color: Color(0xFF6366F1), size: 18),
+                      const SizedBox(width: 12),
+                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text('Time Window', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF94A3B8))),
+                        Text('${fmtDisplay(startTime)} → ${fmtDisplay(endTime)}', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: isDark ? Colors.white : const Color(0xFF1E293B))),
+                      ])),
+                      const Icon(Icons.edit_rounded, size: 14, color: Color(0xFF94A3B8)),
+                    ]),
+                  ),
+                ),
+              ],
+            ]),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8)))),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  final doc = await FirebaseFirestore.instance.collection('devices').doc(deviceId).get();
+                  if (!doc.exists) return;
+                  final data = doc.data() as Map<String, dynamic>;
+                  final schedules = Map<String, dynamic>.from(data['appSchedules'] ?? {});
+                  schedules[pkg] = {'start': fmt(startTime), 'end': fmt(endTime), 'alwaysBlocked': alwaysBlocked};
+                  await FirebaseFirestore.instance.collection('devices').doc(deviceId).update({'appSchedules': schedules});
+                  if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('App rule updated.'), backgroundColor: Color(0xFF10B981)));
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6366F1), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                child: Text('Save', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isLock = rule['isLock'] == true;
@@ -2352,52 +2507,12 @@ class _MobileScheduleCard extends StatelessWidget {
         ])),
         Column(children: [
           GestureDetector(
-            onTap: () async {
-              final deviceId = rule['deviceId'] as String?;
-              if (deviceId == null) return;
-              final isLock = rule['isLock'] == true;
-              if (isLock) {
-                // Show edit schedule bottom sheet
-                final data = await FirebaseFirestore.instance.collection('devices').doc(deviceId).get();
-                if (context.mounted) {
-                  showModalBottomSheet(
-                    context: context, isScrollControlled: true, backgroundColor: Colors.transparent,
-                    builder: (_) => _ScheduleLockSheet(deviceId: deviceId, deviceData: data.data() ?? {}, isDark: isDark),
-                  );
-                }
-              } else {
-                // Show a snack indicating app schedule editing happens in App Controls
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Edit app schedules from App Controls page.'), backgroundColor: Color(0xFF6366F1)));
-              }
-            },
+            onTap: () => _handleEdit(context),
             child: Container(width: 36, height: 36, decoration: BoxDecoration(color: const Color(0xFF6366F1).withOpacity(0.12), shape: BoxShape.circle), child: const Icon(Icons.edit_rounded, color: Color(0xFF6366F1), size: 16)),
           ),
           const SizedBox(height: 6),
           GestureDetector(
-            onTap: () async {
-              final deviceId = rule['deviceId'] as String?;
-              if (deviceId == null) return;
-              final isLock = rule['isLock'] == true;
-              if (isLock) {
-                final snap = await FirebaseFirestore.instance.collection('devices').doc(deviceId).get();
-                final list = List<Map<String, dynamic>>.from((snap.data()?['lockSchedules'] ?? []).map((s) => Map<String, dynamic>.from(s)));
-                final ruleTime = rule['time'] as String? ?? '';
-                list.removeWhere((s) {
-                  String _to12h(String t24) { final parts = t24.split(':'); if (parts.length < 2) return t24; int h = int.tryParse(parts[0]) ?? 0; final m = int.tryParse(parts[1]) ?? 0; final p = h < 12 ? 'AM' : 'PM'; h = h % 12; if (h == 0) h = 12; return '$h:${m.toString().padLeft(2,'0')} $p'; }
-                  return '${_to12h(s['start'] ?? '')} - ${_to12h(s['end'] ?? '')}' == ruleTime;
-                });
-                await FirebaseFirestore.instance.collection('devices').doc(deviceId).update({'lockSchedules': list});
-              } else {
-                final pkg = rule['pkg'] ?? '';
-                if (pkg.isNotEmpty) {
-                  final snap = await FirebaseFirestore.instance.collection('devices').doc(deviceId).get();
-                  final schedules = Map<String, dynamic>.from(snap.data()?['appSchedules'] ?? {});
-                  schedules.remove(pkg);
-                  await FirebaseFirestore.instance.collection('devices').doc(deviceId).update({'appSchedules': schedules});
-                }
-              }
-              if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Schedule deleted.'), backgroundColor: Color(0xFFEF4444)));
-            },
+            onTap: () => _handleDelete(context),
             child: Container(width: 36, height: 36, decoration: BoxDecoration(color: const Color(0xFFEF4444).withOpacity(0.12), shape: BoxShape.circle), child: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 16)),
           ),
         ]),
