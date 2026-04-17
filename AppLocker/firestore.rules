@@ -15,11 +15,16 @@ service cloud.firestore {
     
     // 3. Devices
     match /devices/{deviceId} {
-      allow read, write: if true; 
-      
-      // NEW: Monitoring Activity Logs (under devices sub-collection)
+      allow read, write: if true;
+
+      // 7. Monitoring Activity Logs (under devices sub-collection)
       match /activity/{activityId} {
-        allow read, write: if true; 
+        allow read, write: if true;
+      }
+
+      // 8. Chat Messages (parent ↔ child)
+      match /messages/{messageId} {
+        allow read, write: if true;
       }
     }
     
@@ -28,7 +33,7 @@ service cloud.firestore {
       allow read, write: if request.auth != null && (request.auth.uid == userId || isSuperAdmin());
     }
 
-    // 5. Subscription Plans (NEW: Required for dynamic management)
+    // 5. Subscription Plans (Required for dynamic management)
     match /plans/{planId} {
       allow read: if true; // Everyone can see available plans to subscribe
       allow write: if request.auth != null && isSuperAdmin(); // ONLY Super Admin can Add/Edit/Delete
@@ -38,6 +43,19 @@ service cloud.firestore {
     match /config/{document=**} {
       allow read: if true;
       allow write: if request.auth != null && isSuperAdmin();
+    }
+
+    // 9. Payment Methods (Mode of Payment options like GCash, Maya, Bank Transfer)
+    match /payment_methods/{methodId} {
+      allow read: if true; // Anyone can view available payment methods
+      allow write: if request.auth != null && isSuperAdmin(); // Only Super Admin can manage
+    }
+
+    // 10. Transactions (Payment submissions awaiting Super Admin approval)
+    match /transactions/{transactionId} {
+      allow create: if request.auth != null; // Any logged-in user can submit a payment
+      allow read: if request.auth != null && (resource.data.uid == request.auth.uid || isSuperAdmin());
+      allow update, delete: if request.auth != null && isSuperAdmin(); // Only Super Admin can approve/reject
     }
   }
 }
