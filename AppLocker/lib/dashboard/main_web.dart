@@ -253,15 +253,18 @@ class _AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<_AppShell> {
-  // Always show onboarding on every fresh visit — skip button is available.
   bool _onboardingDone = false;
 
   @override
   void initState() {
     super.initState();
+    _onboardingDone =
+        html.window.localStorage['applocker_onboarding_done'] == 'true' ||
+            FirebaseAuth.instance.currentUser != null;
   }
 
   void _finishOnboarding() {
+    html.window.localStorage['applocker_onboarding_done'] = 'true';
     setState(() => _onboardingDone = true);
   }
 

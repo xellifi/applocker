@@ -98,79 +98,99 @@ void showAppLockerPairingDialog(BuildContext context, Color cardColor, Color tex
     context: context,
     barrierDismissible: true,
     builder: (BuildContext context) {
+      final size = MediaQuery.of(context).size;
+      final isCompact = size.width < 520 || size.height < 760;
       return Dialog(
-        backgroundColor: cardColor,
+        backgroundColor: Colors.transparent,
         elevation: 24,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
-        child: Container(
-          width: 400,
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 430,
+            maxHeight: size.height * 0.9,
+          ),
+          child: Container(
+            decoration: BoxDecoration(
+              color: cardColor,
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.18)),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.28), blurRadius: 34, offset: const Offset(0, 18))],
+            ),
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(24, isCompact ? 20 : 26, 24, isCompact ? 20 : 26),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('Pair New Device', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: textColor)),
-                  const Spacer(),
-                  IconButton(
-                    onPressed: () => Navigator.pop(context), 
-                    icon: const Icon(Icons.close_rounded, size: 20),
-                    color: const Color(0xFF94A3B8),
+                  Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)]),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Pair New Device', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: textColor, height: 1.05)),
+                            const SizedBox(height: 3),
+                            Text('Scan or enter the PIN on the child app', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF94A3B8))),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close_rounded, size: 20),
+                        color: const Color(0xFF94A3B8),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: isCompact ? 18 : 24),
+                  Container(
+                    padding: EdgeInsets.all(isCompact ? 14 : 20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(28),
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 24, offset: const Offset(0, 12))],
+                    ),
+                    child: QrImageView(
+                      data: qrData,
+                      version: QrVersions.auto,
+                      size: isCompact ? 172 : 210,
+                      foregroundColor: const Color(0xFF1E293B),
+                    ),
+                  ),
+                  SizedBox(height: isCompact ? 20 : 26),
+                  Text('6-DIGIT PAIRING PIN', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFF94A3B8), letterSpacing: 1.6)),
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.symmetric(vertical: isCompact ? 12 : 15),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(colors: [const Color(0xFF6366F1).withOpacity(0.16), const Color(0xFF8B5CF6).withOpacity(0.12)]),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.25)),
+                    ),
+                    child: Text(
+                      pin,
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.outfit(fontSize: isCompact ? 30 : 36, fontWeight: FontWeight.w900, color: const Color(0xFF6366F1), letterSpacing: 7),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Keep this window open while pairing. The code is temporary and only works for your account.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.outfit(color: const Color(0xFF64748B), fontSize: 12.5, height: 1.45, fontWeight: FontWeight.w500),
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(32),
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 10))],
-                ),
-                child: QrImageView(
-                  data: qrData,
-                  version: QrVersions.auto,
-                  size: 200,
-                  foregroundColor: const Color(0xFF1E293B),
-                ),
-              ),
-              const SizedBox(height: 32),
-              Text('6-DIGIT PAIRING PIN', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, color: const Color(0xFF94A3B8), letterSpacing: 1.5)),
-              const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF6366F1).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.2)),
-                ),
-                child: Text(
-                  pin,
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.outfit(fontSize: 36, fontWeight: FontWeight.w900, color: const Color(0xFF6366F1), letterSpacing: 8),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                'Scan the QR code or enter the secret PIN\non the child device to start monitoring.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.outfit(color: const Color(0xFF64748B), fontSize: 13, height: 1.5),
-              ),
-              const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                child: TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    backgroundColor: textColor.withOpacity(0.05),
-                  ),
-                  child: Text('Close', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: textColor)),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       );
@@ -190,6 +210,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isDark = true;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
+  @override
+  void initState() {
+    super.initState();
+    _isDark = html.window.localStorage['applocker_dashboard_theme'] != 'light';
+    final savedMenu = html.window.localStorage['applocker_dashboard_menu'];
+    if (savedMenu != null) {
+      for (final menu in _DashboardMenu.values) {
+        if (menu.name == savedMenu) {
+          _selectedMenu = menu;
+          break;
+        }
+      }
+    }
+  }
+
+  void _setSelectedMenu(_DashboardMenu menu) {
+    html.window.localStorage['applocker_dashboard_menu'] = menu.name;
+    setState(() => _selectedMenu = menu);
+  }
+
+  void _toggleTheme() {
+    final next = !_isDark;
+    html.window.localStorage['applocker_dashboard_theme'] = next ? 'dark' : 'light';
+    setState(() => _isDark = next);
+  }
+
   void _showMobileMoreSheet(BuildContext context, Color cardColor, Color textColor, String userRole) {
     showModalBottomSheet(
       context: context,
@@ -199,7 +245,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         isDark: _isDark,
         selectedMenu: _selectedMenu,
         onMenuSelected: (menu) {
-          setState(() => _selectedMenu = menu);
+          _setSelectedMenu(menu);
           Navigator.pop(context);
         },
         userRole: userRole,
@@ -238,13 +284,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       : _mobileMenuLabel(_selectedMenu),
                   isDark: _isDark,
                   userRole: userRole,
-                  onThemeToggle: () => setState(() => _isDark = !_isDark),
+                  onThemeToggle: _toggleTheme,
                   onPrev: _selectedMenu.index > 0
-                      ? () => setState(() => _selectedMenu =
+                      ? () => _setSelectedMenu(
                           _DashboardMenu.values[_selectedMenu.index - 1])
                       : null,
                   onNext: _selectedMenu.index < _DashboardMenu.values.length - 1
-                      ? () => setState(() => _selectedMenu =
+                      ? () => _setSelectedMenu(
                           _DashboardMenu.values[_selectedMenu.index + 1])
                       : null,
                 ),
@@ -256,7 +302,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             bottomNavigationBar: _MobileBottomNav(
               selected: _selectedMenu,
               isDark: _isDark,
-              onSelected: (menu) => setState(() => _selectedMenu = menu),
+              onSelected: _setSelectedMenu,
               onMorePressed: () =>
                   _showMobileMoreSheet(context, cardColor, textColor, userRole),
             ),
@@ -270,7 +316,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               _Sidebar(
                 selectedMenu: _selectedMenu,
-                onMenuSelected: (menu) => setState(() => _selectedMenu = menu),
+                  onMenuSelected: _setSelectedMenu, 
                 isCollapsed: !_isSidebarOpen,
                 isDark: _isDark,
                 userRole: userRole,
@@ -282,12 +328,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     onMenuPressed: () =>
                         setState(() => _isSidebarOpen = !_isSidebarOpen),
                     isDark: _isDark,
-                    onThemeToggle: () =>
-                        setState(() => _isDark = !_isDark),
+                    onThemeToggle: _toggleTheme,
                     isMobile: false,
                     userRole: userRole,
                     onAdminBadgeTap: userRole == 'super_admin'
-                        ? () => setState(() => _selectedMenu = _DashboardMenu.users)
+                        ? () => _setSelectedMenu(_DashboardMenu.users)
                         : null,
                   ),
                   Expanded(
@@ -328,10 +373,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (isMobile) {
       switch (_selectedMenu) {
         case _DashboardMenu.dashboard: return _MobileDashboardHome(isDark: _isDark, userRole: userRole);
-        case _DashboardMenu.devices: return _MobileDevicesView(isDark: _isDark, userRole: userRole, onNavigate: (menu) => setState(() => _selectedMenu = menu));
-        case _DashboardMenu.apps: return _MobileAppControlsView(isDark: _isDark, onNavigate: (menu) => setState(() => _selectedMenu = menu));
+        case _DashboardMenu.devices: return _MobileDevicesView(isDark: _isDark, userRole: userRole, onNavigate: _setSelectedMenu);
+        case _DashboardMenu.apps: return _MobileAppControlsView(isDark: _isDark, onNavigate: _setSelectedMenu);
         case _DashboardMenu.schedules: return _MobileSchedulesView(isDark: _isDark);
-        case _DashboardMenu.location: return _MobileLocationView(isDark: _isDark, onNavigate: (menu) => setState(() => _selectedMenu = menu));
+        case _DashboardMenu.location: return _MobileLocationView(isDark: _isDark, onNavigate: _setSelectedMenu);
         case _DashboardMenu.monitoring: return _MobileMonitoringView(isDark: _isDark);
         case _DashboardMenu.reports: return _MobileReportsView(isDark: _isDark);
         case _DashboardMenu.subscriptions: return _MobileSubscriptionView(isDark: _isDark, userRole: userRole);
@@ -347,7 +392,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case _DashboardMenu.devices: return SingleChildScrollView(child: _DevicesList(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor, isMobile: isMobile, userRole: userRole));
       case _DashboardMenu.apps: return SingleChildScrollView(child: _AppControls(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor));
       case _DashboardMenu.schedules: return SingleChildScrollView(child: _SchedulesView(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor));
-      case _DashboardMenu.location: return _LocationView(isDark: _isDark, textColor: textColor, onBack: () => setState(() => _selectedMenu = _DashboardMenu.dashboard));
+      case _DashboardMenu.location: return _LocationView(isDark: _isDark, textColor: textColor, onBack: () => _setSelectedMenu(_DashboardMenu.dashboard));
       case _DashboardMenu.monitoring: return _MonitoringView(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor, isMobile: isMobile);
       case _DashboardMenu.reports: return SingleChildScrollView(child: _ReportsView(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor));
       case _DashboardMenu.subscriptions: return SingleChildScrollView(child: _SubscriptionView(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor, userRole: userRole));

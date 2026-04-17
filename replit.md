@@ -101,3 +101,4 @@ Configured as a static deployment:
 - A missing `web/favicon.png` was restored from the existing Flutter icon assets to prevent unnecessary 404s in the preview logs.
 - PWA install flow now preserves the native browser install prompt when available, detects embedded preview contexts where the prompt cannot appear, and offers a direct top-level install page before falling back to manual Add to Home Screen instructions.
 - Firebase Hosting production URL: `https://applocker-c39cf.web.app`. The latest PWA install changes were deployed there, and Firebase headers now prevent stale caching for `flutter_service_worker.js`, `main.dart.js`, and `flutter_bootstrap.js`.
+- Dashboard state now persists onboarding completion, selected menu, and light/dark theme in browser storage so accidental refreshes do not send logged-in users back to the first page. The pair-new-device dialog was redesigned as a responsive QR/PIN modal with the clipped bottom Close button removed.
