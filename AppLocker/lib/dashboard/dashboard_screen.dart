@@ -237,6 +237,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ? 'AppLocker'
                       : _mobileMenuLabel(_selectedMenu),
                   isDark: _isDark,
+                  userRole: userRole,
                   onThemeToggle: () => setState(() => _isDark = !_isDark),
                   onPrev: _selectedMenu.index > 0
                       ? () => setState(() => _selectedMenu =
@@ -284,6 +285,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     onThemeToggle: () =>
                         setState(() => _isDark = !_isDark),
                     isMobile: false,
+                    userRole: userRole,
+                    onAdminBadgeTap: userRole == 'super_admin'
+                        ? () => setState(() => _selectedMenu = _DashboardMenu.users)
+                        : null,
                   ),
                   Expanded(
                     child: Padding(
@@ -406,7 +411,8 @@ class _SidebarItem extends StatelessWidget {
 
 class _Header extends StatelessWidget {
   final String title; final VoidCallback onMenuPressed; final bool isDark; final VoidCallback onThemeToggle; final bool isMobile;
-  const _Header({required this.title, required this.onMenuPressed, required this.isDark, required this.onThemeToggle, required this.isMobile});
+  final String userRole; final VoidCallback? onAdminBadgeTap;
+  const _Header({required this.title, required this.onMenuPressed, required this.isDark, required this.onThemeToggle, required this.isMobile, this.userRole = 'parent', this.onAdminBadgeTap});
   @override
   Widget build(BuildContext context) {
     final bgColor = isDark ? const Color(0xFF0D0D10) : Colors.white; final textColor = isDark ? Colors.white : const Color(0xFF1E293B);
@@ -430,19 +436,21 @@ class _Header extends StatelessWidget {
               plan = isAdmin ? 'ADMIN' : (data['plan'] ?? 'FREE').toString().toUpperCase();
             }
             final badgeColor = isAdmin ? const Color(0xFFEF4444) : const Color(0xFF6366F1);
-            return Container(
+            final badge = Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), 
               decoration: BoxDecoration(color: badgeColor.withOpacity(0.1), borderRadius: BorderRadius.circular(10)), 
               child: Row(
                 children: [
                   Icon(isAdmin ? Icons.admin_panel_settings_rounded : Icons.workspace_premium_rounded, size: 16, color: badgeColor), 
-                  if (!isMobile) ...[
-                    const SizedBox(width: 6), 
-                    Text(plan, style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: badgeColor))
-                  ]
+                  const SizedBox(width: 6), 
+                  Text(plan, style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: badgeColor)),
                 ]
               )
             );
+            if (isAdmin && onAdminBadgeTap != null) {
+              return GestureDetector(onTap: onAdminBadgeTap, child: badge);
+            }
+            return badge;
           }
         ),
         if (!isMobile) ...[
@@ -729,6 +737,7 @@ class _MobileTopBar extends StatelessWidget {
   final VoidCallback onThemeToggle;
   final VoidCallback? onPrev;
   final VoidCallback? onNext;
+  final String userRole;
 
   const _MobileTopBar({
     required this.title,
@@ -736,13 +745,15 @@ class _MobileTopBar extends StatelessWidget {
     required this.onThemeToggle,
     this.onPrev,
     this.onNext,
+    this.userRole = 'parent',
   });
 
   @override
   Widget build(BuildContext context) {
     final textColor = isDark ? Colors.white70 : const Color(0xFF64748B);
+    final isAdmin = userRole == 'super_admin';
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(
         children: [
           GestureDetector(
@@ -751,11 +762,22 @@ class _MobileTopBar extends StatelessWidget {
                 color: onPrev != null ? textColor : textColor.withOpacity(0.2),
                 size: 28),
           ),
+          const SizedBox(width: 4),
+          if (isAdmin)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(color: const Color(0xFFEF4444).withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.admin_panel_settings_rounded, size: 14, color: Color(0xFFEF4444)),
+                const SizedBox(width: 4),
+                Text('ADMIN', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFFEF4444))),
+              ]),
+            ),
           const Spacer(),
           Text(
             title,
             style: GoogleFonts.outfit(
-              fontSize: 18,
+              fontSize: 17,
               fontWeight: FontWeight.w800,
               color: isDark ? Colors.white : const Color(0xFF1E293B),
               letterSpacing: -0.5,
@@ -770,7 +792,7 @@ class _MobileTopBar extends StatelessWidget {
               size: 20,
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 4),
           GestureDetector(
             onTap: onNext,
             child: Icon(Icons.chevron_right_rounded,
@@ -1468,8 +1490,11 @@ class _MobileMoreSheet extends StatelessWidget {
       (_DashboardMenu.subscriptions, Icons.workspace_premium_rounded, 'Subscription', 'Plan & billing', const Color(0xFFEC4899)),
       (_DashboardMenu.settings, Icons.settings_rounded, 'Settings', 'App configuration', const Color(0xFF94A3B8)),
       (_DashboardMenu.profile, Icons.person_rounded, 'My Profile', 'Manage your account', const Color(0xFF6366F1)),
-      if (userRole == 'super_admin')
+      if (userRole == 'super_admin') ...[
         (_DashboardMenu.users, Icons.admin_panel_settings_rounded, 'Users Admin', 'Global user management', const Color(0xFFEF4444)),
+        (_DashboardMenu.paymentMethods, Icons.credit_card_rounded, 'Payment Methods', 'Manage payment options', const Color(0xFF6366F1)),
+        (_DashboardMenu.pendingTransactions, Icons.pending_actions_rounded, 'Pending Payments', 'Approve transactions', const Color(0xFF22C55E)),
+      ],
     ];
 
     return Container(
@@ -3477,79 +3502,86 @@ class _MobileSubscriptionViewState extends State<_MobileSubscriptionView> {
         final expiryDate = (userData['expiryDate'] as Timestamp?)?.toDate();
         final bool isExpired = expiryDate != null && expiryDate.isBefore(DateTime.now());
 
-        if (_selectedPlan != null) {
-          final p = _selectedPlan!;
-          final name = (p['name'] ?? 'Plan').toString().toUpperCase();
-          final price = (p['price'] ?? 0); final devices = p['deviceLimit'] ?? 1;
-          final blocked = p['blockedAppsLimit'] ?? 0; final hidden = p['hiddenAppsLimit'] ?? 0;
-          final hasTracking = p['realtimeTracking'] == true || p['deviceLimit'] == 999;
-          final color = p['_color'] as Color? ?? const Color(0xFF22C55E);
-          final icon = p['_icon'] as IconData? ?? Icons.workspace_premium_rounded;
-          final planId = _selectedPlanId ?? '';
-          final isCurrent = currentPlan == planId.toLowerCase() && !isExpired;
-
-          return Container(
-            color: bg,
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                TextButton.icon(
-                  onPressed: () => setState(() { _selectedPlan = null; _selectedPlanId = null; }),
-                  icon: const Icon(Icons.arrow_back_rounded, size: 18), label: Text('Back', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600)),
-                  style: TextButton.styleFrom(foregroundColor: const Color(0xFF94A3B8), padding: EdgeInsets.zero)),
-                const SizedBox(height: 8),
-                Container(
-                  width: double.infinity, padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(color: color.withOpacity(widget.isDark ? 0.12 : 0.08), borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withOpacity(isCurrent ? 0.6 : 0.3), width: isCurrent ? 2 : 1)),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Row(children: [
-                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        if (isCurrent) Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          margin: const EdgeInsets.only(bottom: 8),
-                          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(8)),
-                          child: Text('CURRENT PLAN', style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.w900, color: Colors.white)),
-                        ),
-                        Text(name, style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: color)),
-                      ])),
-                      Container(width: 52, height: 52, decoration: BoxDecoration(color: color, shape: BoxShape.circle), child: Icon(icon, color: Colors.white, size: 26)),
-                    ]),
-                    const SizedBox(height: 16),
-                    _bullet('${devices == 999 ? 'Unlimited' : devices} Device${devices == 1 ? '' : 's'}', color),
-                    if (blocked > 0) _bullet('$blocked Blocked Apps Allowed', color),
-                    if (hidden > 0) _bullet('$hidden Hidden Apps Allowed', color),
-                    if (hasTracking) _bullet('Realtime Tracking', color),
-                    const SizedBox(height: 20),
-                    if (!isCurrent)
-                      GestureDetector(
-                        onTap: () => _upgradePlan(context, planId, (p['name'] ?? 'Plan').toString()),
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(12)),
-                          child: Center(child: Text('UPGRADE', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1.5))),
-                        ),
-                      )
-                    else
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(12), border: Border.all(color: color.withOpacity(0.4))),
-                        child: Center(child: Text('CURRENT PLAN', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: color, letterSpacing: 1.5))),
-                      ),
-                  ]),
-                ),
-              ]),
-            ),
-          );
-        }
-
         return StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance.collection('plans').orderBy('deviceLimit').snapshots(),
           builder: (context, snap) {
+            final plans = snap.hasData ? snap.data!.docs : <QueryDocumentSnapshot>[];
+            // Build a price map from the plans list for UPGRADE/DOWNGRADE comparison
+            final planPriceMap = <String, num>{for (final doc in plans) doc.id.toLowerCase(): (doc.data() as Map<String, dynamic>)['price'] as num? ?? 0};
+            final currentPlanPrice = planPriceMap[currentPlan] ?? 0;
+
+            if (_selectedPlan != null) {
+              final p = _selectedPlan!;
+              final name = (p['name'] ?? 'Plan').toString().toUpperCase();
+              final selectedPrice = (p['price'] as num? ?? 0);
+              final devices = p['deviceLimit'] ?? 1;
+              final blocked = p['blockedAppsLimit'] ?? 0; final hidden = p['hiddenAppsLimit'] ?? 0;
+              final hasTracking = p['realtimeTracking'] == true || p['deviceLimit'] == 999;
+              final color = p['_color'] as Color? ?? const Color(0xFF22C55E);
+              final icon = p['_icon'] as IconData? ?? Icons.workspace_premium_rounded;
+              final planId = _selectedPlanId ?? '';
+              final isCurrent = currentPlan == planId.toLowerCase() && !isExpired;
+              final btnLabel = isCurrent ? 'CURRENT PLAN' : (selectedPrice >= currentPlanPrice ? 'UPGRADE' : 'DOWNGRADE');
+
+              return Container(
+                color: bg,
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    TextButton.icon(
+                      onPressed: () => setState(() { _selectedPlan = null; _selectedPlanId = null; }),
+                      icon: const Icon(Icons.arrow_back_rounded, size: 18), label: Text('Back', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600)),
+                      style: TextButton.styleFrom(foregroundColor: const Color(0xFF94A3B8), padding: EdgeInsets.zero)),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity, padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(color: color.withOpacity(widget.isDark ? 0.12 : 0.08), borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withOpacity(isCurrent ? 0.6 : 0.3), width: isCurrent ? 2 : 1)),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Row(children: [
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            if (isCurrent) Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              margin: const EdgeInsets.only(bottom: 8),
+                              decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(8)),
+                              child: Text('CURRENT PLAN', style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.w900, color: Colors.white)),
+                            ),
+                            Text(name, style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: color)),
+                          ])),
+                          Container(width: 52, height: 52, decoration: BoxDecoration(color: color, shape: BoxShape.circle), child: Icon(icon, color: Colors.white, size: 26)),
+                        ]),
+                        const SizedBox(height: 16),
+                        _bullet('${devices == 999 ? 'Unlimited' : devices} Device${devices == 1 ? '' : 's'}', color),
+                        if (blocked > 0) _bullet('$blocked Blocked Apps Allowed', color),
+                        if (hidden > 0) _bullet('$hidden Hidden Apps Allowed', color),
+                        if (hasTracking) _bullet('Realtime Tracking', color),
+                        const SizedBox(height: 20),
+                        if (!isCurrent)
+                          GestureDetector(
+                            onTap: () => _upgradePlan(context, planId, (p['name'] ?? 'Plan').toString()),
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(12)),
+                              child: Center(child: Text(btnLabel, style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1.5))),
+                            ),
+                          )
+                        else
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(12), border: Border.all(color: color.withOpacity(0.4))),
+                            child: Center(child: Text('CURRENT PLAN', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: color, letterSpacing: 1.5))),
+                          ),
+                      ]),
+                    ),
+                  ]),
+                ),
+              );
+            }
+
             if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-            final plans = snap.data!.docs;
+
             return Container(
               color: bg,
               child: SingleChildScrollView(
