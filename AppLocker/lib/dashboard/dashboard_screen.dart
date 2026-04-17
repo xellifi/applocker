@@ -2392,18 +2392,47 @@ class _MobileAppControlsViewState extends State<_MobileAppControlsView> {
                     final tColors = [const Color(0xFFD97706), const Color(0xFF1D4ED8), const Color(0xFFBE185D), const Color(0xFF065F46), const Color(0xFF3730A3)];
                     final ci = displayName.isNotEmpty ? displayName.codeUnitAt(0) % circleColors.length : 0;
                     final borderCol = isBlocked ? const Color(0xFFEF4444).withOpacity(0.4) : isHidden ? const Color(0xFFFBBF24).withOpacity(0.4) : borderColor;
+                    // Check for active block schedule on this app
+                    final allBlockSchedules = (data['appBlockSchedules'] as List<dynamic>? ?? []);
+                    final appSchedules = allBlockSchedules.where((s) => (s as Map)['pkg'] == pkg).toList();
+                    final hasSchedule = appSchedules.isNotEmpty;
+                    final bool scheduleActiveNow = appSchedules.any((s) {
+                      final sm = s as Map;
+                      final sp = (sm['start'] as String? ?? '').split(':');
+                      final ep = (sm['end']   as String? ?? '').split(':');
+                      if (sp.length < 2 || ep.length < 2) return false;
+                      final now = TimeOfDay.now();
+                      final nowMin = now.hour * 60 + now.minute;
+                      final startMin = (int.tryParse(sp[0]) ?? 0) * 60 + (int.tryParse(sp[1]) ?? 0);
+                      final endMin   = (int.tryParse(ep[0]) ?? 0) * 60 + (int.tryParse(ep[1]) ?? 0);
+                      if (startMin <= endMin) return nowMin >= startMin && nowMin < endMin;
+                      return nowMin >= startMin || nowMin < endMin;
+                    });
+                    final effectiveBorderCol = scheduleActiveNow
+                        ? const Color(0xFFEF4444).withOpacity(0.6)
+                        : borderCol;
                     return Container(
                       margin: const EdgeInsets.only(bottom: 8),
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(14), border: Border.all(color: borderCol)),
+                      decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(14), border: Border.all(color: effectiveBorderCol)),
                       child: Row(children: [
                         Container(width: 42, height: 42, decoration: BoxDecoration(color: circleColors[ci], shape: BoxShape.circle), child: Center(child: Text(initial, style: GoogleFonts.outfit(color: tColors[ci], fontSize: 18, fontWeight: FontWeight.w900)))),
                         const SizedBox(width: 12),
                         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
                           Text(displayName, style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700, color: textColor), softWrap: true),
-                          if (isBlocked) Text('Blocked', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFFEF4444), fontWeight: FontWeight.w600))
-                          else if (isHidden) Text('Hidden', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFFFBBF24), fontWeight: FontWeight.w600))
-                          else Text('Allowed', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF22C55E), fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 2),
+                          Row(children: [
+                            if (isBlocked) _AppStatusBadge('Blocked', const Color(0xFFEF4444))
+                            else if (isHidden) _AppStatusBadge('Hidden', const Color(0xFFFBBF24))
+                            else _AppStatusBadge('Allowed', const Color(0xFF22C55E)),
+                            if (hasSchedule) ...[
+                              const SizedBox(width: 6),
+                              _AppStatusBadge(
+                                scheduleActiveNow ? '⏱ Blocking Now' : '⏱ ${appSchedules.length} Schedule${appSchedules.length > 1 ? 's' : ''}',
+                                scheduleActiveNow ? const Color(0xFFEF4444) : const Color(0xFF6366F1),
+                              ),
+                            ],
+                          ]),
                         ])),
                         PopupMenuButton<String>(
                           icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF94A3B8), size: 18),
@@ -2412,17 +2441,28 @@ class _MobileAppControlsViewState extends State<_MobileAppControlsView> {
                           padding: EdgeInsets.zero,
                           onSelected: (action) async {
                             final ref = FirebaseFirestore.instance.collection('devices').doc(selDoc.id);
+                            if (action == 'schedule_block') {
+                              showModalBottomSheet(
+                                context: context, isScrollControlled: true, backgroundColor: Colors.transparent,
+                                builder: (_) => _AppBlockScheduleSheet(
+                                  deviceId: selDoc.id, pkg: pkg, appName: displayName, isDark: widget.isDark,
+                                ),
+                              );
+                              return;
+                            }
                             final List<dynamic> blocked = List.from(data['blockedApps'] ?? []);
-                            final List<dynamic> hidden = List.from(data['hiddenApps'] ?? []);
-                            if (action == 'block') { blocked.add(pkg); hidden.remove(pkg); }
+                            final List<dynamic> hidden  = List.from(data['hiddenApps']  ?? []);
+                            if (action == 'block_now') { blocked.add(pkg); hidden.remove(pkg); }
                             else if (action == 'hide') { hidden.add(pkg); blocked.remove(pkg); }
                             else if (action == 'allow') { blocked.remove(pkg); hidden.remove(pkg); }
                             await ref.update({'blockedApps': blocked, 'hiddenApps': hidden});
                           },
                           itemBuilder: (_) => [
                             PopupMenuItem(value: 'allow', child: Row(children: [const Icon(Icons.check_circle_rounded, color: Color(0xFF22C55E), size: 16), const SizedBox(width: 8), Text('Allow', style: GoogleFonts.outfit(fontSize: 13, color: textColor))])),
-                            PopupMenuItem(value: 'block', child: Row(children: [const Icon(Icons.block_rounded, color: Color(0xFFEF4444), size: 16), const SizedBox(width: 8), Text('Block', style: GoogleFonts.outfit(fontSize: 13, color: textColor))])),
+                            PopupMenuItem(value: 'block_now', child: Row(children: [const Icon(Icons.block_rounded, color: Color(0xFFEF4444), size: 16), const SizedBox(width: 8), Text('Block instantly', style: GoogleFonts.outfit(fontSize: 13, color: textColor))])),
                             PopupMenuItem(value: 'hide', child: Row(children: [const Icon(Icons.visibility_off_rounded, color: Color(0xFFFBBF24), size: 16), const SizedBox(width: 8), Text('Hide', style: GoogleFonts.outfit(fontSize: 13, color: textColor))])),
+                            const PopupMenuDivider(),
+                            PopupMenuItem(value: 'schedule_block', child: Row(children: [const Icon(Icons.schedule_rounded, color: Color(0xFF6366F1), size: 16), const SizedBox(width: 8), Text('Schedule Block', style: GoogleFonts.outfit(fontSize: 13, color: textColor, fontWeight: FontWeight.w700))])),
                           ],
                         ),
                       ]),
@@ -2459,6 +2499,264 @@ class _MobileDropBox extends StatelessWidget {
           onChanged: (v) { if (v != null) onChanged(v); },
         )),
       ]),
+    );
+  }
+}
+
+// ─── App Status Badge ─────────────────────────────────────────────────────────
+class _AppStatusBadge extends StatelessWidget {
+  final String label; final Color color;
+  const _AppStatusBadge(this.label, this.color);
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+    decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(6)),
+    child: Text(label, style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w700, color: color)),
+  );
+}
+
+// ─── App Block Schedule Sheet ─────────────────────────────────────────────────
+class _AppBlockScheduleSheet extends StatefulWidget {
+  final String deviceId, pkg, appName; final bool isDark;
+  const _AppBlockScheduleSheet({required this.deviceId, required this.pkg, required this.appName, required this.isDark});
+  @override State<_AppBlockScheduleSheet> createState() => _AppBlockScheduleSheetState();
+}
+class _AppBlockScheduleSheetState extends State<_AppBlockScheduleSheet> {
+  TimeOfDay _startTime = const TimeOfDay(hour: 22, minute: 0);
+  TimeOfDay _endTime   = const TimeOfDay(hour: 6,  minute: 0);
+  bool _saving = false;
+
+  String _fmt24(TimeOfDay t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+  String _fmt12(TimeOfDay t) {
+    final h = t.hourOfPeriod == 0 ? 12 : t.hourOfPeriod;
+    return '$h:${t.minute.toString().padLeft(2, '0')} ${t.period == DayPeriod.am ? 'AM' : 'PM'}';
+  }
+
+  String _to12h(String t24) {
+    final p = t24.split(':'); if (p.length < 2) return t24;
+    int h = int.tryParse(p[0]) ?? 0; final m = int.tryParse(p[1]) ?? 0;
+    final period = h < 12 ? 'AM' : 'PM'; h = h % 12; if (h == 0) h = 12;
+    return '$h:${m.toString().padLeft(2, '0')} $period';
+  }
+
+  bool _isNowInWindow(String s24, String e24) {
+    final sp = s24.split(':'); final ep = e24.split(':');
+    if (sp.length < 2 || ep.length < 2) return false;
+    final now = TimeOfDay.now(); final nowMin = now.hour * 60 + now.minute;
+    final sMin = (int.tryParse(sp[0]) ?? 0) * 60 + (int.tryParse(sp[1]) ?? 0);
+    final eMin = (int.tryParse(ep[0]) ?? 0) * 60 + (int.tryParse(ep[1]) ?? 0);
+    if (sMin <= eMin) return nowMin >= sMin && nowMin < eMin;
+    return nowMin >= sMin || nowMin < eMin;
+  }
+
+  Future<void> _pickTime(bool isStart) async {
+    final t = await showTimePicker(
+      context: context, initialTime: isStart ? _startTime : _endTime,
+      builder: (ctx, child) => Theme(data: ThemeData.light().copyWith(colorScheme: const ColorScheme.light(primary: Color(0xFF6366F1))), child: child!),
+    );
+    if (t != null) setState(() { if (isStart) _startTime = t; else _endTime = t; });
+  }
+
+  Future<void> _add(List<dynamic> current) async {
+    setState(() => _saving = true);
+    try {
+      final updated = List<dynamic>.from(current)
+        ..add({'pkg': widget.pkg, 'start': _fmt24(_startTime), 'end': _fmt24(_endTime)});
+      final activeNow = _isNowInWindow(_fmt24(_startTime), _fmt24(_endTime));
+      final Map<String, dynamic> patch = {'appBlockSchedules': updated};
+      // If schedule is active right now, also add to blockedApps immediately
+      if (activeNow) {
+        final snap = await FirebaseFirestore.instance.collection('devices').doc(widget.deviceId).get();
+        final blocked = List<dynamic>.from(snap.data()?['blockedApps'] ?? []);
+        if (!blocked.contains(widget.pkg)) blocked.add(widget.pkg);
+        patch['blockedApps'] = blocked;
+      }
+      await FirebaseFirestore.instance.collection('devices').doc(widget.deviceId).update(patch);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(activeNow ? 'Schedule added & app blocked now!' : 'Block schedule added!'),
+        backgroundColor: const Color(0xFF22C55E),
+      ));
+    } finally { if (mounted) setState(() => _saving = false); }
+  }
+
+  Future<void> _delete(List<dynamic> current, int index) async {
+    final s = Map<String, dynamic>.from(current[index] as Map);
+    final updated = List<dynamic>.from(current)..removeAt(index);
+    final Map<String, dynamic> patch = {'appBlockSchedules': updated};
+    // If currently active, also unblock the app
+    if (_isNowInWindow(s['start'] as String? ?? '', s['end'] as String? ?? '')) {
+      final snap = await FirebaseFirestore.instance.collection('devices').doc(widget.deviceId).get();
+      final blocked = List<dynamic>.from(snap.data()?['blockedApps'] ?? [])..remove(widget.pkg);
+      patch['blockedApps'] = blocked;
+    }
+    await FirebaseFirestore.instance.collection('devices').doc(widget.deviceId).update(patch);
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('Block schedule deleted.'), backgroundColor: Color(0xFFEF4444),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final h = MediaQuery.of(context).size.height;
+    final bg      = widget.isDark ? const Color(0xFF0F1A35) : Colors.white;
+    final cardBg  = widget.isDark ? const Color(0xFF060D1F) : const Color(0xFFF8FAFC);
+    final textColor = widget.isDark ? Colors.white : const Color(0xFF1E293B);
+    final subColor  = widget.isDark ? Colors.white54 : const Color(0xFF64748B);
+
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance.collection('devices').doc(widget.deviceId).snapshots(),
+      builder: (context, snap) {
+        final liveData  = snap.data?.data() as Map<String, dynamic>? ?? {};
+        final existing  = (liveData['appBlockSchedules'] as List<dynamic>? ?? [])
+            .where((s) => (s as Map)['pkg'] == widget.pkg)
+            .toList();
+
+        return Container(
+          margin: const EdgeInsets.fromLTRB(15, 0, 15, 15),
+          height: h * 0.78,
+          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(28)),
+          clipBehavior: Clip.hardEdge,
+          child: Column(children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 20, 16, 20),
+              decoration: const BoxDecoration(color: Color(0xFF6366F1)),
+              child: Row(children: [
+                Container(padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(14)),
+                    child: const Icon(Icons.schedule_rounded, color: Colors.white, size: 24)),
+                const SizedBox(width: 14),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Schedule Block', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.white)),
+                  Text(widget.appName, style: GoogleFonts.outfit(fontSize: 12, color: Colors.white70), overflow: TextOverflow.ellipsis),
+                ])),
+                GestureDetector(onTap: () => Navigator.pop(context),
+                    child: Container(width: 36, height: 36, decoration: const BoxDecoration(color: Color(0xFFEF4444), shape: BoxShape.circle),
+                        child: const Icon(Icons.close_rounded, color: Colors.white, size: 20))),
+              ]),
+            ),
+            Expanded(child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('New Block Schedule', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: textColor)),
+                const SizedBox(height: 4),
+                Text('Set a time range when this app will be automatically blocked.', style: GoogleFonts.outfit(fontSize: 12, color: subColor)),
+                const SizedBox(height: 16),
+                Row(children: [
+                  Expanded(child: GestureDetector(
+                    onTap: () => _pickTime(true),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.4))),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text('Block From', style: GoogleFonts.outfit(fontSize: 11, color: subColor, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 6),
+                        Row(children: [
+                          const Icon(Icons.access_time_rounded, color: Color(0xFF6366F1), size: 18),
+                          const SizedBox(width: 8),
+                          Text(_fmt12(_startTime), style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: textColor)),
+                        ]),
+                      ]),
+                    ),
+                  )),
+                  const SizedBox(width: 12),
+                  Expanded(child: GestureDetector(
+                    onTap: () => _pickTime(false),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFF22C55E).withOpacity(0.4))),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text('Unblock At', style: GoogleFonts.outfit(fontSize: 11, color: subColor, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 6),
+                        Row(children: [
+                          const Icon(Icons.access_time_filled_rounded, color: Color(0xFF22C55E), size: 18),
+                          const SizedBox(width: 8),
+                          Text(_fmt12(_endTime), style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: textColor)),
+                        ]),
+                      ]),
+                    ),
+                  )),
+                ]),
+                const SizedBox(height: 16),
+                GestureDetector(
+                  onTap: _saving ? null : () => _add(
+                      (liveData['appBlockSchedules'] as List<dynamic>? ?? [])),
+                  child: Container(
+                    width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 15),
+                    decoration: BoxDecoration(
+                      color: _saving ? const Color(0xFF6366F1).withOpacity(0.6) : const Color(0xFF6366F1),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Center(child: _saving
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : Row(mainAxisSize: MainAxisSize.min, children: [
+                          const Icon(Icons.add_rounded, color: Colors.white, size: 20),
+                          const SizedBox(width: 8),
+                          Text('Add Block Schedule', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
+                        ])),
+                  ),
+                ),
+                if (existing.isNotEmpty) ...[
+                  const SizedBox(height: 24),
+                  Row(children: [
+                    Text('Active Schedules', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: textColor)),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(color: const Color(0xFF6366F1).withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+                      child: Text('${existing.length}', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, color: const Color(0xFF6366F1))),
+                    ),
+                  ]),
+                  const SizedBox(height: 10),
+                  ...existing.asMap().entries.map((e) {
+                    final s = Map<String, dynamic>.from(e.value as Map);
+                    final s24 = s['start'] as String? ?? '';
+                    final e24 = s['end']   as String? ?? '';
+                    final activeNow = _isNowInWindow(s24, e24);
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: activeNow ? const Color(0xFFEF4444).withOpacity(0.06) : cardBg,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: activeNow ? const Color(0xFFEF4444).withOpacity(0.5) : const Color(0xFF6366F1).withOpacity(0.25)),
+                      ),
+                      child: Row(children: [
+                        Icon(activeNow ? Icons.block_rounded : Icons.schedule_rounded,
+                            color: activeNow ? const Color(0xFFEF4444) : const Color(0xFF6366F1), size: 20),
+                        const SizedBox(width: 12),
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text('${_to12h(s24)} → ${_to12h(e24)}',
+                              style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700, color: textColor)),
+                          const SizedBox(height: 3),
+                          if (activeNow)
+                            Row(children: [
+                              Container(width: 7, height: 7, decoration: const BoxDecoration(color: Color(0xFFEF4444), shape: BoxShape.circle)),
+                              const SizedBox(width: 5),
+                              Text('Blocking right now', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFFEF4444), fontWeight: FontWeight.w700)),
+                            ])
+                          else
+                            Text('App blocked during this period', style: GoogleFonts.outfit(fontSize: 11, color: subColor)),
+                        ])),
+                        GestureDetector(
+                          onTap: () => _delete(
+                              List<dynamic>.from(liveData['appBlockSchedules'] ?? []), e.key),
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(color: const Color(0xFFEF4444).withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
+                            child: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 18),
+                          ),
+                        ),
+                      ]),
+                    );
+                  }),
+                ],
+              ]),
+            )),
+          ]),
+        );
+      },
     );
   }
 }
