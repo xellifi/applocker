@@ -317,8 +317,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildContent(Color textColor, Color cardColor, Color borderColor, bool isMobile, String userRole) {
-    if (isMobile && _selectedMenu == _DashboardMenu.dashboard) {
-      return _MobileDashboardHome(isDark: _isDark, userRole: userRole);
+    if (isMobile) {
+      switch (_selectedMenu) {
+        case _DashboardMenu.dashboard: return _MobileDashboardHome(isDark: _isDark, userRole: userRole);
+        case _DashboardMenu.devices: return _MobileDevicesView(isDark: _isDark, userRole: userRole);
+        case _DashboardMenu.apps: return _MobileAppControlsView(isDark: _isDark);
+        case _DashboardMenu.schedules: return _MobileSchedulesView(isDark: _isDark);
+        case _DashboardMenu.location: return _MobileLocationView(isDark: _isDark);
+        case _DashboardMenu.monitoring: return _MobileMonitoringView(isDark: _isDark);
+        case _DashboardMenu.reports: return _MobileReportsView(isDark: _isDark);
+        case _DashboardMenu.subscriptions: return _MobileSubscriptionView(isDark: _isDark, userRole: userRole);
+        case _DashboardMenu.settings: return _MobileSettingsView(isDark: _isDark);
+        case _DashboardMenu.users: return SingleChildScrollView(child: _UsersList(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor, isMobile: true));
+      }
     }
     switch (_selectedMenu) {
       case _DashboardMenu.dashboard: return _DashboardOverview(isDark: _isDark, isMobile: isMobile, userRole: userRole);
@@ -1493,6 +1504,1075 @@ class _MobileMoreSheet extends StatelessWidget {
       ),
     );
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MOBILE PAGE VIEWS — Devices, Chat, Schedules, Apps, Location,
+//                     Monitoring, Reports, Subscriptions, Settings
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ─── Devices ────────────────────────────────────────────────────────────────
+class _MobileDevicesView extends StatefulWidget {
+  final bool isDark; final String userRole;
+  const _MobileDevicesView({required this.isDark, required this.userRole});
+  @override State<_MobileDevicesView> createState() => _MobileDevicesViewState();
+}
+class _MobileDevicesViewState extends State<_MobileDevicesView> {
+  void _openChat(BuildContext context, String deviceId) {
+    showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent,
+      builder: (_) => _MobileChatSheet(deviceId: deviceId, isDark: widget.isDark));
+  }
+  Future<void> _toggleLock(String deviceId, bool current) async =>
+      FirebaseFirestore.instance.collection('devices').doc(deviceId).update({'locked': !current});
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = widget.isDark ? const Color(0xFF060D1F) : const Color(0xFFF8FAFC);
+    final cardColor = widget.isDark ? const Color(0xFF0F1A35) : Colors.white;
+    final textColor = widget.isDark ? Colors.white : const Color(0xFF1E293B);
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseService.instance.streamAdminDevices(),
+      builder: (context, snap) {
+        if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+        final devices = snap.data!.docs;
+        return Container(
+          color: bg,
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Text('Device list', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: textColor)),
+                const Spacer(),
+                Text('See All', style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF6366F1), fontWeight: FontWeight.w600)),
+              ]),
+              const SizedBox(height: 10),
+              if (devices.isEmpty)
+                Padding(padding: const EdgeInsets.symmetric(vertical: 40),
+                  child: Center(child: Text('No devices paired yet.', style: GoogleFonts.outfit(color: widget.isDark ? Colors.white38 : const Color(0xFF94A3B8))))),
+              ...devices.map((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                final isOnline = (data['status'] ?? 'offline') == 'online';
+                final battery = ((data['battery'] ?? 0) as num).toInt();
+                final isLocked = data['locked'] == true;
+                return _MobileDeviceListCard(
+                  name: doc.id, isOnline: isOnline, battery: battery,
+                  isDark: widget.isDark, isLocked: isLocked,
+                  onChat: () => _openChat(context, doc.id),
+                  onLock: () => _toggleLock(doc.id, isLocked),
+                );
+              }),
+              const SizedBox(height: 12),
+              Builder(builder: (ctx) => GestureDetector(
+                onTap: () => showAppLockerPairingDialog(ctx, cardColor, textColor),
+                child: Container(
+                  width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF7C3AED), Color(0xFF6366F1)]), borderRadius: BorderRadius.circular(14)),
+                  child: Center(child: Text('+ Add New Device', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white))),
+                ),
+              )),
+            ]),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _MobileDeviceListCard extends StatelessWidget {
+  final String name; final bool isOnline; final int battery; final bool isDark; final bool isLocked;
+  final VoidCallback onChat; final VoidCallback onLock;
+  const _MobileDeviceListCard({required this.name, required this.isOnline, required this.battery, required this.isDark, required this.isLocked, required this.onChat, required this.onLock});
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = isDark ? const Color(0xFF0F1A35) : Colors.white;
+    final textColor = isDark ? Colors.white : const Color(0xFF1E293B);
+    final circleColor = isOnline ? const Color(0xFF22C55E) : const Color(0xFF94A3B8);
+    final borderColor = isOnline ? const Color(0xFF22C55E).withOpacity(0.4) : const Color(0xFF94A3B8).withOpacity(0.3);
+    final batColor = battery > 50 ? const Color(0xFF22C55E) : battery > 20 ? const Color(0xFFFBBF24) : const Color(0xFFEF4444);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(16), border: Border.all(color: borderColor, width: 1.5)),
+      child: Row(children: [
+        Container(width: 58, height: 58, decoration: BoxDecoration(color: circleColor, shape: BoxShape.circle),
+          child: const Icon(Icons.smartphone_rounded, color: Colors.white, size: 26)),
+        const SizedBox(width: 10),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [Icon(Icons.battery_charging_full_rounded, size: 12, color: batColor), const SizedBox(width: 2), Text('$battery%', style: GoogleFonts.outfit(fontSize: 11, color: batColor, fontWeight: FontWeight.w700))]),
+          Text(name, style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: textColor), maxLines: 1, overflow: TextOverflow.ellipsis),
+          Text('Status: ${isOnline ? "online" : "offline"}', style: GoogleFonts.outfit(fontSize: 11, color: isOnline ? const Color(0xFF22C55E) : const Color(0xFF94A3B8))),
+        ])),
+        Row(children: [
+          _DevActCircle(icon: Icons.calendar_month_rounded, color: const Color(0xFF22C55E), onTap: () {}),
+          const SizedBox(width: 5),
+          _DevActCircle(icon: Icons.chat_bubble_rounded, color: const Color(0xFFFBBF24), onTap: onChat, badge: true),
+          const SizedBox(width: 5),
+          _DevActCircle(icon: Icons.location_on_rounded, color: const Color(0xFFEF4444), onTap: () {}),
+          const SizedBox(width: 5),
+          _DevActCircle(icon: Icons.history_rounded, color: const Color(0xFF818CF8), onTap: () {}),
+          const SizedBox(width: 5),
+          _DevActCircle(icon: isLocked ? Icons.lock_rounded : Icons.lock_open_rounded, color: const Color(0xFFEF4444), onTap: onLock),
+        ]),
+      ]),
+    );
+  }
+}
+
+class _DevActCircle extends StatelessWidget {
+  final IconData icon; final Color color; final VoidCallback onTap; final bool badge;
+  const _DevActCircle({required this.icon, required this.color, required this.onTap, this.badge = false});
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Stack(children: [
+      Container(width: 34, height: 34, decoration: BoxDecoration(color: color.withOpacity(0.15), shape: BoxShape.circle), child: Icon(icon, color: color, size: 16)),
+      if (badge) Positioned(top: 0, right: 0, child: Container(width: 13, height: 13, decoration: const BoxDecoration(color: Color(0xFFEF4444), shape: BoxShape.circle), child: const Center(child: Text('1', style: TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.bold))))),
+    ]),
+  );
+}
+
+// ─── Chat Sheet ──────────────────────────────────────────────────────────────
+class _MobileChatSheet extends StatefulWidget {
+  final String deviceId; final bool isDark;
+  const _MobileChatSheet({required this.deviceId, required this.isDark});
+  @override State<_MobileChatSheet> createState() => _MobileChatSheetState();
+}
+class _MobileChatSheetState extends State<_MobileChatSheet> {
+  final _ctrl = TextEditingController();
+  @override void dispose() { _ctrl.dispose(); super.dispose(); }
+  Future<void> _send() async {
+    final t = _ctrl.text.trim(); if (t.isEmpty) return; _ctrl.clear();
+    await FirebaseService.instance.sendChatMessage(widget.deviceId, t, 'parent');
+  }
+  @override
+  Widget build(BuildContext context) {
+    final h = MediaQuery.of(context).size.height;
+    final bg = widget.isDark ? const Color(0xFF0F1A35) : Colors.white;
+    return Container(
+      height: h * 0.86,
+      decoration: BoxDecoration(color: bg, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
+      child: Column(children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+          decoration: const BoxDecoration(color: Color(0xFFFBBF24), borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+          child: Row(children: [
+            Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.white.withOpacity(0.25), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.chat_rounded, color: Colors.white, size: 22)),
+            const SizedBox(width: 12),
+            Text('Chat Now', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
+            const Spacer(),
+            GestureDetector(onTap: () => Navigator.pop(context),
+              child: Container(padding: const EdgeInsets.all(6), decoration: const BoxDecoration(color: Color(0xFFEF4444), shape: BoxShape.circle), child: const Icon(Icons.close_rounded, color: Colors.white, size: 18))),
+          ]),
+        ),
+        Expanded(child: StreamBuilder<QuerySnapshot>(
+          stream: FirebaseService.instance.streamChatMessages(widget.deviceId),
+          builder: (context, snap) {
+            if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+            final docs = snap.data!.docs;
+            return ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: docs.length,
+              itemBuilder: (context, i) {
+                final data = docs[i].data() as Map<String, dynamic>;
+                final isParent = data['sender'] == 'parent';
+                final text = data['text'] as String? ?? '';
+                final ts = (data['timestamp'] as Timestamp?)?.toDate();
+                final timeStr = ts != null ? DateFormat('MMM d, yyyy h:mm a').format(ts) : '';
+                final maxW = MediaQuery.of(context).size.width * 0.6;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: Row(
+                    mainAxisAlignment: isParent ? MainAxisAlignment.end : MainAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      if (!isParent) Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Container(constraints: BoxConstraints(maxWidth: maxW), padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(color: const Color(0xFFFEF9C3), borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16), bottomRight: Radius.circular(16), bottomLeft: Radius.circular(4))),
+                          child: Text(text, style: GoogleFonts.outfit(color: const Color(0xFF1E293B), fontSize: 14, height: 1.5))),
+                        const SizedBox(height: 4),
+                        Text(timeStr, style: GoogleFonts.outfit(fontSize: 10, color: const Color(0xFF94A3B8))),
+                      ])
+                      else Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                        Text(timeStr, style: GoogleFonts.outfit(fontSize: 10, color: const Color(0xFF94A3B8))),
+                        const SizedBox(height: 4),
+                        Container(constraints: BoxConstraints(maxWidth: maxW), padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(color: const Color(0xFFE9D5FF), borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16), bottomLeft: Radius.circular(16), bottomRight: Radius.circular(4))),
+                          child: Text(text, style: GoogleFonts.outfit(color: const Color(0xFF4C1D95), fontSize: 14, height: 1.5))),
+                      ]),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        )),
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          decoration: BoxDecoration(border: Border(top: BorderSide(color: widget.isDark ? Colors.white10 : const Color(0xFFE2E8F0)))),
+          child: Row(children: [
+            Expanded(child: TextField(
+              controller: _ctrl,
+              style: GoogleFonts.outfit(fontSize: 14, color: widget.isDark ? Colors.white : const Color(0xFF1E293B)),
+              decoration: InputDecoration(
+                hintText: 'Type a message...', hintStyle: GoogleFonts.outfit(color: const Color(0xFF94A3B8)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                filled: true, fillColor: widget.isDark ? Colors.white.withOpacity(0.06) : const Color(0xFFF8FAFC),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide(color: widget.isDark ? Colors.white12 : const Color(0xFFE2E8F0))),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: const BorderSide(color: Color(0xFF7C3AED))),
+              ),
+            )),
+            const SizedBox(width: 10),
+            GestureDetector(onTap: _send,
+              child: Container(width: 50, height: 50, decoration: const BoxDecoration(color: Color(0xFF7C3AED), shape: BoxShape.circle), child: const Icon(Icons.send_rounded, color: Colors.white, size: 22))),
+          ]),
+        ),
+      ]),
+    );
+  }
+}
+
+// ─── Schedules ───────────────────────────────────────────────────────────────
+class _MobileSchedulesView extends StatelessWidget {
+  final bool isDark;
+  const _MobileSchedulesView({required this.isDark});
+  @override
+  Widget build(BuildContext context) {
+    final bg = isDark ? const Color(0xFF060D1F) : const Color(0xFFF8FAFC);
+    final textColor = isDark ? Colors.white : const Color(0xFF1E293B);
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseService.instance.streamAdminDevices(),
+      builder: (context, snap) {
+        if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+        final docs = snap.data!.docs;
+        final List<Map<String, dynamic>> rules = [];
+        for (var doc in docs) {
+          final data = doc.data() as Map<String, dynamic>;
+          for (var s in (data['lockSchedules'] as List<dynamic>? ?? [])) {
+            rules.add({'deviceId': doc.id, 'type': 'Device Lock', 'target': 'Full Device', 'time': '${s['start']} - ${s['end']}', 'isLock': true});
+          }
+          (data['appSchedules'] as Map<String, dynamic>? ?? {}).forEach((pkg, sched) {
+            final s = sched as Map<String, dynamic>;
+            rules.add({'deviceId': doc.id, 'type': 'App Restriction', 'target': pkg.split('.').last, 'time': (s['alwaysBlocked'] == true) ? 'Always Blocked' : '${s['start']} - ${s['end']}', 'isLock': false});
+          });
+        }
+        return Container(
+          color: bg,
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Text('Schedules', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: textColor)),
+                const Spacer(),
+                Text('See All', style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF6366F1), fontWeight: FontWeight.w600)),
+              ]),
+              const SizedBox(height: 10),
+              if (rules.isEmpty)
+                Padding(padding: const EdgeInsets.symmetric(vertical: 48),
+                  child: Center(child: Text('No schedules set yet.', textAlign: TextAlign.center, style: GoogleFonts.outfit(color: isDark ? Colors.white38 : const Color(0xFF94A3B8)))))
+              else
+                ...rules.map((r) => _MobileScheduleCard(rule: r, isDark: isDark)),
+            ]),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _MobileScheduleCard extends StatelessWidget {
+  final Map<String, dynamic> rule; final bool isDark;
+  const _MobileScheduleCard({required this.rule, required this.isDark});
+  @override
+  Widget build(BuildContext context) {
+    final isLock = rule['isLock'] == true;
+    final color = isLock ? const Color(0xFFEF4444) : const Color(0xFF6366F1);
+    final bg = isDark ? const Color(0xFF0F1A35) : Colors.white;
+    final textColor = isDark ? Colors.white : const Color(0xFF1E293B);
+    final subColor = isDark ? Colors.white54 : const Color(0xFF64748B);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withOpacity(0.35), width: 1.5)),
+      child: Row(children: [
+        Container(width: 52, height: 52, decoration: BoxDecoration(color: color.withOpacity(0.12), shape: BoxShape.circle),
+          child: Icon(isLock ? Icons.smartphone_rounded : Icons.apps_rounded, color: color, size: 24)),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(6)),
+              child: Text(rule['type'] ?? '', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w800, color: color))),
+            const SizedBox(width: 6),
+            Expanded(child: Text(rule['deviceId'] ?? '', style: GoogleFonts.outfit(fontSize: 10, color: subColor), overflow: TextOverflow.ellipsis)),
+          ]),
+          const SizedBox(height: 4),
+          Text(rule['target'] ?? '', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: textColor)),
+          const SizedBox(height: 4),
+          Row(children: [Icon(Icons.schedule_rounded, size: 13, color: subColor), const SizedBox(width: 4), Text(rule['time'] ?? '', style: GoogleFonts.outfit(fontSize: 12, color: subColor))]),
+        ])),
+        Column(children: [
+          Container(width: 36, height: 36, decoration: BoxDecoration(color: const Color(0xFF6366F1).withOpacity(0.12), shape: BoxShape.circle), child: const Icon(Icons.edit_rounded, color: Color(0xFF6366F1), size: 16)),
+          const SizedBox(height: 6),
+          Container(width: 36, height: 36, decoration: BoxDecoration(color: const Color(0xFFEF4444).withOpacity(0.12), shape: BoxShape.circle), child: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 16)),
+        ]),
+      ]),
+    );
+  }
+}
+
+// ─── App Controls ─────────────────────────────────────────────────────────────
+class _MobileAppControlsView extends StatefulWidget {
+  final bool isDark;
+  const _MobileAppControlsView({required this.isDark});
+  @override State<_MobileAppControlsView> createState() => _MobileAppControlsViewState();
+}
+class _MobileAppControlsViewState extends State<_MobileAppControlsView> {
+  String? _selDeviceId; String _filterMode = 'all';
+  @override
+  Widget build(BuildContext context) {
+    final bg = widget.isDark ? const Color(0xFF060D1F) : const Color(0xFFF8FAFC);
+    final cardBg = widget.isDark ? const Color(0xFF0F1A35) : Colors.white;
+    final textColor = widget.isDark ? Colors.white : const Color(0xFF1E293B);
+    final subColor = widget.isDark ? Colors.white54 : const Color(0xFF64748B);
+    final borderColor = const Color(0xFF6366F1).withOpacity(0.3);
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseService.instance.streamAdminDevices(),
+      builder: (context, snap) {
+        if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+        final devices = snap.data!.docs;
+        if (devices.isEmpty) return Center(child: Text('No devices paired.', style: GoogleFonts.outfit(color: subColor)));
+        _selDeviceId ??= devices.first.id;
+        final selDoc = devices.any((d) => d.id == _selDeviceId) ? devices.firstWhere((d) => d.id == _selDeviceId) : devices.first;
+        final data = selDoc.data() as Map<String, dynamic>;
+        final apps = data['installedApps'] as List<dynamic>? ?? [];
+        final blockedApps = (data['blockedApps'] as List<dynamic>? ?? []).map((e) => e.toString()).toSet();
+        final hiddenApps = (data['hiddenApps'] as List<dynamic>? ?? []).map((e) => e.toString()).toSet();
+        final filtered = apps.where((app) {
+          final d = app as Map<String, dynamic>;
+          final pkg = (d['packageName'] ?? '').toString();
+          if (_filterMode == 'blocked') return blockedApps.contains(pkg);
+          if (_filterMode == 'hidden') return hiddenApps.contains(pkg);
+          if (_filterMode == 'allowed') return !blockedApps.contains(pkg) && !hiddenApps.contains(pkg);
+          return true;
+        }).toList();
+        return Container(
+          color: bg,
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Expanded(child: _MobileDropBox(value: _selDeviceId!, items: devices.map((d) => d.id).toList(), icon: Icons.phone_android_rounded, isDark: widget.isDark, onChanged: (v) => setState(() => _selDeviceId = v))),
+                const SizedBox(width: 10),
+                Expanded(child: _MobileDropBox(value: _filterMode, items: const ['all', 'blocked', 'hidden', 'allowed'], icon: Icons.apps_rounded, isDark: widget.isDark, onChanged: (v) => setState(() => _filterMode = v))),
+              ]),
+              const SizedBox(height: 16),
+              Row(children: [
+                Text('Apps', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: textColor)),
+                const Spacer(),
+                Text('See All', style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF6366F1), fontWeight: FontWeight.w600)),
+              ]),
+              const SizedBox(height: 10),
+              if (filtered.isEmpty)
+                Padding(padding: const EdgeInsets.symmetric(vertical: 32), child: Center(child: Text('No apps found.', style: GoogleFonts.outfit(color: subColor))))
+              else
+                GridView.builder(
+                  shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 10, mainAxisSpacing: 10, childAspectRatio: 2.5),
+                  itemCount: filtered.length,
+                  itemBuilder: (context, i) {
+                    final app = filtered[i] as Map<String, dynamic>;
+                    final name = (app['appName'] ?? app['name'] ?? app['label'] ?? '').toString();
+                    final pkg = (app['packageName'] ?? '').toString();
+                    final isBlocked = blockedApps.contains(pkg);
+                    final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
+                    final circleColors = [const Color(0xFFFDE68A), const Color(0xFFBFDBFE), const Color(0xFFFCE7F3), const Color(0xFFD1FAE5), const Color(0xFFE0E7FF)];
+                    final tColors = [const Color(0xFFD97706), const Color(0xFF1D4ED8), const Color(0xFFBE185D), const Color(0xFF065F46), const Color(0xFF3730A3)];
+                    final ci = name.isNotEmpty ? name.codeUnitAt(0) % circleColors.length : 0;
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(14), border: Border.all(color: isBlocked ? const Color(0xFFEF4444).withOpacity(0.4) : borderColor)),
+                      child: Row(children: [
+                        Container(width: 38, height: 38, decoration: BoxDecoration(color: circleColors[ci], shape: BoxShape.circle), child: Center(child: Text(initial, style: GoogleFonts.outfit(color: tColors[ci], fontSize: 17, fontWeight: FontWeight.w900)))),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(name, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: textColor), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                        Column(mainAxisAlignment: MainAxisAlignment.center, children: const [
+                          Icon(Icons.circle, size: 4, color: Color(0xFF94A3B8)), SizedBox(height: 3),
+                          Icon(Icons.circle, size: 4, color: Color(0xFF94A3B8)), SizedBox(height: 3),
+                          Icon(Icons.circle, size: 4, color: Color(0xFF94A3B8)),
+                        ]),
+                      ]),
+                    );
+                  },
+                ),
+            ]),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _MobileDropBox extends StatelessWidget {
+  final String value; final List<String> items; final IconData icon; final bool isDark; final Function(String) onChanged;
+  const _MobileDropBox({required this.value, required this.items, required this.icon, required this.isDark, required this.onChanged});
+  @override
+  Widget build(BuildContext context) {
+    final bg = isDark ? const Color(0xFF0F1A35) : Colors.white;
+    final textColor = isDark ? Colors.white : const Color(0xFF1E293B);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.3))),
+      child: Row(children: [
+        Container(width: 32, height: 32, decoration: BoxDecoration(color: const Color(0xFF6366F1).withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: Icon(icon, color: const Color(0xFF6366F1), size: 16)),
+        const SizedBox(width: 6),
+        Expanded(child: DropdownButton<String>(
+          value: items.contains(value) ? value : items.first, isExpanded: true, underline: const SizedBox(),
+          dropdownColor: isDark ? const Color(0xFF0F1A35) : Colors.white,
+          style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w700, color: textColor),
+          icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF6366F1), size: 18),
+          items: items.map((i) => DropdownMenuItem(value: i, child: Text(i.toUpperCase()))).toList(),
+          onChanged: (v) { if (v != null) onChanged(v); },
+        )),
+      ]),
+    );
+  }
+}
+
+// ─── Location ─────────────────────────────────────────────────────────────────
+class _MobileLocationView extends StatelessWidget {
+  final bool isDark;
+  const _MobileLocationView({required this.isDark});
+  @override
+  Widget build(BuildContext context) {
+    final bg = isDark ? const Color(0xFF060D1F) : const Color(0xFFF8FAFC);
+    final textColor = isDark ? Colors.white : const Color(0xFF1E293B);
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseService.instance.streamAdminDevices(),
+      builder: (context, snap) {
+        if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+        final devices = snap.data!.docs;
+        int active = devices.where((d) => (d.data() as Map)['status'] == 'online').length;
+        final List<Marker> markers = [];
+        LatLng center = const LatLng(14.5995, 120.9842);
+        for (var doc in devices) {
+          final data = doc.data() as Map<String, dynamic>;
+          final lat = (data['lat'] as num?)?.toDouble() ?? 0.0;
+          final lng = (data['lng'] as num?)?.toDouble() ?? 0.0;
+          if (lat != 0.0 || lng != 0.0) {
+            center = LatLng(lat, lng);
+            markers.add(Marker(point: LatLng(lat, lng), width: 60, height: 60, child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(6), border: Border.all(color: const Color(0xFF22C55E))),
+                child: Text(doc.id.length > 8 ? doc.id.substring(0, 8) : doc.id, style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.bold, color: const Color(0xFF1E293B)))),
+              const Icon(Icons.location_on_rounded, color: Colors.red, size: 28),
+            ])));
+          }
+        }
+        return Container(
+          color: bg,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Expanded(child: Text('Tracking $active active devices locations', style: GoogleFonts.outfit(fontSize: 13, color: textColor, fontWeight: FontWeight.w600))),
+                Container(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(color: const Color(0xFFF0FDF4), borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFF22C55E))),
+                  child: Row(children: [const Icon(Icons.refresh_rounded, color: Color(0xFF22C55E), size: 16), const SizedBox(width: 6), Text('Live Sync', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF22C55E)))])),
+              ]),
+              const SizedBox(height: 14),
+              Expanded(child: Container(
+                decoration: BoxDecoration(borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFF22C55E).withOpacity(0.5), width: 2)),
+                clipBehavior: Clip.hardEdge,
+                child: FlutterMap(
+                  options: MapOptions(initialCenter: center, initialZoom: 13),
+                  children: [
+                    TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.parentalcontrol.applocker'),
+                    MarkerLayer(markers: markers),
+                  ],
+                ),
+              )),
+            ]),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ─── Monitoring ───────────────────────────────────────────────────────────────
+class _MobileMonitoringView extends StatefulWidget {
+  final bool isDark;
+  const _MobileMonitoringView({required this.isDark});
+  @override State<_MobileMonitoringView> createState() => _MobileMonitoringViewState();
+}
+class _MobileMonitoringViewState extends State<_MobileMonitoringView> {
+  String _category = 'App Opened';
+  String? _selDeviceId;
+  static const _cats = ['App Opened', 'Web Activity', 'Social Messages', 'Calls & SMS'];
+
+  String get _activityType {
+    switch (_category) {
+      case 'Web Activity': return 'url';
+      case 'Social Messages': return 'message';
+      case 'Calls & SMS': return 'call';
+      default: return 'app_usage';
+    }
+  }
+  String get _listLabel { switch (_category) { case 'Web Activity': return 'Websites'; case 'Social Messages': return 'Social Messages'; case 'Calls & SMS': return 'Calls'; default: return 'Apps'; } }
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = widget.isDark ? const Color(0xFF060D1F) : const Color(0xFFF8FAFC);
+    final cardBg = widget.isDark ? const Color(0xFF0F1A35) : Colors.white;
+    final textColor = widget.isDark ? Colors.white : const Color(0xFF1E293B);
+    final subColor = widget.isDark ? Colors.white54 : const Color(0xFF64748B);
+    final border = const Color(0xFF6366F1).withOpacity(0.3);
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseService.instance.streamAdminDevices(),
+      builder: (context, devSnap) {
+        if (!devSnap.hasData) return const Center(child: CircularProgressIndicator());
+        final devices = devSnap.data!.docs;
+        if (devices.isEmpty) return Center(child: Text('No devices.', style: GoogleFonts.outfit(color: subColor)));
+        _selDeviceId ??= devices.first.id;
+        final deviceId = devices.any((d) => d.id == _selDeviceId) ? _selDeviceId! : devices.first.id;
+
+        return Container(
+          color: bg,
+          child: Column(children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(14), border: Border.all(color: border)),
+                child: Row(children: [
+                  Container(width: 44, height: 44, decoration: BoxDecoration(color: const Color(0xFF6366F1).withOpacity(0.1), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.touch_app_rounded, color: Color(0xFF6366F1), size: 22)),
+                  const SizedBox(width: 12),
+                  Expanded(child: DropdownButton<String>(
+                    value: _category, isExpanded: true, underline: const SizedBox(),
+                    dropdownColor: widget.isDark ? const Color(0xFF0F1A35) : Colors.white,
+                    style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: textColor),
+                    icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF6366F1)),
+                    items: _cats.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                    onChanged: (v) { if (v != null) setState(() => _category = v); },
+                  )),
+                ]),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Expanded(child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance.collection('devices').doc(deviceId).collection('activity')
+                  .where('type', isEqualTo: _activityType).orderBy('timestamp', descending: true).limit(30).snapshots(),
+              builder: (context, snap) {
+                final mainDocs = snap.data?.docs ?? [];
+                return StreamBuilder<QuerySnapshot>(
+                  stream: _category == 'Calls & SMS'
+                      ? FirebaseFirestore.instance.collection('devices').doc(deviceId).collection('activity').where('type', isEqualTo: 'sms').orderBy('timestamp', descending: true).limit(30).snapshots()
+                      : const Stream.empty(),
+                  builder: (context, smsSnap) {
+                    final allDocs = [...mainDocs, ...?smsSnap.data?.docs]..sort((a, b) {
+                      final at = (a.data() as Map)['timestamp'] as Timestamp?;
+                      final bt = (b.data() as Map)['timestamp'] as Timestamp?;
+                      if (at == null || bt == null) return 0;
+                      return bt.compareTo(at);
+                    });
+                    return SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Row(children: [
+                          Text(_listLabel, style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, color: textColor)),
+                          const Spacer(),
+                          Text('See All', style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF6366F1), fontWeight: FontWeight.w600)),
+                        ]),
+                        const SizedBox(height: 10),
+                        if (allDocs.isEmpty)
+                          Padding(padding: const EdgeInsets.symmetric(vertical: 40), child: Center(child: Text('No activity recorded yet.', style: GoogleFonts.outfit(color: subColor))))
+                        else
+                          ...allDocs.map((doc) => _buildActivityCard(doc, cardBg, textColor, subColor, border, context)),
+                      ]),
+                    );
+                  },
+                );
+              },
+            )),
+          ]),
+        );
+      },
+    );
+  }
+
+  Widget _buildActivityCard(QueryDocumentSnapshot doc, Color cardBg, Color textColor, Color subColor, Color border, BuildContext context) {
+    final data = doc.data() as Map<String, dynamic>;
+    final ts = (data['timestamp'] as Timestamp?)?.toDate();
+    final dateStr = ts != null ? DateFormat('h:mm a MMM d').format(ts) : '';
+    final type = data['type'] as String? ?? '';
+    final circleColors = [const Color(0xFFFDE68A), const Color(0xFFBFDBFE), const Color(0xFFFCE7F3), const Color(0xFFD1FAE5)];
+    final tColors = [const Color(0xFFD97706), const Color(0xFF1D4ED8), const Color(0xFFBE185D), const Color(0xFF065F46)];
+
+    Widget leading; String title, subtitle = ''; Widget? trailing; String? badge; String? trailing2;
+
+    switch (_category) {
+      case 'App Opened': {
+        final app = (data['appName'] ?? data['app'] ?? '').toString();
+        final dMin = (((data['duration'] as int?) ?? 0) / 60000).round();
+        final initial = app.isNotEmpty ? app[0].toUpperCase() : '?';
+        final ci = app.isNotEmpty ? app.codeUnitAt(0) % circleColors.length : 0;
+        leading = Container(width: 48, height: 48, decoration: BoxDecoration(color: circleColors[ci], shape: BoxShape.circle), child: Center(child: Text(initial, style: GoogleFonts.outfit(color: tColors[ci], fontSize: 20, fontWeight: FontWeight.w900))));
+        title = app.isEmpty ? 'Unknown' : app; subtitle = dateStr;
+        trailing = Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: circleColors[ci], borderRadius: BorderRadius.circular(20)), child: Text('${dMin}m', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, color: tColors[ci])));
+        break;
+      }
+      case 'Web Activity': {
+        final url = (data['url'] ?? data['domain'] ?? '').toString();
+        final dMin = (((data['duration'] as int?) ?? 0) / 60000).round();
+        leading = Container(width: 48, height: 48, decoration: const BoxDecoration(color: Color(0xFFD1FAE5), shape: BoxShape.circle), child: const Icon(Icons.language_rounded, color: Color(0xFF059669), size: 24));
+        title = url.isEmpty ? 'Unknown site' : url; subtitle = 'Chrome · $dateStr';
+        trailing = Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: const Color(0xFF1D4ED8), borderRadius: BorderRadius.circular(20)), child: Text('${dMin}m', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white)));
+        break;
+      }
+      case 'Social Messages': {
+        final contact = (data['contact'] ?? data['from'] ?? 'Unknown').toString();
+        final body = (data['body'] ?? data['message'] ?? '').toString();
+        final isIn = (data['direction'] ?? 'incoming') == 'incoming';
+        leading = Container(width: 48, height: 48, decoration: const BoxDecoration(color: Color(0xFFD1FAE5), shape: BoxShape.circle), child: Icon(isIn ? Icons.south_west_rounded : Icons.north_east_rounded, color: const Color(0xFF1D4ED8), size: 24));
+        title = '${isIn ? "Incoming" : "Outgoing"} ($contact)'; subtitle = body; trailing2 = dateStr;
+        break;
+      }
+      default: {
+        final contact = (data['contact'] ?? data['from'] ?? 'Unknown').toString();
+        final body = (data['body'] ?? data['number'] ?? '').toString();
+        final isIn = (data['direction'] ?? 'incoming') == 'incoming';
+        leading = Container(width: 48, height: 48, decoration: const BoxDecoration(color: Color(0xFFD1FAE5), shape: BoxShape.circle), child: Icon(isIn ? Icons.south_west_rounded : Icons.north_east_rounded, color: const Color(0xFF1D4ED8), size: 24));
+        title = '${isIn ? "Incoming" : "Outgoing"} ($contact)'; subtitle = body.isEmpty ? 'No content' : body;
+        badge = type == 'sms' ? 'Messages' : 'Phone Manager'; trailing2 = dateStr;
+        break;
+      }
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(14), border: Border.all(color: border)),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        leading,
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Expanded(child: Text(title, style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w800, color: textColor), maxLines: 1, overflow: TextOverflow.ellipsis)),
+            if (badge != null) ...[const SizedBox(width: 6), Text(badge, style: GoogleFonts.outfit(fontSize: 11, color: subColor))],
+          ]),
+          if (subtitle.isNotEmpty) ...[const SizedBox(height: 3), Text(subtitle, style: GoogleFonts.outfit(fontSize: 12, color: subColor), maxLines: 2)],
+          if (trailing2 != null) ...[const SizedBox(height: 4), Align(alignment: Alignment.bottomRight, child: Text(trailing2, style: GoogleFonts.outfit(fontSize: 10, color: subColor)))],
+        ])),
+        if (trailing != null) ...[const SizedBox(width: 8), trailing],
+      ]),
+    );
+  }
+}
+
+// ─── Reports ──────────────────────────────────────────────────────────────────
+class _MobileReportsView extends StatelessWidget {
+  final bool isDark;
+  const _MobileReportsView({required this.isDark});
+  @override
+  Widget build(BuildContext context) {
+    final bg = isDark ? const Color(0xFF060D1F) : const Color(0xFFF8FAFC);
+    final cardBg = isDark ? const Color(0xFF0F1A35) : Colors.white;
+    final textColor = isDark ? Colors.white : const Color(0xFF1E293B);
+    final border = const Color(0xFF6366F1).withOpacity(0.3);
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseService.instance.streamAdminDevices(),
+      builder: (context, snap) {
+        if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+        final devices = snap.data!.docs;
+        double screenTime = 0; int blocked = 0, active = 0;
+        final List<Map<String, dynamic>> events = [];
+        for (var doc in devices) {
+          final data = doc.data() as Map<String, dynamic>;
+          if (data['status'] == 'online') active++;
+          blocked += (data['blockedApps'] as List<dynamic>? ?? []).length;
+          (data['usageStats'] as Map<dynamic, dynamic>? ?? {}).forEach((k, v) { if (v is num) screenTime += v / (1000 * 60 * 60); });
+          if (data['status'] == 'online') events.add({'title': 'Device is online', 'device': doc.id, 'icon': Icons.cell_tower_rounded, 'color': const Color(0xFF22C55E)});
+          if ((data['battery'] ?? 100) < 20) events.add({'title': 'Battery critical low', 'device': doc.id, 'icon': Icons.battery_alert_rounded, 'color': const Color(0xFFEF4444)});
+          if (data['locked'] == true) events.add({'title': 'Manual lock active', 'device': doc.id, 'icon': Icons.lock_rounded, 'color': const Color(0xFF6366F1)});
+        }
+        return Container(
+          color: bg,
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Expanded(child: _MiniStatCard(label: 'Total Screen Time', value: '${screenTime.toStringAsFixed(1)}h', liveColor: const Color(0xFF22C55E), isDark: isDark)),
+                const SizedBox(width: 8),
+                Expanded(child: _MiniStatCard(label: 'Block Threats', value: '$blocked', liveColor: const Color(0xFFFBBF24), isDark: isDark)),
+                const SizedBox(width: 8),
+                Expanded(child: _MiniStatCard(label: 'Active Devices', value: '$active', liveColor: const Color(0xFFA78BFA), isDark: isDark)),
+              ]),
+              const SizedBox(height: 20),
+              Text('Real-time Status Alert', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, color: textColor)),
+              const SizedBox(height: 10),
+              if (events.isEmpty)
+                Padding(padding: const EdgeInsets.symmetric(vertical: 32), child: Center(child: Text('No alerts.', style: GoogleFonts.outfit(color: isDark ? Colors.white38 : const Color(0xFF94A3B8)))))
+              else
+                ...events.map((e) => Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(14), border: Border.all(color: border)),
+                  child: Row(children: [
+                    Container(width: 48, height: 48, decoration: BoxDecoration(color: const Color(0xFFD1FAE5), shape: BoxShape.circle), child: Icon(e['icon'] as IconData, color: e['color'] as Color, size: 22)),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text(e['title'] as String, style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700, color: textColor))),
+                    Text('${(e['device'] as String).length > 8 ? (e['device'] as String).substring(0, 8) : e['device']} - Recent', style: GoogleFonts.outfit(fontSize: 10, color: const Color(0xFF94A3B8))),
+                  ]),
+                )),
+            ]),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _MiniStatCard extends StatelessWidget {
+  final String label; final String value; final Color liveColor; final bool isDark;
+  const _MiniStatCard({required this.label, required this.value, required this.liveColor, required this.isDark});
+  @override
+  Widget build(BuildContext context) {
+    final bg = isDark ? const Color(0xFF0F1A35) : Colors.white;
+    final textColor = isDark ? Colors.white : const Color(0xFF1E293B);
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.3))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: GoogleFonts.outfit(fontSize: 10, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w600), maxLines: 2),
+        const SizedBox(height: 4),
+        Text(value, style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: textColor)),
+        const SizedBox(height: 6),
+        Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: liveColor.withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
+          child: Text('LIVE', style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.w900, color: liveColor))),
+      ]),
+    );
+  }
+}
+
+// ─── Subscriptions ────────────────────────────────────────────────────────────
+class _MobileSubscriptionView extends StatefulWidget {
+  final bool isDark; final String userRole;
+  const _MobileSubscriptionView({required this.isDark, required this.userRole});
+  @override State<_MobileSubscriptionView> createState() => _MobileSubscriptionViewState();
+}
+class _MobileSubscriptionViewState extends State<_MobileSubscriptionView> {
+  Map<String, dynamic>? _selectedPlan;
+
+  static const _planColors = {'basic': Color(0xFFA78BFA), 'starter': Color(0xFF22C55E), 'pro': Color(0xFF6366F1), 'lifetime': Color(0xFFFBBF24)};
+  static const _planIcons = {'basic': Icons.monetization_on_outlined, 'starter': Icons.workspace_premium_rounded, 'pro': Icons.stars_rounded, 'lifetime': Icons.all_inclusive_rounded};
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = widget.isDark ? const Color(0xFF060D1F) : const Color(0xFFF8FAFC);
+    final textColor = widget.isDark ? Colors.white : const Color(0xFF1E293B);
+
+    if (_selectedPlan != null) {
+      final p = _selectedPlan!;
+      final name = (p['name'] ?? 'Plan').toString().toUpperCase();
+      final price = (p['price'] ?? 0); final devices = p['deviceLimit'] ?? 1;
+      final blocked = p['blockedAppsLimit'] ?? 0; final hidden = p['hiddenAppsLimit'] ?? 0;
+      final hasTracking = p['realtimeTracking'] == true || p['deviceLimit'] == 999;
+      final color = p['_color'] as Color? ?? const Color(0xFF22C55E);
+      final icon = p['_icon'] as IconData? ?? Icons.workspace_premium_rounded;
+      final isLifetime = name.contains('LIFETIME');
+
+      return Container(
+        color: bg,
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            TextButton.icon(onPressed: () => setState(() => _selectedPlan = null),
+              icon: const Icon(Icons.arrow_back_rounded, size: 18), label: Text('Back', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600)),
+              style: TextButton.styleFrom(foregroundColor: const Color(0xFF94A3B8), padding: EdgeInsets.zero)),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity, padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(color: color.withOpacity(widget.isDark ? 0.12 : 0.08), borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withOpacity(0.3))),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Expanded(child: Text(name, style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: color))),
+                  Container(width: 52, height: 52, decoration: BoxDecoration(color: color, shape: BoxShape.circle), child: Icon(icon, color: Colors.white, size: 26)),
+                ]),
+                const SizedBox(height: 16),
+                _bullet('${devices == 999 ? 'Unlimited' : devices} Device${devices == 1 ? '' : 's'}', color),
+                if (blocked > 0) _bullet('$blocked Blocked Apps Allowed', color),
+                if (hidden > 0) _bullet('$hidden Hidden Apps Allowed', color),
+                if (hasTracking) _bullet('Realtime Tracking', color),
+                const SizedBox(height: 20),
+                GestureDetector(onTap: () {},
+                  child: Container(width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 16), decoration: BoxDecoration(color: const Color(0xFFFBBF24), borderRadius: BorderRadius.circular(12)),
+                    child: Center(child: Text('UPGRADE', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1.5))))),
+              ]),
+            ),
+          ]),
+        ),
+      );
+    }
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('plans').orderBy('deviceLimit').snapshots(),
+      builder: (context, snap) {
+        if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+        final plans = snap.data!.docs;
+        return Container(
+          color: bg,
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Subscription Plans', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: textColor)),
+              const SizedBox(height: 14),
+              ...plans.map((doc) {
+                final p = doc.data() as Map<String, dynamic>;
+                final name = (p['name'] ?? 'Plan').toString();
+                final price = p['price'] ?? 0; final devices = p['deviceLimit'] ?? 1;
+                final key = name.toLowerCase();
+                final color = _planColors[key] ?? const Color(0xFF6366F1);
+                final icon = _planIcons[key] ?? Icons.workspace_premium_rounded;
+                final isLifetime = key.contains('lifetime');
+                return GestureDetector(
+                  onTap: () => setState(() => _selectedPlan = {...p, '_color': color, '_icon': icon}),
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(color: widget.isDark ? const Color(0xFF0F1A35) : Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withOpacity(0.4))),
+                    child: Row(children: [
+                      Container(width: 48, height: 48, decoration: BoxDecoration(color: color.withOpacity(0.15), shape: BoxShape.circle), child: Icon(icon, color: color, size: 22)),
+                      const SizedBox(width: 12),
+                      Expanded(child: Text(name, style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: textColor))),
+                      RichText(text: TextSpan(children: [
+                        TextSpan(text: '\$', style: GoogleFonts.outfit(fontSize: 13, color: textColor, fontWeight: FontWeight.w700)),
+                        TextSpan(text: '$price', style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: textColor)),
+                        TextSpan(text: isLifetime ? ' one-time' : '/mo', style: GoogleFonts.outfit(fontSize: 10, color: const Color(0xFF94A3B8))),
+                      ])),
+                      const SizedBox(width: 10),
+                      Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                        Text('${devices == 999 ? '∞' : devices}', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: textColor)),
+                        Text(devices == 1 ? 'Device' : 'Devices', style: GoogleFonts.outfit(fontSize: 10, color: const Color(0xFF94A3B8))),
+                      ]),
+                      const SizedBox(width: 8),
+                      Container(width: 34, height: 34, decoration: BoxDecoration(color: const Color(0xFF94A3B8).withOpacity(0.15), shape: BoxShape.circle), child: const Icon(Icons.arrow_forward_rounded, color: Color(0xFF94A3B8), size: 16)),
+                    ]),
+                  ),
+                );
+              }),
+            ]),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _bullet(String text, Color color) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Row(children: [Icon(Icons.circle, size: 6, color: color), const SizedBox(width: 10), Text(text, style: GoogleFonts.outfit(fontSize: 14, color: color, fontWeight: FontWeight.w700))]),
+  );
+}
+
+// ─── Settings ─────────────────────────────────────────────────────────────────
+class _MobileSettingsView extends StatefulWidget {
+  final bool isDark;
+  const _MobileSettingsView({required this.isDark});
+  @override State<_MobileSettingsView> createState() => _MobileSettingsViewState();
+}
+class _MobileSettingsViewState extends State<_MobileSettingsView> {
+  final _imageUrlCtrl = TextEditingController();
+  final _quoteCtrl = TextEditingController();
+  final _greetingCtrl = TextEditingController();
+  final _headingCtrl = TextEditingController();
+  final _titleCtrl = TextEditingController();
+  final _tasksCtrl = TextEditingController();
+  final _rHeadCtrl = TextEditingController();
+  final _rMsgCtrl = TextEditingController();
+  final _rTasksCtrl = TextEditingController();
+  final _pinCtrl = TextEditingController();
+  String? _selDevice;
+  bool _loaded = false, _saving = false;
+
+  @override void initState() { super.initState(); _load(); }
+  @override void dispose() {
+    for (var c in [_imageUrlCtrl, _quoteCtrl, _greetingCtrl, _headingCtrl, _titleCtrl, _tasksCtrl, _rHeadCtrl, _rMsgCtrl, _rTasksCtrl, _pinCtrl]) c.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid; if (uid == null) return;
+    final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+    final data = doc.data() ?? {};
+    setState(() {
+      _imageUrlCtrl.text = data['profileImageUrl'] ?? '';
+      _quoteCtrl.text = data['parentQuote'] ?? '';
+      _greetingCtrl.text = data['unlockGreeting'] ?? '';
+      _headingCtrl.text = data['lockScreenHeading'] ?? 'LOCKED';
+      _titleCtrl.text = data['lockScreenTitle'] ?? 'Your Tasks';
+      _tasksCtrl.text = (data['lockScreenTasks'] as List<dynamic>? ?? []).join('\n');
+      _rHeadCtrl.text = data['restrictedHeadline'] ?? 'APP RESTRICTED';
+      _rMsgCtrl.text = data['restrictedMessage'] ?? 'Access to this application is restricted by parent settings.';
+      _rTasksCtrl.text = (data['restrictedTasks'] as List<dynamic>? ?? []).join('\n');
+      _pinCtrl.text = data['masterPin'] ?? '';
+      _loaded = true;
+    });
+  }
+
+  Future<void> _save(String section) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid; if (uid == null) return;
+    setState(() => _saving = true);
+    Map<String, dynamic> payload = {};
+    if (section == 'child') payload = {'profileImageUrl': _imageUrlCtrl.text.trim(), 'parentQuote': _quoteCtrl.text.trim(), 'unlockGreeting': _greetingCtrl.text.trim()};
+    else if (section == 'lock') {
+      payload = {'lockScreenHeading': _headingCtrl.text.trim(), 'lockScreenTitle': _titleCtrl.text.trim(), 'lockScreenTasks': _tasksCtrl.text.trim().split('\n').where((l) => l.trim().isNotEmpty).toList()};
+      if (_selDevice != null) await FirebaseFirestore.instance.collection('devices').doc(_selDevice).update(payload).catchError((_) {});
+    } else if (section == 'restrict') {
+      payload = {'restrictedHeadline': _rHeadCtrl.text.trim(), 'restrictedMessage': _rMsgCtrl.text.trim(), 'restrictedTasks': _rTasksCtrl.text.trim().split('\n').where((l) => l.trim().isNotEmpty).toList()};
+    } else if (section == 'pin') {
+      payload = {'masterPin': _pinCtrl.text.trim()};
+    }
+    await FirebaseFirestore.instance.collection('users').doc(uid).update(payload);
+    setState(() => _saving = false);
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Saved successfully!'), backgroundColor: Color(0xFF22C55E)));
+  }
+
+  Future<void> _pickImage() async {
+    final input = html.FileUploadInputElement()..accept = 'image/*';
+    input.click();
+    await input.onChange.first;
+    final file = input.files?.first; if (file == null) return;
+    final reader = html.FileReader(); reader.readAsArrayBuffer(file); await reader.onLoad.first;
+    final bytes = reader.result as List<int>;
+    final uid = FirebaseAuth.instance.currentUser?.uid; if (uid == null) return;
+    final ref = FirebaseStorage.instance.ref('profile_images/$uid/${DateTime.now().millisecondsSinceEpoch}_${file.name}');
+    await ref.putData(Uint8List.fromList(bytes), SettableMetadata(contentType: file.type));
+    final url = await ref.getDownloadURL();
+    setState(() => _imageUrlCtrl.text = url);
+  }
+
+  Widget _sectionWrap(String title, String sectionId, Widget body, {bool showSave = true}) {
+    final sectionBg = widget.isDark ? const Color(0xFF091526) : const Color(0xFFECFDF5);
+    final textColor = widget.isDark ? Colors.white : const Color(0xFF1E293B);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Text(title, style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w800, color: textColor)),
+        const Spacer(),
+        if (showSave) GestureDetector(
+          onTap: _saving ? null : () => _save(sectionId),
+          child: Container(padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8), decoration: BoxDecoration(color: const Color(0xFF22C55E), borderRadius: BorderRadius.circular(20)),
+            child: Text(_saving ? '...' : 'save', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white))),
+        ),
+      ]),
+      const SizedBox(height: 10),
+      Container(width: double.infinity, padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: sectionBg, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFF22C55E).withOpacity(0.3))), child: body),
+      const SizedBox(height: 20),
+    ]);
+  }
+
+  Widget _tf(String label, TextEditingController ctrl, {int maxLines = 1, String? hint}) {
+    final textColor = widget.isDark ? Colors.white : const Color(0xFF1E293B);
+    final bg = widget.isDark ? const Color(0xFF0F1A35) : Colors.white;
+    final border = OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF22C55E), width: 0.8));
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w600)),
+      const SizedBox(height: 4),
+      TextField(controller: ctrl, maxLines: maxLines, style: GoogleFonts.outfit(fontSize: 13, color: textColor),
+        decoration: InputDecoration(hintText: hint, hintStyle: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF94A3B8)), filled: true, fillColor: bg, contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), border: border, enabledBorder: border, focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF22C55E), width: 1.5)))),
+      const SizedBox(height: 10),
+    ]);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = widget.isDark ? const Color(0xFF060D1F) : const Color(0xFFF8FAFC);
+    if (!_loaded) return Container(color: bg, child: const Center(child: CircularProgressIndicator()));
+
+    return Container(
+      color: bg,
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          _sectionWrap('Child App View Data', 'child', Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              _tf('Paste your URL here', _imageUrlCtrl, hint: 'https://example.com/photo.jpg'),
+              _tf('Parent Quote', _quoteCtrl, maxLines: 3, hint: '"I love you more than words can say"'),
+              _tf('Unlock Greetings', _greetingCtrl, hint: 'Enjoy Your Day My Child.'),
+            ])),
+            const SizedBox(width: 10),
+            Column(children: [
+              Container(width: 88, height: 110, decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), color: widget.isDark ? Colors.white10 : const Color(0xFFE2E8F0)), clipBehavior: Clip.hardEdge,
+                child: _imageUrlCtrl.text.isNotEmpty ? Image.network(_imageUrlCtrl.text, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.person_rounded, size: 36, color: Color(0xFF94A3B8))) : const Icon(Icons.person_rounded, size: 36, color: Color(0xFF94A3B8))),
+              const SizedBox(height: 6),
+              GestureDetector(onTap: _pickImage,
+                child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: const Color(0xFFFBBF24), borderRadius: BorderRadius.circular(8)),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.upload_rounded, color: Colors.white, size: 14), const SizedBox(width: 4), Text('Choose Img', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white))]))),
+              const SizedBox(height: 4),
+              Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: const Color(0xFF22C55E), borderRadius: BorderRadius.circular(8)),
+                child: Text('Preview', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white))),
+            ]),
+          ])),
+
+          _sectionWrap('Device Lock Screen Settings', 'lock', StreamBuilder<QuerySnapshot>(
+            stream: FirebaseService.instance.streamAdminDevices(),
+            builder: (context, snap) {
+              final devices = snap.data?.docs ?? [];
+              _selDevice ??= devices.isNotEmpty ? devices.first.id : null;
+              return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Target Device', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w600)),
+                const SizedBox(height: 4),
+                if (devices.isNotEmpty) Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(color: widget.isDark ? const Color(0xFF0F1A35) : Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFF22C55E).withOpacity(0.8))),
+                  child: DropdownButton<String>(
+                    value: devices.any((d) => d.id == _selDevice) ? _selDevice : devices.first.id, isExpanded: true, underline: const SizedBox(),
+                    dropdownColor: widget.isDark ? const Color(0xFF0F1A35) : Colors.white,
+                    style: GoogleFonts.outfit(fontSize: 13, color: widget.isDark ? Colors.white : const Color(0xFF1E293B)),
+                    items: devices.map((d) => DropdownMenuItem(value: d.id, child: Text(d.id))).toList(),
+                    onChanged: (v) => setState(() => _selDevice = v),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                _tf('Lock Screen Heading', _headingCtrl, hint: 'LOCKED'),
+                _tf('Lock Screen Title', _titleCtrl, hint: 'Your Tasks'),
+                _tf('Lock Screen Tasks (one per line)', _tasksCtrl, maxLines: 5, hint: 'Cook Food\nBreakfast\nWash Dishes'),
+              ]);
+            },
+          )),
+
+          _sectionWrap('App Restricted Settings', 'restrict', Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _tf('App Restricted Headline', _rHeadCtrl, hint: 'APP RESTRICTED'),
+            _tf('App Restricted Fallback Message', _rMsgCtrl, maxLines: 2, hint: 'Access to this application is restricted.'),
+            _tf('List of Tasks to Show (one per line)', _rTasksCtrl, maxLines: 5, hint: 'Cook Food\nBreakfast'),
+          ])),
+
+          _sectionWrap('Default Master PIN', 'pin', Row(children: [
+            Expanded(child: TextField(
+              controller: _pinCtrl,
+              style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: widget.isDark ? Colors.white : const Color(0xFF1E293B)),
+              textAlign: TextAlign.center, keyboardType: TextInputType.number,
+              decoration: InputDecoration(filled: true, fillColor: widget.isDark ? const Color(0xFF0F1A35) : Colors.white, contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF22C55E))),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF22C55E)))),
+            )),
+            const SizedBox(width: 10),
+            GestureDetector(onTap: () => _save('pin'),
+              child: Container(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14), decoration: BoxDecoration(color: const Color(0xFF22C55E), borderRadius: BorderRadius.circular(10)),
+                child: Text('save', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)))),
+          ]), showSave: false),
+        ]),
+      ),
+    );
+  }
+
 }
 
 class _StatCard extends StatelessWidget {
