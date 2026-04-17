@@ -1526,6 +1526,13 @@ class _MobileDevicesViewState extends State<_MobileDevicesView> {
   Future<void> _toggleLock(String deviceId, bool current) async =>
       FirebaseFirestore.instance.collection('devices').doc(deviceId).update({'locked': !current});
 
+  void _openScheduleDialog(BuildContext context, String deviceId, Map<String, dynamic> data) {
+    showModalBottomSheet(
+      context: context, isScrollControlled: true, backgroundColor: Colors.transparent,
+      builder: (_) => _ScheduleLockSheet(deviceId: deviceId, deviceData: data, isDark: widget.isDark),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bg = widget.isDark ? const Color(0xFF060D1F) : const Color(0xFFF8FAFC);
@@ -1563,7 +1570,7 @@ class _MobileDevicesViewState extends State<_MobileDevicesView> {
                   onChat: () => _openChat(context, doc.id),
                   onLock: () => _toggleLock(doc.id, isLocked),
                   onLocation: () => widget.onNavigate?.call(_DashboardMenu.location),
-                  onMonitoring: () => widget.onNavigate?.call(_DashboardMenu.monitoring),
+                  onSchedule: () => _openScheduleDialog(context, doc.id, data),
                 );
               }),
               const SizedBox(height: 12),
@@ -1586,8 +1593,8 @@ class _MobileDevicesViewState extends State<_MobileDevicesView> {
 class _MobileDeviceListCard extends StatelessWidget {
   final String name; final String deviceId; final bool isOnline; final int battery; final bool isDark; final bool isLocked;
   final VoidCallback onChat; final VoidCallback onLock;
-  final VoidCallback? onLocation; final VoidCallback? onMonitoring;
-  const _MobileDeviceListCard({required this.name, required this.deviceId, required this.isOnline, required this.battery, required this.isDark, required this.isLocked, required this.onChat, required this.onLock, this.onLocation, this.onMonitoring});
+  final VoidCallback? onLocation; final VoidCallback? onSchedule;
+  const _MobileDeviceListCard({required this.name, required this.deviceId, required this.isOnline, required this.battery, required this.isDark, required this.isLocked, required this.onChat, required this.onLock, this.onLocation, this.onSchedule});
 
   @override
   Widget build(BuildContext context) {
@@ -1598,28 +1605,56 @@ class _MobileDeviceListCard extends StatelessWidget {
     final borderColor = isOnline ? const Color(0xFF22C55E).withOpacity(0.4) : const Color(0xFF94A3B8).withOpacity(0.3);
     final batColor = battery > 50 ? const Color(0xFF22C55E) : battery > 20 ? const Color(0xFFFBBF24) : const Color(0xFFEF4444);
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(16), border: Border.all(color: borderColor, width: 1.5)),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(18), border: Border.all(color: borderColor, width: 1.5)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Container(width: 52, height: 52, decoration: BoxDecoration(color: circleColor, shape: BoxShape.circle),
             child: const Icon(Icons.smartphone_rounded, color: Colors.white, size: 24)),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [Icon(Icons.battery_charging_full_rounded, size: 12, color: batColor), const SizedBox(width: 2), Text('$battery%', style: GoogleFonts.outfit(fontSize: 11, color: batColor, fontWeight: FontWeight.w700))]),
+            Row(children: [Icon(Icons.battery_charging_full_rounded, size: 12, color: batColor), const SizedBox(width: 3), Text('$battery%', style: GoogleFonts.outfit(fontSize: 11, color: batColor, fontWeight: FontWeight.w700))]),
+            const SizedBox(height: 2),
             Text(name, style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: textColor), maxLines: 1, overflow: TextOverflow.ellipsis),
-            Text(deviceId.length > 16 ? deviceId.substring(0, 16) + '…' : deviceId, style: GoogleFonts.outfit(fontSize: 10, color: subColor), maxLines: 1, overflow: TextOverflow.ellipsis),
-            Text(isOnline ? 'Online' : 'Offline', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w700, color: isOnline ? const Color(0xFF22C55E) : const Color(0xFF94A3B8))),
+            Text(deviceId.length > 18 ? deviceId.substring(0, 18) + '…' : deviceId, style: GoogleFonts.outfit(fontSize: 10, color: subColor), maxLines: 1, overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 2),
+            Row(children: [
+              Container(width: 7, height: 7, decoration: BoxDecoration(color: isOnline ? const Color(0xFF22C55E) : const Color(0xFF94A3B8), shape: BoxShape.circle)),
+              const SizedBox(width: 5),
+              Text(isOnline ? 'Online' : 'Offline', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w700, color: isOnline ? const Color(0xFF22C55E) : const Color(0xFF94A3B8))),
+            ]),
           ])),
-          _DevActCircle(icon: isLocked ? Icons.lock_rounded : Icons.lock_open_rounded, color: const Color(0xFFEF4444), onTap: onLock),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: onLock,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: isLocked ? const Color(0xFFEF4444).withOpacity(0.1) : const Color(0xFF22C55E).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: isLocked ? const Color(0xFFEF4444).withOpacity(0.4) : const Color(0xFF22C55E).withOpacity(0.4)),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(isLocked ? Icons.lock_rounded : Icons.lock_open_rounded, size: 14, color: isLocked ? const Color(0xFFEF4444) : const Color(0xFF22C55E)),
+                const SizedBox(width: 4),
+                Text(isLocked ? 'Locked' : 'Unlock', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w700, color: isLocked ? const Color(0xFFEF4444) : const Color(0xFF22C55E))),
+              ]),
+            ),
+          ),
         ]),
-        const SizedBox(height: 10),
-        Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-          _DevActCircle(icon: Icons.location_on_rounded, color: const Color(0xFFEF4444), label: 'Location', onTap: onLocation ?? () {}),
-          _DevActCircle(icon: Icons.chat_bubble_rounded, color: const Color(0xFFFBBF24), label: 'Chat', onTap: onChat, badge: true),
-          _DevActCircle(icon: Icons.history_rounded, color: const Color(0xFF818CF8), label: 'Monitoring', onTap: onMonitoring ?? () {}),
-        ]),
+        const SizedBox(height: 14),
+        Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(color: isDark ? Colors.white.withOpacity(0.04) : const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12)),
+          child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+            _DevActCircle(icon: Icons.location_on_rounded, color: const Color(0xFFEF4444), label: 'Location', onTap: onLocation ?? () {}),
+            Container(width: 1, height: 36, color: isDark ? Colors.white10 : const Color(0xFFE2E8F0)),
+            _DevActCircle(icon: Icons.chat_bubble_rounded, color: const Color(0xFFFBBF24), label: 'Chat', onTap: onChat, badge: true),
+            Container(width: 1, height: 36, color: isDark ? Colors.white10 : const Color(0xFFE2E8F0)),
+            _DevActCircle(icon: Icons.calendar_month_rounded, color: const Color(0xFF6366F1), label: 'Schedule', onTap: onSchedule ?? () {}),
+          ]),
+        ),
       ]),
     );
   }
@@ -1649,94 +1684,298 @@ class _MobileChatSheet extends StatefulWidget {
 }
 class _MobileChatSheetState extends State<_MobileChatSheet> {
   final _ctrl = TextEditingController();
-  @override void dispose() { _ctrl.dispose(); super.dispose(); }
+  final _scrollCtrl = ScrollController();
+  @override void dispose() { _ctrl.dispose(); _scrollCtrl.dispose(); super.dispose(); }
   Future<void> _send() async {
     final t = _ctrl.text.trim(); if (t.isEmpty) return; _ctrl.clear();
     await FirebaseService.instance.sendChatMessage(widget.deviceId, t, 'parent');
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollCtrl.hasClients) _scrollCtrl.animateTo(_scrollCtrl.position.maxScrollExtent, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+    });
   }
   @override
   Widget build(BuildContext context) {
     final h = MediaQuery.of(context).size.height;
     final bg = widget.isDark ? const Color(0xFF0F1A35) : Colors.white;
+    final msgAreaBg = widget.isDark ? const Color(0xFF060D1F) : const Color(0xFFFAFAFA);
     return Container(
-      height: h * 0.86,
-      decoration: BoxDecoration(color: bg, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
+      height: h * 0.88,
+      decoration: BoxDecoration(color: bg, borderRadius: const BorderRadius.vertical(top: Radius.circular(28))),
       child: Column(children: [
+        // ── Header ──
         Container(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-          decoration: const BoxDecoration(color: Color(0xFFFBBF24), borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+          padding: const EdgeInsets.fromLTRB(20, 20, 16, 20),
+          decoration: const BoxDecoration(color: Color(0xFFFBBF24), borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
           child: Row(children: [
-            Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.white.withOpacity(0.25), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.chat_rounded, color: Colors.white, size: 22)),
-            const SizedBox(width: 12),
-            Text('Chat Now', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: Colors.white.withOpacity(0.25), borderRadius: BorderRadius.circular(14)),
+              child: const Icon(Icons.chat_bubble_rounded, color: Colors.white, size: 24)),
+            const SizedBox(width: 14),
+            Text('Chat Now', style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.white)),
             const Spacer(),
-            GestureDetector(onTap: () => Navigator.pop(context),
-              child: Container(padding: const EdgeInsets.all(6), decoration: const BoxDecoration(color: Color(0xFFEF4444), shape: BoxShape.circle), child: const Icon(Icons.close_rounded, color: Colors.white, size: 18))),
+            GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: Container(
+                width: 36, height: 36,
+                decoration: const BoxDecoration(color: Color(0xFFEF4444), shape: BoxShape.circle),
+                child: const Icon(Icons.close_rounded, color: Colors.white, size: 20)),
+            ),
           ]),
         ),
-        Expanded(child: StreamBuilder<QuerySnapshot>(
-          stream: FirebaseService.instance.streamChatMessages(widget.deviceId),
-          builder: (context, snap) {
-            if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-            final docs = snap.data!.docs;
-            return ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: docs.length,
-              itemBuilder: (context, i) {
-                final data = docs[i].data() as Map<String, dynamic>;
-                final isParent = data['sender'] == 'parent';
-                final text = data['text'] as String? ?? '';
-                final ts = (data['timestamp'] as Timestamp?)?.toDate();
-                final timeStr = ts != null ? DateFormat('MMM d, yyyy h:mm a').format(ts) : '';
-                final maxW = MediaQuery.of(context).size.width * 0.6;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
-                  child: Row(
-                    mainAxisAlignment: isParent ? MainAxisAlignment.end : MainAxisAlignment.start,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      if (!isParent) Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Container(constraints: BoxConstraints(maxWidth: maxW), padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(color: const Color(0xFFFEF9C3), borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16), bottomRight: Radius.circular(16), bottomLeft: Radius.circular(4))),
-                          child: Text(text, style: GoogleFonts.outfit(color: const Color(0xFF1E293B), fontSize: 14, height: 1.5))),
-                        const SizedBox(height: 4),
-                        Text(timeStr, style: GoogleFonts.outfit(fontSize: 10, color: const Color(0xFF94A3B8))),
-                      ])
-                      else Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                        Text(timeStr, style: GoogleFonts.outfit(fontSize: 10, color: const Color(0xFF94A3B8))),
-                        const SizedBox(height: 4),
-                        Container(constraints: BoxConstraints(maxWidth: maxW), padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(color: const Color(0xFFE9D5FF), borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16), bottomLeft: Radius.circular(16), bottomRight: Radius.circular(4))),
-                          child: Text(text, style: GoogleFonts.outfit(color: const Color(0xFF4C1D95), fontSize: 14, height: 1.5))),
-                      ]),
-                    ],
-                  ),
-                );
-              },
-            );
-          },
+        // ── Messages ──
+        Expanded(child: Container(
+          color: msgAreaBg,
+          child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseService.instance.streamChatMessages(widget.deviceId),
+            builder: (context, snap) {
+              if (!snap.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFF7C3AED)));
+              final docs = snap.data!.docs;
+              if (docs.isEmpty) return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFFD1D5DB), size: 48),
+                const SizedBox(height: 12),
+                Text('No messages yet.\nSay hello to your child!', textAlign: TextAlign.center, style: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 14)),
+              ]));
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (_scrollCtrl.hasClients) _scrollCtrl.jumpTo(_scrollCtrl.position.maxScrollExtent);
+              });
+              return ListView.builder(
+                controller: _scrollCtrl,
+                padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
+                itemCount: docs.length,
+                itemBuilder: (context, i) {
+                  final data = docs[i].data() as Map<String, dynamic>;
+                  final isParent = data['sender'] == 'parent';
+                  final text = data['text'] as String? ?? '';
+                  final ts = (data['timestamp'] as Timestamp?)?.toDate();
+                  final timeStr = ts != null ? DateFormat('MMM d, yyyy h:mm a').format(ts) : '';
+                  final maxW = MediaQuery.of(context).size.width * 0.58;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: isParent
+                      ? Row(mainAxisAlignment: MainAxisAlignment.end, crossAxisAlignment: CrossAxisAlignment.center, children: [
+                          Padding(
+                            padding: const EdgeInsets.only(right: 10),
+                            child: Text(timeStr, style: GoogleFonts.outfit(fontSize: 10, color: const Color(0xFF94A3B8))),
+                          ),
+                          Container(
+                            constraints: BoxConstraints(maxWidth: maxW),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE9D5FF),
+                              borderRadius: const BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20), bottomLeft: Radius.circular(20), bottomRight: Radius.circular(4)),
+                            ),
+                            child: Text(text, style: GoogleFonts.outfit(color: const Color(0xFF4C1D95), fontSize: 14, fontWeight: FontWeight.w500, height: 1.5)),
+                          ),
+                        ])
+                      : Row(mainAxisAlignment: MainAxisAlignment.start, crossAxisAlignment: CrossAxisAlignment.center, children: [
+                          Container(
+                            constraints: BoxConstraints(maxWidth: maxW),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF3C7),
+                              borderRadius: const BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20), bottomRight: Radius.circular(20), bottomLeft: Radius.circular(4)),
+                            ),
+                            child: Text(text, style: GoogleFonts.outfit(color: const Color(0xFF1E293B), fontSize: 14, fontWeight: FontWeight.w500, height: 1.5)),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.only(left: 10),
+                            child: Text(timeStr, style: GoogleFonts.outfit(fontSize: 10, color: const Color(0xFF94A3B8))),
+                          ),
+                        ]),
+                  );
+                },
+              );
+            },
+          ),
         )),
+        // ── Input ──
         Container(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          decoration: BoxDecoration(border: Border(top: BorderSide(color: widget.isDark ? Colors.white10 : const Color(0xFFE2E8F0)))),
+          padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.of(context).viewInsets.bottom + 16),
+          decoration: BoxDecoration(
+            color: bg,
+            border: Border(top: BorderSide(color: widget.isDark ? Colors.white10 : const Color(0xFFE2E8F0))),
+          ),
           child: Row(children: [
             Expanded(child: TextField(
               controller: _ctrl,
+              onSubmitted: (_) => _send(),
               style: GoogleFonts.outfit(fontSize: 14, color: widget.isDark ? Colors.white : const Color(0xFF1E293B)),
               decoration: InputDecoration(
-                hintText: 'Type a message...', hintStyle: GoogleFonts.outfit(color: const Color(0xFF94A3B8)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-                filled: true, fillColor: widget.isDark ? Colors.white.withOpacity(0.06) : const Color(0xFFF8FAFC),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                hintText: 'Type a message...', hintStyle: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 14),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                filled: true,
+                fillColor: widget.isDark ? Colors.white.withOpacity(0.06) : const Color(0xFFF1F5F9),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none),
                 enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide(color: widget.isDark ? Colors.white12 : const Color(0xFFE2E8F0))),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: const BorderSide(color: Color(0xFF7C3AED))),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: const BorderSide(color: Color(0xFF7C3AED), width: 1.5)),
               ),
             )),
             const SizedBox(width: 10),
-            GestureDetector(onTap: _send,
-              child: Container(width: 50, height: 50, decoration: const BoxDecoration(color: Color(0xFF7C3AED), shape: BoxShape.circle), child: const Icon(Icons.send_rounded, color: Colors.white, size: 22))),
+            GestureDetector(
+              onTap: _send,
+              child: Container(
+                width: 52, height: 52,
+                decoration: const BoxDecoration(color: Color(0xFF7C3AED), shape: BoxShape.circle),
+                child: const Icon(Icons.navigation_rounded, color: Colors.white, size: 24),
+              ),
+            ),
           ]),
         ),
+      ]),
+    );
+  }
+}
+
+// ─── Schedule Lock Sheet ─────────────────────────────────────────────────────
+class _ScheduleLockSheet extends StatefulWidget {
+  final String deviceId; final Map<String, dynamic> deviceData; final bool isDark;
+  const _ScheduleLockSheet({required this.deviceId, required this.deviceData, required this.isDark});
+  @override State<_ScheduleLockSheet> createState() => _ScheduleLockSheetState();
+}
+class _ScheduleLockSheetState extends State<_ScheduleLockSheet> {
+  TimeOfDay _startTime = const TimeOfDay(hour: 22, minute: 0);
+  TimeOfDay _endTime = const TimeOfDay(hour: 6, minute: 0);
+  bool _saving = false;
+
+  List<Map<String, dynamic>> get _schedules =>
+      (widget.deviceData['lockSchedules'] as List<dynamic>? ?? []).map((s) => Map<String, dynamic>.from(s as Map)).toList();
+
+  String _fmtTime(TimeOfDay t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+  Future<void> _pickTime(bool isStart) async {
+    final picked = await showTimePicker(context: context, initialTime: isStart ? _startTime : _endTime,
+      builder: (context, child) => Theme(data: ThemeData.light().copyWith(colorScheme: const ColorScheme.light(primary: Color(0xFF6366F1))), child: child!));
+    if (picked != null) setState(() { if (isStart) _startTime = picked; else _endTime = picked; });
+  }
+
+  Future<void> _addSchedule() async {
+    setState(() => _saving = true);
+    final current = List<dynamic>.from(widget.deviceData['lockSchedules'] ?? []);
+    current.add({'start': _fmtTime(_startTime), 'end': _fmtTime(_endTime)});
+    await FirebaseFirestore.instance.collection('devices').doc(widget.deviceId).update({'lockSchedules': current});
+    setState(() => _saving = false);
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Schedule added!'), backgroundColor: Color(0xFF22C55E)));
+  }
+
+  Future<void> _deleteSchedule(int index) async {
+    final current = List<dynamic>.from(widget.deviceData['lockSchedules'] ?? []);
+    current.removeAt(index);
+    await FirebaseFirestore.instance.collection('devices').doc(widget.deviceId).update({'lockSchedules': current});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final h = MediaQuery.of(context).size.height;
+    final bg = widget.isDark ? const Color(0xFF0F1A35) : Colors.white;
+    final textColor = widget.isDark ? Colors.white : const Color(0xFF1E293B);
+    final subColor = widget.isDark ? Colors.white54 : const Color(0xFF64748B);
+    final cardBg = widget.isDark ? const Color(0xFF060D1F) : const Color(0xFFF8FAFC);
+    final existing = _schedules;
+    return Container(
+      height: h * 0.72,
+      decoration: BoxDecoration(color: bg, borderRadius: const BorderRadius.vertical(top: Radius.circular(28))),
+      child: Column(children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(20, 20, 16, 20),
+          decoration: const BoxDecoration(color: Color(0xFF6366F1), borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+          child: Row(children: [
+            Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(14)),
+              child: const Icon(Icons.calendar_month_rounded, color: Colors.white, size: 24)),
+            const SizedBox(width: 14),
+            Text('Schedule Lock', style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.white)),
+            const Spacer(),
+            GestureDetector(onTap: () => Navigator.pop(context),
+              child: Container(width: 36, height: 36, decoration: const BoxDecoration(color: Color(0xFFEF4444), shape: BoxShape.circle),
+                child: const Icon(Icons.close_rounded, color: Colors.white, size: 20))),
+          ]),
+        ),
+        Expanded(child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('New Lock Schedule', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: textColor)),
+            const SizedBox(height: 4),
+            Text('Set a time range when the device will be locked automatically.', style: GoogleFonts.outfit(fontSize: 12, color: subColor)),
+            const SizedBox(height: 16),
+            Row(children: [
+              Expanded(child: GestureDetector(
+                onTap: () => _pickTime(true),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.4))),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('Lock From', style: GoogleFonts.outfit(fontSize: 11, color: subColor, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 6),
+                    Row(children: [
+                      const Icon(Icons.access_time_rounded, color: Color(0xFF6366F1), size: 18),
+                      const SizedBox(width: 8),
+                      Text(_fmtTime(_startTime), style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: textColor)),
+                    ]),
+                  ]),
+                ),
+              )),
+              const SizedBox(width: 12),
+              Expanded(child: GestureDetector(
+                onTap: () => _pickTime(false),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.4))),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('Unlock At', style: GoogleFonts.outfit(fontSize: 11, color: subColor, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 6),
+                    Row(children: [
+                      const Icon(Icons.access_time_filled_rounded, color: Color(0xFF22C55E), size: 18),
+                      const SizedBox(width: 8),
+                      Text(_fmtTime(_endTime), style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: textColor)),
+                    ]),
+                  ]),
+                ),
+              )),
+            ]),
+            const SizedBox(height: 16),
+            GestureDetector(
+              onTap: _saving ? null : _addSchedule,
+              child: Container(
+                width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 15),
+                decoration: BoxDecoration(color: const Color(0xFF6366F1), borderRadius: BorderRadius.circular(14)),
+                child: Center(child: _saving
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : Row(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(Icons.add_rounded, color: Colors.white, size: 20),
+                      const SizedBox(width: 8),
+                      Text('Add Lock Schedule', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
+                    ]),
+                ),
+              ),
+            ),
+            if (existing.isNotEmpty) ...[
+              const SizedBox(height: 24),
+              Text('Active Schedules', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: textColor)),
+              const SizedBox(height: 10),
+              ...existing.asMap().entries.map((e) {
+                final s = e.value;
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.25))),
+                  child: Row(children: [
+                    const Icon(Icons.lock_clock_rounded, color: Color(0xFF6366F1), size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('${s['start']} → ${s['end']}', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700, color: textColor)),
+                      Text('Device locked during this period', style: GoogleFonts.outfit(fontSize: 11, color: subColor)),
+                    ])),
+                    GestureDetector(
+                      onTap: () => _deleteSchedule(e.key),
+                      child: Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: const Color(0xFFEF4444).withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                        child: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 16)),
+                    ),
+                  ]),
+                );
+              }),
+            ],
+          ]),
+        )),
       ]),
     );
   }
