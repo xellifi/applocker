@@ -279,9 +279,9 @@ class _PwaInstallBannerState extends State<_PwaInstallBanner>
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 350));
-    _slideAnim = Tween<double>(begin: 40, end: 0)
-        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 400));
+    _slideAnim = Tween<double>(begin: 0.88, end: 1.0)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutBack));
     _fadeAnim = Tween<double>(begin: 0, end: 1)
         .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
     Future.delayed(const Duration(milliseconds: 800), () {
@@ -528,156 +528,192 @@ class _PwaInstallBannerState extends State<_PwaInstallBanner>
     final isSafari = _BrowserInfo.isSafari && isIOS;
     final canInstall = _PwaInstallManager.canInstall;
 
-    // Decide what the action button does / shows
-    final bool showInstallBtn = canInstall && !isInApp;
+    // Show install button for any browser that can support it
+    final bool showInstallBtn = !isInApp && !isIOS;
     final bool showSafariHint = isIOS && isSafari && !isInApp;
     final bool showInAppHint  = isInApp;
 
     return AnimatedBuilder(
       animation: _ctrl,
-      builder: (context, child) => Positioned(
-        bottom: 0, left: 0, right: 0,
+      builder: (context, child) => Positioned.fill(
         child: Opacity(
           opacity: _fadeAnim.value,
-          child: Transform.translate(
-            offset: Offset(0, _slideAnim.value),
+          child: Transform.scale(
+            scale: _slideAnim.value,
             child: child,
           ),
         ),
       ),
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          child: Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E293B),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: const Color(0xFF6366F1).withOpacity(0.35),
-                width: 1.5,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.5),
-                  blurRadius: 24,
-                  offset: const Offset(0, 8),
+      child: Container(
+        color: Colors.black.withOpacity(0.55),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 380),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E293B),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: const Color(0xFF6366F1).withOpacity(0.4),
+                  width: 1.5,
                 ),
-              ],
-            ),
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // ── Main row ──────────────────────────────────────────
-                Row(
-                  children: [
-                    Container(
-                      width: 46,
-                      height: 46,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(Icons.shield_rounded,
-                          color: Colors.white, size: 24),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            showInAppHint
-                                ? (isMessenger ? 'Open in Chrome to install' : 'Open in Chrome to install')
-                                : showSafariHint
-                                    ? 'Add to Home Screen'
-                                    : 'Install AppLocker',
-                            style: GoogleFonts.outfit(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
-                              decoration: TextDecoration.none,
-                            ),
-                          ),
-                          Text(
-                            showInAppHint
-                                ? (isMessenger
-                                    ? 'Tap ⋮ → "Open in Chrome", then install from there.'
-                                    : 'Tap the share/menu icon → "Open in Chrome".')
-                                : showSafariHint
-                                    ? 'Tap Share (□↑) → "Add to Home Screen".'
-                                    : 'Add to your home screen for quick access.',
-                            style: GoogleFonts.outfit(
-                              fontSize: 12,
-                              color: Colors.white54,
-                              height: 1.4,
-                              decoration: TextDecoration.none,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: widget.onDismiss,
-                      child: Container(
-                        width: 28,
-                        height: 28,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.08),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.close_rounded,
-                            color: Colors.white38, size: 16),
-                      ),
-                    ),
-                  ],
-                ),
-
-                // ── Install button (only for Chrome/Edge) ─────────────
-                if (showInstallBtn) ...[
-                  const SizedBox(height: 12),
-                  GestureDetector(
-                    onTap: _handleInstall,
-                    child: Container(
-                      width: double.infinity,
-                      height: 46,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF6366F1).withOpacity(0.4),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.download_rounded,
-                              color: Colors.white, size: 18),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Install App',
-                            style: GoogleFonts.outfit(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 15,
-                              decoration: TextDecoration.none,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF6366F1).withOpacity(0.2),
+                    blurRadius: 40,
+                    offset: const Offset(0, 8),
+                  ),
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.6),
+                    blurRadius: 32,
+                    offset: const Offset(0, 4),
                   ),
                 ],
-              ],
+              ),
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // ── Main row ──────────────────────────────────────────
+                  Row(
+                    children: [
+                      Container(
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.shield_rounded,
+                            color: Colors.white, size: 24),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              showInAppHint
+                                  ? (isMessenger ? 'Open in Chrome to install' : 'Open in Chrome to install')
+                                  : showSafariHint
+                                      ? 'Add to Home Screen'
+                                      : 'Install AppLocker',
+                              style: GoogleFonts.outfit(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                                decoration: TextDecoration.none,
+                              ),
+                            ),
+                            Text(
+                              showInAppHint
+                                  ? (isMessenger
+                                      ? 'Tap ⋮ → "Open in Chrome", then install from there.'
+                                      : 'Tap the share/menu icon → "Open in Chrome".')
+                                  : showSafariHint
+                                      ? 'Tap Share (□↑) → "Add to Home Screen".'
+                                      : 'Add to your home screen for quick access.',
+                              style: GoogleFonts.outfit(
+                                fontSize: 12,
+                                color: Colors.white54,
+                                height: 1.4,
+                                decoration: TextDecoration.none,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: widget.onDismiss,
+                        child: Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.08),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.close_rounded,
+                              color: Colors.white38, size: 16),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  // ── Install button ─────────────────────────────────────
+                  if (showInstallBtn) ...[
+                    const SizedBox(height: 16),
+                    Row(children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: widget.onDismiss,
+                          child: Container(
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.07),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.white.withOpacity(0.1)),
+                            ),
+                            child: Center(
+                              child: Text('Not now',
+                                style: GoogleFonts.outfit(
+                                  color: Colors.white38,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                  decoration: TextDecoration.none,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        flex: 2,
+                        child: GestureDetector(
+                          onTap: _handleInstall,
+                          child: Container(
+                            height: 44,
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF6366F1).withOpacity(0.45),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.download_rounded,
+                                    color: Colors.white, size: 18),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Install App',
+                                  style: GoogleFonts.outfit(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 15,
+                                    decoration: TextDecoration.none,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ]),
+                  ],
+                ],
+              ),
             ),
           ),
         ),
