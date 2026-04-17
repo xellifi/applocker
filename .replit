@@ -26,7 +26,7 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "npx serve -s AppLocker/build/web -l 5000 --no-clipboard"
+args = "serve -s AppLocker/build/web -l 5000 --no-clipboard"
 waitForPort = 5000
 
 [[ports]]
