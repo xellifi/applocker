@@ -1484,17 +1484,17 @@ class _MobileMoreSheet extends StatelessWidget {
     final subtextColor = isDark ? Colors.white54 : const Color(0xFF94A3B8);
 
     final moreItems = <(_DashboardMenu, IconData, String, String, Color)>[
+      if (userRole == 'super_admin') ...[
+        (_DashboardMenu.users, Icons.admin_panel_settings_rounded, 'Users Admin', 'Global user management', const Color(0xFFEF4444)),
+        (_DashboardMenu.paymentMethods, Icons.credit_card_rounded, 'Payment Methods', 'Manage payment options', const Color(0xFF6366F1)),
+        (_DashboardMenu.pendingTransactions, Icons.pending_actions_rounded, 'Pending Payments', 'Approve transactions', const Color(0xFF22C55E)),
+      ],
       (_DashboardMenu.location, Icons.location_on_rounded, 'Location', 'Track child location', const Color(0xFF10B981)),
       (_DashboardMenu.monitoring, Icons.monitor_heart_rounded, 'Monitoring', 'Child activity logs', const Color(0xFF6366F1)),
       (_DashboardMenu.reports, Icons.bar_chart_rounded, 'Reports', 'Usage statistics', const Color(0xFFF59E0B)),
       (_DashboardMenu.subscriptions, Icons.workspace_premium_rounded, 'Subscription', 'Plan & billing', const Color(0xFFEC4899)),
       (_DashboardMenu.settings, Icons.settings_rounded, 'Settings', 'App configuration', const Color(0xFF94A3B8)),
       (_DashboardMenu.profile, Icons.person_rounded, 'My Profile', 'Manage your account', const Color(0xFF6366F1)),
-      if (userRole == 'super_admin') ...[
-        (_DashboardMenu.users, Icons.admin_panel_settings_rounded, 'Users Admin', 'Global user management', const Color(0xFFEF4444)),
-        (_DashboardMenu.paymentMethods, Icons.credit_card_rounded, 'Payment Methods', 'Manage payment options', const Color(0xFF6366F1)),
-        (_DashboardMenu.pendingTransactions, Icons.pending_actions_rounded, 'Pending Payments', 'Approve transactions', const Color(0xFF22C55E)),
-      ],
     ];
 
     return Container(
@@ -1524,58 +1524,117 @@ class _MobileMoreSheet extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-          ...moreItems.map((item) {
-            final isActive = selectedMenu == item.$1;
-            return GestureDetector(
-              onTap: () => onMenuSelected(item.$1),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(
-                  color: isActive
-                      ? item.$5.withOpacity(0.12)
-                      : (isDark ? Colors.white.withOpacity(0.04) : const Color(0xFFF8FAFC)),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: isActive ? item.$5.withOpacity(0.3) : Colors.transparent,
-                    width: 1,
-                  ),
-                ),
-                child: Row(children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: item.$5.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(12),
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.6,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ...moreItems.map((item) {
+                    final isActive = selectedMenu == item.$1;
+                    return GestureDetector(
+                      onTap: () => onMenuSelected(item.$1),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: isActive
+                              ? item.$5.withOpacity(0.12)
+                              : (isDark ? Colors.white.withOpacity(0.04) : const Color(0xFFF8FAFC)),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isActive ? item.$5.withOpacity(0.3) : Colors.transparent,
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: item.$5.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(item.$2, color: item.$5, size: 20),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(item.$3,
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                      color: isActive ? item.$5 : textColor,
+                                    )),
+                                Text(item.$4,
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 11,
+                                      color: subtextColor,
+                                    )),
+                              ],
+                            ),
+                          ),
+                          Icon(Icons.chevron_right_rounded,
+                              color: isActive ? item.$5 : subtextColor, size: 18),
+                        ]),
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.pop(context);
+                      FirebaseAuth.instance.signOut();
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: Colors.redAccent.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.transparent),
+                      ),
+                      child: Row(children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.redAccent.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 20),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Logout',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.redAccent,
+                                  )),
+                              Text('Sign out of your account',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 11,
+                                    color: subtextColor,
+                                  )),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.chevron_right_rounded,
+                            color: Colors.redAccent, size: 18),
+                      ]),
                     ),
-                    child: Icon(item.$2, color: item.$5, size: 20),
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(item.$3,
-                            style: GoogleFonts.outfit(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: isActive ? item.$5 : textColor,
-                            )),
-                        Text(item.$4,
-                            style: GoogleFonts.outfit(
-                              fontSize: 11,
-                              color: subtextColor,
-                            )),
-                      ],
-                    ),
-                  ),
-                  Icon(Icons.chevron_right_rounded,
-                      color: isActive ? item.$5 : subtextColor, size: 18),
-                ]),
+                ],
               ),
-            );
-          }),
+            ),
+          ),
         ],
       ),
     );
