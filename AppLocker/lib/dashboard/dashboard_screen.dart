@@ -22,7 +22,7 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../shared/firebase_service.dart';
-enum _DashboardMenu { dashboard, devices, apps, schedules, location, monitoring, reports, subscriptions, settings, users, profile }
+enum _DashboardMenu { dashboard, devices, apps, schedules, location, monitoring, reports, subscriptions, paymentMethods, pendingTransactions, settings, users, profile }
 
 // GLOBAL HELPER FOR PAIRING DIALOG
 void showAppLockerPairingDialog(BuildContext context, Color cardColor, Color textColor) async {
@@ -311,6 +311,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case _DashboardMenu.monitoring: return 'Monitoring';
       case _DashboardMenu.reports: return 'Reports';
       case _DashboardMenu.subscriptions: return 'Subscription';
+      case _DashboardMenu.paymentMethods: return 'Payment Methods';
+      case _DashboardMenu.pendingTransactions: return 'Pending Payments';
       case _DashboardMenu.settings: return 'Settings';
       case _DashboardMenu.users: return 'Users Admin';
       case _DashboardMenu.profile: return 'My Profile';
@@ -328,6 +330,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         case _DashboardMenu.monitoring: return _MobileMonitoringView(isDark: _isDark);
         case _DashboardMenu.reports: return _MobileReportsView(isDark: _isDark);
         case _DashboardMenu.subscriptions: return _MobileSubscriptionView(isDark: _isDark, userRole: userRole);
+        case _DashboardMenu.paymentMethods: return _PaymentMethodsView(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor);
+        case _DashboardMenu.pendingTransactions: return _PendingTransactionsView(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor);
         case _DashboardMenu.settings: return _MobileSettingsView(isDark: _isDark);
         case _DashboardMenu.users: return SingleChildScrollView(child: _UsersList(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor, isMobile: true));
         case _DashboardMenu.profile: return _MobileProfileView(isDark: _isDark);
@@ -342,6 +346,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case _DashboardMenu.monitoring: return _MonitoringView(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor, isMobile: isMobile);
       case _DashboardMenu.reports: return SingleChildScrollView(child: _ReportsView(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor));
       case _DashboardMenu.subscriptions: return SingleChildScrollView(child: _SubscriptionView(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor, userRole: userRole));
+      case _DashboardMenu.paymentMethods: return SingleChildScrollView(child: _PaymentMethodsView(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor));
+      case _DashboardMenu.pendingTransactions: return SingleChildScrollView(child: _PendingTransactionsView(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor));
       case _DashboardMenu.settings: return SingleChildScrollView(child: _SettingsView(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor));
       case _DashboardMenu.users: return SingleChildScrollView(child: _UsersList(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor, isMobile: isMobile));
       case _DashboardMenu.profile: return SingleChildScrollView(child: _ProfileView(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor));
@@ -375,6 +381,8 @@ class _Sidebar extends StatelessWidget {
           _buildSidebarItem(_DashboardMenu.monitoring, 'Child Monitoring', HeroIcons.magnifyingGlassCircle),
           _buildSidebarItem(_DashboardMenu.reports, 'Activity Reports', HeroIcons.chartBar),
           _buildSidebarItem(_DashboardMenu.subscriptions, 'Subscription', HeroIcons.creditCard),
+          if (userRole == 'super_admin') _buildSidebarItem(_DashboardMenu.paymentMethods, 'Payment Methods', HeroIcons.creditCard),
+          if (userRole == 'super_admin') _buildSidebarItem(_DashboardMenu.pendingTransactions, 'Pending Payments', HeroIcons.documentCheck),
           _buildSidebarItem(_DashboardMenu.settings, 'Settings', HeroIcons.cog6Tooth),
           _buildSidebarItem(_DashboardMenu.profile, 'My Profile', HeroIcons.user),
         ])),
@@ -414,19 +422,23 @@ class _Header extends StatelessWidget {
           stream: FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser?.uid).snapshots(),
           builder: (context, snapshot) {
             String plan = 'FREE';
+            bool isAdmin = false;
             if (snapshot.hasData && snapshot.data?.data() != null) {
               final data = snapshot.data!.data() as Map<String, dynamic>;
-              plan = (data['plan'] ?? 'FREE').toString().toUpperCase();
+              final role = (data['role'] ?? '').toString();
+              isAdmin = role == 'super_admin';
+              plan = isAdmin ? 'ADMIN' : (data['plan'] ?? 'FREE').toString().toUpperCase();
             }
+            final badgeColor = isAdmin ? const Color(0xFFEF4444) : const Color(0xFF6366F1);
             return Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), 
-              decoration: BoxDecoration(color: const Color(0xFF6366F1).withOpacity(0.1), borderRadius: BorderRadius.circular(10)), 
+              decoration: BoxDecoration(color: badgeColor.withOpacity(0.1), borderRadius: BorderRadius.circular(10)), 
               child: Row(
                 children: [
-                  const Icon(Icons.workspace_premium_rounded, size: 16, color: Color(0xFF6366F1)), 
+                  Icon(isAdmin ? Icons.admin_panel_settings_rounded : Icons.workspace_premium_rounded, size: 16, color: badgeColor), 
                   if (!isMobile) ...[
                     const SizedBox(width: 6), 
-                    Text(plan, style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF6366F1)))
+                    Text(plan, style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: badgeColor))
                   ]
                 ]
               )
@@ -3303,108 +3315,296 @@ class _MobileSubscriptionView extends StatefulWidget {
 }
 class _MobileSubscriptionViewState extends State<_MobileSubscriptionView> {
   Map<String, dynamic>? _selectedPlan;
+  String? _selectedPlanId;
 
   static const _planColors = {'basic': Color(0xFFA78BFA), 'starter': Color(0xFF22C55E), 'pro': Color(0xFF6366F1), 'lifetime': Color(0xFFFBBF24)};
   static const _planIcons = {'basic': Icons.monetization_on_outlined, 'starter': Icons.workspace_premium_rounded, 'pro': Icons.stars_rounded, 'lifetime': Icons.all_inclusive_rounded};
+
+  Future<void> _upgradePlan(BuildContext context, String planId, String planName) async {
+    final isDark = widget.isDark;
+    final cardColor = isDark ? const Color(0xFF18181B) : Colors.white;
+    final textColor = isDark ? Colors.white : const Color(0xFF1E293B);
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    String? selectedMethod;
+    String? proofUrl;
+
+    final pmSnap = await FirebaseFirestore.instance.collection('payment_methods').get();
+    final paymentMethods = pmSnap.docs.map((d) => {...d.data(), 'id': d.id}).toList();
+    if (paymentMethods.isEmpty) {
+      paymentMethods.addAll([
+        {'id': 'gcash', 'name': 'GCash', 'icon': '📱', 'qrUrl': '', 'accountName': 'AppLocker PH', 'accountNumber': '09XX-XXX-XXXX'},
+        {'id': 'maya', 'name': 'Maya', 'icon': '💳', 'qrUrl': '', 'accountName': 'AppLocker PH', 'accountNumber': '09XX-XXX-XXXX'},
+        {'id': 'bank', 'name': 'Bank Transfer', 'icon': '🏦', 'qrUrl': '', 'accountName': 'AppLocker PH', 'accountNumber': '0000-0000-0000'},
+      ]);
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dlgCtx) => StatefulBuilder(
+        builder: (dlgCtx, setS) => AlertDialog(
+          backgroundColor: cardColor,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
+          title: Row(children: [
+            const Icon(Icons.payment_rounded, color: Color(0xFF6366F1)),
+            const SizedBox(width: 10),
+            Expanded(child: Text('Upgrade to $planName', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: textColor, fontSize: 18))),
+          ]),
+          content: SizedBox(
+            width: 400,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('SELECT PAYMENT METHOD', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF94A3B8), letterSpacing: 1.2)),
+                  const SizedBox(height: 12),
+                  ...paymentMethods.map((pm) {
+                    final isSelected = selectedMethod == pm['id'];
+                    return GestureDetector(
+                      onTap: () => setS(() => selectedMethod = pm['id'] as String),
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: isSelected ? const Color(0xFF6366F1).withOpacity(0.1) : (isDark ? Colors.white.withOpacity(0.04) : Colors.grey.withOpacity(0.05)),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: isSelected ? const Color(0xFF6366F1) : const Color(0xFF64748B).withOpacity(0.4), width: isSelected ? 1.5 : 0.5),
+                        ),
+                        child: Row(children: [
+                          Text(pm['icon'] as String? ?? '💰', style: const TextStyle(fontSize: 24)),
+                          const SizedBox(width: 12),
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(pm['name'] as String? ?? '', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: textColor)),
+                            if ((pm['accountName'] as String? ?? '').isNotEmpty)
+                              Text('${pm['accountName']} · ${pm['accountNumber']}', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF94A3B8))),
+                          ])),
+                          if (isSelected) const Icon(Icons.check_circle_rounded, color: Color(0xFF6366F1), size: 20),
+                        ]),
+                      ),
+                    );
+                  }).toList(),
+                  if (selectedMethod != null) ...[
+                    const SizedBox(height: 16),
+                    Divider(color: const Color(0xFF64748B).withOpacity(0.3)),
+                    const SizedBox(height: 12),
+                    Builder(builder: (_) {
+                      final pm = paymentMethods.firstWhere((p) => p['id'] == selectedMethod, orElse: () => {});
+                      final qrUrl = pm['qrUrl'] as String? ?? '';
+                      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        if (qrUrl.isNotEmpty) ...[
+                          Text('SCAN QR CODE', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF94A3B8), letterSpacing: 1.2)),
+                          const SizedBox(height: 8),
+                          Center(child: ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.network(qrUrl, height: 180, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const SizedBox.shrink()))),
+                          const SizedBox(height: 12),
+                        ],
+                        Text('PROOF OF PAYMENT', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF94A3B8), letterSpacing: 1.2)),
+                        const SizedBox(height: 8),
+                        Text('After paying, paste your screenshot URL or reference number below.', style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF94A3B8))),
+                        const SizedBox(height: 8),
+                        TextField(
+                          onChanged: (v) => setS(() => proofUrl = v.trim()),
+                          style: GoogleFonts.outfit(fontSize: 12, color: textColor),
+                          decoration: InputDecoration(
+                            hintText: 'Reference # or image URL of receipt…',
+                            hintStyle: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF94A3B8)),
+                            prefixIcon: const Icon(Icons.receipt_long_rounded, color: Color(0xFF6366F1), size: 18),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            filled: true, fillColor: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: const Color(0xFF6366F1).withOpacity(0.4))),
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: const Color(0xFF6366F1).withOpacity(0.25))),
+                          ),
+                        ),
+                      ]);
+                    }),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dlgCtx, false), child: Text('Cancel', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8)))),
+            ElevatedButton(
+              onPressed: selectedMethod == null ? null : () => Navigator.pop(dlgCtx, true),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6366F1), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+              child: Text('Submit for Approval', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed != true || selectedMethod == null) return;
+
+    try {
+      await FirebaseFirestore.instance.collection('transactions').add({
+        'uid': uid,
+        'planId': planId,
+        'planName': planName,
+        'paymentMethod': selectedMethod,
+        'proofUrl': proofUrl ?? '',
+        'status': 'pending',
+        'submittedAt': FieldValue.serverTimestamp(),
+        'userEmail': FirebaseAuth.instance.currentUser?.email ?? '',
+      });
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Payment submitted! Awaiting admin approval for $planName plan.'),
+          backgroundColor: const Color(0xFF6366F1),
+          duration: const Duration(seconds: 4),
+        ));
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent));
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final bg = widget.isDark ? const Color(0xFF060D1F) : const Color(0xFFF8FAFC);
     final textColor = widget.isDark ? Colors.white : const Color(0xFF1E293B);
 
-    if (_selectedPlan != null) {
-      final p = _selectedPlan!;
-      final name = (p['name'] ?? 'Plan').toString().toUpperCase();
-      final price = (p['price'] ?? 0); final devices = p['deviceLimit'] ?? 1;
-      final blocked = p['blockedAppsLimit'] ?? 0; final hidden = p['hiddenAppsLimit'] ?? 0;
-      final hasTracking = p['realtimeTracking'] == true || p['deviceLimit'] == 999;
-      final color = p['_color'] as Color? ?? const Color(0xFF22C55E);
-      final icon = p['_icon'] as IconData? ?? Icons.workspace_premium_rounded;
-      final isLifetime = name.contains('LIFETIME');
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser?.uid).snapshots(),
+      builder: (context, userSnap) {
+        final userData = userSnap.data?.data() as Map<String, dynamic>? ?? {};
+        final currentPlan = (userData['plan'] ?? 'free').toString().toLowerCase();
+        final expiryDate = (userData['expiryDate'] as Timestamp?)?.toDate();
+        final bool isExpired = expiryDate != null && expiryDate.isBefore(DateTime.now());
 
-      return Container(
-        color: bg,
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            TextButton.icon(onPressed: () => setState(() => _selectedPlan = null),
-              icon: const Icon(Icons.arrow_back_rounded, size: 18), label: Text('Back', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600)),
-              style: TextButton.styleFrom(foregroundColor: const Color(0xFF94A3B8), padding: EdgeInsets.zero)),
-            const SizedBox(height: 8),
-            Container(
-              width: double.infinity, padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(color: color.withOpacity(widget.isDark ? 0.12 : 0.08), borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withOpacity(0.3))),
+        if (_selectedPlan != null) {
+          final p = _selectedPlan!;
+          final name = (p['name'] ?? 'Plan').toString().toUpperCase();
+          final price = (p['price'] ?? 0); final devices = p['deviceLimit'] ?? 1;
+          final blocked = p['blockedAppsLimit'] ?? 0; final hidden = p['hiddenAppsLimit'] ?? 0;
+          final hasTracking = p['realtimeTracking'] == true || p['deviceLimit'] == 999;
+          final color = p['_color'] as Color? ?? const Color(0xFF22C55E);
+          final icon = p['_icon'] as IconData? ?? Icons.workspace_premium_rounded;
+          final planId = _selectedPlanId ?? '';
+          final isCurrent = currentPlan == planId.toLowerCase() && !isExpired;
+
+          return Container(
+            color: bg,
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  Expanded(child: Text(name, style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: color))),
-                  Container(width: 52, height: 52, decoration: BoxDecoration(color: color, shape: BoxShape.circle), child: Icon(icon, color: Colors.white, size: 26)),
-                ]),
-                const SizedBox(height: 16),
-                _bullet('${devices == 999 ? 'Unlimited' : devices} Device${devices == 1 ? '' : 's'}', color),
-                if (blocked > 0) _bullet('$blocked Blocked Apps Allowed', color),
-                if (hidden > 0) _bullet('$hidden Hidden Apps Allowed', color),
-                if (hasTracking) _bullet('Realtime Tracking', color),
-                const SizedBox(height: 20),
-                GestureDetector(onTap: () {},
-                  child: Container(width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 16), decoration: BoxDecoration(color: const Color(0xFFFBBF24), borderRadius: BorderRadius.circular(12)),
-                    child: Center(child: Text('UPGRADE', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1.5))))),
+                TextButton.icon(
+                  onPressed: () => setState(() { _selectedPlan = null; _selectedPlanId = null; }),
+                  icon: const Icon(Icons.arrow_back_rounded, size: 18), label: Text('Back', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600)),
+                  style: TextButton.styleFrom(foregroundColor: const Color(0xFF94A3B8), padding: EdgeInsets.zero)),
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity, padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(color: color.withOpacity(widget.isDark ? 0.12 : 0.08), borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withOpacity(isCurrent ? 0.6 : 0.3), width: isCurrent ? 2 : 1)),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [
+                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        if (isCurrent) Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          margin: const EdgeInsets.only(bottom: 8),
+                          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(8)),
+                          child: Text('CURRENT PLAN', style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.w900, color: Colors.white)),
+                        ),
+                        Text(name, style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: color)),
+                      ])),
+                      Container(width: 52, height: 52, decoration: BoxDecoration(color: color, shape: BoxShape.circle), child: Icon(icon, color: Colors.white, size: 26)),
+                    ]),
+                    const SizedBox(height: 16),
+                    _bullet('${devices == 999 ? 'Unlimited' : devices} Device${devices == 1 ? '' : 's'}', color),
+                    if (blocked > 0) _bullet('$blocked Blocked Apps Allowed', color),
+                    if (hidden > 0) _bullet('$hidden Hidden Apps Allowed', color),
+                    if (hasTracking) _bullet('Realtime Tracking', color),
+                    const SizedBox(height: 20),
+                    if (!isCurrent)
+                      GestureDetector(
+                        onTap: () => _upgradePlan(context, planId, (p['name'] ?? 'Plan').toString()),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(12)),
+                          child: Center(child: Text('UPGRADE', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1.5))),
+                        ),
+                      )
+                    else
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(12), border: Border.all(color: color.withOpacity(0.4))),
+                        child: Center(child: Text('CURRENT PLAN', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: color, letterSpacing: 1.5))),
+                      ),
+                  ]),
+                ),
               ]),
             ),
-          ]),
-        ),
-      );
-    }
+          );
+        }
 
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('plans').orderBy('deviceLimit').snapshots(),
-      builder: (context, snap) {
-        if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-        final plans = snap.data!.docs;
-        return Container(
-          color: bg,
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Subscription Plans', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: textColor)),
-              const SizedBox(height: 14),
-              ...plans.map((doc) {
-                final p = doc.data() as Map<String, dynamic>;
-                final name = (p['name'] ?? 'Plan').toString();
-                final price = p['price'] ?? 0; final devices = p['deviceLimit'] ?? 1;
-                final key = name.toLowerCase();
-                final color = _planColors[key] ?? const Color(0xFF6366F1);
-                final icon = _planIcons[key] ?? Icons.workspace_premium_rounded;
-                final isLifetime = key.contains('lifetime');
-                return GestureDetector(
-                  onTap: () => setState(() => _selectedPlan = {...p, '_color': color, '_icon': icon}),
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    decoration: BoxDecoration(color: widget.isDark ? const Color(0xFF0F1A35) : Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withOpacity(0.4))),
-                    child: Row(children: [
-                      Container(width: 48, height: 48, decoration: BoxDecoration(color: color.withOpacity(0.15), shape: BoxShape.circle), child: Icon(icon, color: color, size: 22)),
-                      const SizedBox(width: 12),
-                      Expanded(child: Text(name, style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: textColor))),
-                      RichText(text: TextSpan(children: [
-                        TextSpan(text: '\$', style: GoogleFonts.outfit(fontSize: 13, color: textColor, fontWeight: FontWeight.w700)),
-                        TextSpan(text: '$price', style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: textColor)),
-                        TextSpan(text: isLifetime ? ' one-time' : '/mo', style: GoogleFonts.outfit(fontSize: 10, color: const Color(0xFF94A3B8))),
-                      ])),
-                      const SizedBox(width: 10),
-                      Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                        Text('${devices == 999 ? '∞' : devices}', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: textColor)),
-                        Text(devices == 1 ? 'Device' : 'Devices', style: GoogleFonts.outfit(fontSize: 10, color: const Color(0xFF94A3B8))),
-                      ]),
-                      const SizedBox(width: 8),
-                      Container(width: 34, height: 34, decoration: BoxDecoration(color: const Color(0xFF94A3B8).withOpacity(0.15), shape: BoxShape.circle), child: const Icon(Icons.arrow_forward_rounded, color: Color(0xFF94A3B8), size: 16)),
-                    ]),
-                  ),
-                );
-              }),
-            ]),
-          ),
+        return StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance.collection('plans').orderBy('deviceLimit').snapshots(),
+          builder: (context, snap) {
+            if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+            final plans = snap.data!.docs;
+            return Container(
+              color: bg,
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Subscription Plans', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: textColor)),
+                  Text('Active: ${currentPlan.toUpperCase()}${isExpired ? ' (EXPIRED)' : ''}', style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF94A3B8))),
+                  const SizedBox(height: 14),
+                  ...plans.map((doc) {
+                    final p = doc.data() as Map<String, dynamic>;
+                    final name = (p['name'] ?? 'Plan').toString();
+                    final price = p['price'] ?? 0; final devices = p['deviceLimit'] ?? 1;
+                    final key = name.toLowerCase();
+                    final color = _planColors[key] ?? const Color(0xFF6366F1);
+                    final icon = _planIcons[key] ?? Icons.workspace_premium_rounded;
+                    final isLifetime = key.contains('lifetime');
+                    final isCurrent = currentPlan == doc.id.toLowerCase() && !isExpired;
+                    return GestureDetector(
+                      onTap: () => setState(() { _selectedPlan = {...p, '_color': color, '_icon': icon}; _selectedPlanId = doc.id; }),
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: isCurrent ? color.withOpacity(widget.isDark ? 0.15 : 0.07) : (widget.isDark ? const Color(0xFF0F1A35) : Colors.white),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: isCurrent ? color : color.withOpacity(0.4), width: isCurrent ? 2 : 1),
+                        ),
+                        child: Row(children: [
+                          Container(width: 48, height: 48, decoration: BoxDecoration(color: color.withOpacity(0.15), shape: BoxShape.circle), child: Icon(icon, color: color, size: 22)),
+                          const SizedBox(width: 12),
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(name, style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: textColor)),
+                            if (isCurrent) Text('CURRENT PLAN', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: color)),
+                          ])),
+                          RichText(text: TextSpan(children: [
+                            TextSpan(text: '\$', style: GoogleFonts.outfit(fontSize: 13, color: textColor, fontWeight: FontWeight.w700)),
+                            TextSpan(text: '$price', style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: textColor)),
+                            TextSpan(text: isLifetime ? ' one-time' : '/mo', style: GoogleFonts.outfit(fontSize: 10, color: const Color(0xFF94A3B8))),
+                          ])),
+                          const SizedBox(width: 10),
+                          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                            Text('${devices == 999 ? '∞' : devices}', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: textColor)),
+                            Text(devices == 1 ? 'Device' : 'Devices', style: GoogleFonts.outfit(fontSize: 10, color: const Color(0xFF94A3B8))),
+                          ]),
+                          const SizedBox(width: 8),
+                          Container(width: 34, height: 34, decoration: BoxDecoration(color: isCurrent ? color.withOpacity(0.2) : const Color(0xFF94A3B8).withOpacity(0.15), shape: BoxShape.circle), child: Icon(isCurrent ? Icons.check_rounded : Icons.arrow_forward_rounded, color: isCurrent ? color : const Color(0xFF94A3B8), size: 16)),
+                        ]),
+                      ),
+                    );
+                  }),
+                ]),
+              ),
+            );
+          },
         );
       },
     );
@@ -6040,6 +6240,345 @@ class _SuperAdminStatsCard extends StatelessWidget {
   }
 }
 
+// ─── Payment Methods (super_admin) ────────────────────────────────────────────
+class _PaymentMethodsView extends StatefulWidget {
+  final bool isDark;
+  final Color cardColor, textColor, borderColor;
+  const _PaymentMethodsView({required this.isDark, required this.cardColor, required this.textColor, required this.borderColor});
+  @override State<_PaymentMethodsView> createState() => _PaymentMethodsViewState();
+}
+class _PaymentMethodsViewState extends State<_PaymentMethodsView> {
+  final _nameCtrl = TextEditingController();
+  final _iconCtrl = TextEditingController();
+  final _acctNameCtrl = TextEditingController();
+  final _acctNumCtrl = TextEditingController();
+  final _qrCtrl = TextEditingController();
+
+  @override void dispose() { _nameCtrl.dispose(); _iconCtrl.dispose(); _acctNameCtrl.dispose(); _acctNumCtrl.dispose(); _qrCtrl.dispose(); super.dispose(); }
+
+  void _clearCtrl() { _nameCtrl.clear(); _iconCtrl.clear(); _acctNameCtrl.clear(); _acctNumCtrl.clear(); _qrCtrl.clear(); }
+
+  void _showAddEdit(BuildContext context, {Map<String, dynamic>? existing, String? docId}) {
+    if (existing != null) {
+      _nameCtrl.text = existing['name'] ?? '';
+      _iconCtrl.text = existing['icon'] ?? '';
+      _acctNameCtrl.text = existing['accountName'] ?? '';
+      _acctNumCtrl.text = existing['accountNumber'] ?? '';
+      _qrCtrl.text = existing['qrUrl'] ?? '';
+    } else {
+      _clearCtrl();
+    }
+    showDialog(
+      context: context,
+      builder: (dlgCtx) => AlertDialog(
+        backgroundColor: widget.cardColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(existing == null ? 'Add Payment Method' : 'Edit Payment Method', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: widget.textColor)),
+        content: SizedBox(
+          width: 400,
+          child: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              _field('Name (e.g. GCash)', _nameCtrl),
+              _field('Icon (emoji, e.g. 📱)', _iconCtrl),
+              _field('Account Name', _acctNameCtrl),
+              _field('Account Number', _acctNumCtrl),
+              _field('QR Code Image URL (optional)', _qrCtrl),
+            ]),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dlgCtx), child: Text('Cancel', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8)))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6366F1), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+            onPressed: () async {
+              if (_nameCtrl.text.trim().isEmpty) return;
+              final data = {
+                'name': _nameCtrl.text.trim(),
+                'icon': _iconCtrl.text.trim().isEmpty ? '💰' : _iconCtrl.text.trim(),
+                'accountName': _acctNameCtrl.text.trim(),
+                'accountNumber': _acctNumCtrl.text.trim(),
+                'qrUrl': _qrCtrl.text.trim(),
+                'updatedAt': FieldValue.serverTimestamp(),
+              };
+              if (docId != null) {
+                await FirebaseFirestore.instance.collection('payment_methods').doc(docId).update(data);
+              } else {
+                await FirebaseFirestore.instance.collection('payment_methods').add(data);
+              }
+              if (dlgCtx.mounted) Navigator.pop(dlgCtx);
+            },
+            child: Text('Save', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _field(String label, TextEditingController ctrl) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: TextField(
+      controller: ctrl,
+      style: GoogleFonts.outfit(color: widget.textColor),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 13),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: widget.borderColor.withOpacity(0.3))),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF6366F1))),
+      ),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Payment Methods', style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: widget.textColor)),
+            Text('Manage payment options shown to users during subscription upgrade', style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF94A3B8))),
+          ])),
+          ElevatedButton.icon(
+            onPressed: () => _showAddEdit(context),
+            icon: const Icon(Icons.add_rounded, size: 18),
+            label: Text('Add Method', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6366F1), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12)),
+          ),
+        ]),
+        const SizedBox(height: 20),
+        StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance.collection('payment_methods').snapshots(),
+          builder: (context, snap) {
+            if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+            final docs = snap.data!.docs;
+            if (docs.isEmpty) return Center(child: Padding(padding: const EdgeInsets.all(48), child: Text('No payment methods yet. Add one above.', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8)))));
+            return Column(children: docs.map((doc) {
+              final d = doc.data() as Map<String, dynamic>;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(color: widget.cardColor, borderRadius: BorderRadius.circular(16), border: Border.all(color: widget.borderColor.withOpacity(0.3))),
+                child: Row(children: [
+                  Text(d['icon'] as String? ?? '💰', style: const TextStyle(fontSize: 30)),
+                  const SizedBox(width: 14),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(d['name'] as String? ?? '', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15, color: widget.textColor)),
+                    if ((d['accountName'] as String? ?? '').isNotEmpty)
+                      Text('${d['accountName']} · ${d['accountNumber']}', style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF94A3B8))),
+                    if ((d['qrUrl'] as String? ?? '').isNotEmpty)
+                      Text('QR: ${d['qrUrl']}', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF6366F1)), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ])),
+                  IconButton(icon: const Icon(Icons.edit_rounded, color: Color(0xFF6366F1), size: 20), onPressed: () => _showAddEdit(context, existing: d, docId: doc.id)),
+                  IconButton(icon: const Icon(Icons.delete_rounded, color: Colors.redAccent, size: 20), onPressed: () async {
+                    final ok = await showDialog<bool>(context: context, builder: (_) => AlertDialog(
+                      backgroundColor: widget.cardColor,
+                      title: Text('Delete ${d['name']}?', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: widget.textColor)),
+                      content: Text('This will remove this payment method for all users.', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8))),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(_, false), child: Text('Cancel', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8)))),
+                        ElevatedButton(onPressed: () => Navigator.pop(_, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent), child: Text('Delete', style: GoogleFonts.outfit(color: Colors.white))),
+                      ],
+                    ));
+                    if (ok == true) await FirebaseFirestore.instance.collection('payment_methods').doc(doc.id).delete();
+                  }),
+                ]),
+              );
+            }).toList());
+          },
+        ),
+      ]),
+    );
+  }
+}
+
+// ─── Pending Transactions (super_admin) ───────────────────────────────────────
+class _PendingTransactionsView extends StatelessWidget {
+  final bool isDark;
+  final Color cardColor, textColor, borderColor;
+  const _PendingTransactionsView({required this.isDark, required this.cardColor, required this.textColor, required this.borderColor});
+
+  Future<void> _approve(BuildContext context, String txId, String uid, String planId, Color cardColor, Color textColor) async {
+    final durCtrl = TextEditingController(text: '30');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: cardColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Approve Payment', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: textColor)),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('This will activate the plan for this user.', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8))),
+          const SizedBox(height: 14),
+          TextField(
+            controller: durCtrl,
+            keyboardType: TextInputType.number,
+            style: GoogleFonts.outfit(color: textColor),
+            decoration: InputDecoration(
+              labelText: 'Duration (days)',
+              labelStyle: GoogleFonts.outfit(color: const Color(0xFF94A3B8)),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(_, false), child: Text('Cancel', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8)))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF22C55E), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+            onPressed: () => Navigator.pop(_, true),
+            child: Text('Approve & Activate', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final days = int.tryParse(durCtrl.text.trim()) ?? 30;
+    final expiry = DateTime.now().add(Duration(days: days));
+    final batch = FirebaseFirestore.instance.batch();
+    batch.update(FirebaseFirestore.instance.collection('transactions').doc(txId), {
+      'status': 'approved', 'approvedAt': FieldValue.serverTimestamp(), 'approvedBy': FirebaseAuth.instance.currentUser?.uid,
+    });
+    batch.update(FirebaseFirestore.instance.collection('users').doc(uid), {
+      'plan': planId, 'expiryDate': Timestamp.fromDate(expiry), 'planActivatedAt': FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Plan activated successfully!'), backgroundColor: Color(0xFF22C55E)));
+    }
+  }
+
+  Future<void> _reject(BuildContext context, String txId, Color cardColor, Color textColor) async {
+    final reasonCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: cardColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Reject Payment', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: textColor)),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('Optionally provide a reason for rejection:', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8))),
+          const SizedBox(height: 10),
+          TextField(
+            controller: reasonCtrl,
+            style: GoogleFonts.outfit(color: textColor),
+            maxLines: 3,
+            decoration: InputDecoration(
+              hintText: 'Reason (optional)…',
+              hintStyle: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 13),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(_, false), child: Text('Cancel', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8)))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+            onPressed: () => Navigator.pop(_, true),
+            child: Text('Reject', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await FirebaseFirestore.instance.collection('transactions').doc(txId).update({
+      'status': 'rejected', 'rejectedAt': FieldValue.serverTimestamp(), 'rejectionReason': reasonCtrl.text.trim(),
+    });
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Transaction rejected.'), backgroundColor: Colors.redAccent));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Pending Payments', style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: textColor)),
+        Text('Review and approve subscription payment submissions from users', style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF94A3B8))),
+        const SizedBox(height: 20),
+        StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance.collection('transactions').orderBy('submittedAt', descending: true).snapshots(),
+          builder: (context, snap) {
+            if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+            final docs = snap.data!.docs;
+            if (docs.isEmpty) return Center(child: Padding(padding: const EdgeInsets.all(48), child: Text('No transactions yet.', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8)))));
+
+            final pending = docs.where((d) => (d.data() as Map)['status'] == 'pending').toList();
+            final others = docs.where((d) => (d.data() as Map)['status'] != 'pending').toList();
+
+            return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              if (pending.isNotEmpty) ...[
+                Row(children: [
+                  Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFFBBF24).withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+                    child: Text('PENDING  ${pending.length}', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFFFBBF24)))),
+                ]),
+                const SizedBox(height: 10),
+                ...pending.map((doc) => _buildCard(context, doc, isPending: true)),
+                const SizedBox(height: 20),
+              ],
+              if (others.isNotEmpty) ...[
+                Text('HISTORY', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF94A3B8), letterSpacing: 1.2)),
+                const SizedBox(height: 10),
+                ...others.map((doc) => _buildCard(context, doc, isPending: false)),
+              ],
+            ]);
+          },
+        ),
+      ]),
+    );
+  }
+
+  Widget _buildCard(BuildContext context, QueryDocumentSnapshot doc, {required bool isPending}) {
+    final d = doc.data() as Map<String, dynamic>;
+    final status = d['status'] as String? ?? 'pending';
+    final statusColor = status == 'approved' ? const Color(0xFF22C55E) : status == 'rejected' ? Colors.redAccent : const Color(0xFFFBBF24);
+    final submittedAt = (d['submittedAt'] as Timestamp?)?.toDate();
+    final dateStr = submittedAt != null ? '${submittedAt.day}/${submittedAt.month}/${submittedAt.year}' : '—';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(16), border: Border.all(color: isPending ? const Color(0xFFFBBF24).withOpacity(0.4) : borderColor.withOpacity(0.25))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(d['userEmail'] as String? ?? 'Unknown', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14, color: textColor)),
+            Text('Plan: ${(d['planName'] ?? d['planId'] ?? '').toString()}  ·  Via: ${d['paymentMethod'] ?? '—'}  ·  $dateStr', style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF94A3B8))),
+          ])),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(color: statusColor.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+            child: Text(status.toUpperCase(), style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: statusColor)),
+          ),
+        ]),
+        if ((d['proofUrl'] as String? ?? '').isNotEmpty) ...[
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: () {}, 
+            child: Text('Proof: ${d['proofUrl']}', style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF6366F1), decoration: TextDecoration.underline), maxLines: 2, overflow: TextOverflow.ellipsis),
+          ),
+        ],
+        if (isPending) ...[
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(child: OutlinedButton.icon(
+              onPressed: () => _reject(context, doc.id, cardColor, textColor),
+              icon: const Icon(Icons.close_rounded, size: 16),
+              label: Text('Reject', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+              style: OutlinedButton.styleFrom(foregroundColor: Colors.redAccent, side: const BorderSide(color: Colors.redAccent), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            )),
+            const SizedBox(width: 10),
+            Expanded(child: ElevatedButton.icon(
+              onPressed: () => _approve(context, doc.id, d['uid'] as String? ?? '', d['planId'] as String? ?? '', cardColor, textColor),
+              icon: const Icon(Icons.check_rounded, size: 16),
+              label: Text('Approve', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF22C55E), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            )),
+          ]),
+        ],
+      ]),
+    );
+  }
+}
+
 class _UsersList extends StatelessWidget {
   final bool isDark; final Color cardColor; final Color textColor; final Color borderColor; final bool isMobile;
   const _UsersList({required this.isDark, required this.cardColor, required this.textColor, required this.borderColor, required this.isMobile});
@@ -6325,25 +6864,24 @@ class _SubscriptionView extends StatelessWidget {
           const SizedBox(height: 24),
           ...features.map((f) => Padding(padding: const EdgeInsets.only(bottom: 12), child: Row(children: [Icon(Icons.check_circle_rounded, size: 16, color: color), const SizedBox(width: 10), Expanded(child: Text(f, style: GoogleFonts.outfit(fontSize: 13, color: textColor)))]))).toList(),
           const SizedBox(height: 32),
-          if (userRole != 'super_admin')
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: isCurrent && isActive ? null : () => _upgradePlan(context, id.toLowerCase(), name),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: color, 
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 20),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  disabledBackgroundColor: color.withOpacity(0.1),
-                ),
-                child: Text(
-                  isCurrent && isActive ? 'CURRENT PLAN' : 
-                  (isCurrent ? 'RENEW' : (thisPrice > currentPrice ? 'UPGRADE' : 'DOWNGRADE')), 
-                  style: GoogleFonts.outfit(fontWeight: FontWeight.w900, letterSpacing: 1)
-                ),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: isCurrent && isActive ? null : () => _upgradePlan(context, id.toLowerCase(), name),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: color, 
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                disabledBackgroundColor: color.withOpacity(0.1),
+              ),
+              child: Text(
+                isCurrent && isActive ? 'CURRENT PLAN' : 
+                (isCurrent ? 'RENEW' : (thisPrice > currentPrice ? 'UPGRADE' : 'DOWNGRADE')), 
+                style: GoogleFonts.outfit(fontWeight: FontWeight.w900, letterSpacing: 1)
               ),
             ),
+          ),
         ],
       ),
     );
