@@ -84,3 +84,13 @@ Configured as a static deployment:
 - Image upload for parent profile photo in admin settings (Firebase Storage)
 - Lock screen: PIN removed from lock icon tap; 10-tap hidden emergency unlock
 - Restricted mode: red/pink background, GOT IT button with matching rounded corners
+
+## Recent Dashboard Bug Fixes & Enhancements (April 2026)
+1. **My Devices**: Added remove device button to mobile device list cards
+2. **App Controls (Mobile)**: Back button at top-right; empty state shows filter-specific message (e.g., "No blocked apps found")
+3. **Schedules (Desktop)**: Edit button now fully functional — time picker for Device Lock rules, schedule dialog for App Restriction rules; converted `_SchedulesView` to StatefulWidget
+4. **Location (Mobile + Desktop)**: Back navigation button added after Live Sync in both views
+5. **Monitoring**: Chat heads/junk notifications pre-filtered before ListView build; missing sender defaults to "Me" instead of "Unknown"
+6. **Subscriptions**: `_upgradePlan` replaced with full payment flow — GCash/Maya/Bank Transfer selection, QR code display, proof-of-payment URL input, transaction saved to `transactions` Firestore collection with `pending` status for admin approval
+7. **Settings**: Initialization bug fixed — uses `_settingsInitialized` flag with `addPostFrameCallback` + `setState` to avoid duplicate calls
+8. **Profile (Mobile + Desktop)**: Photo URL field added; avatar renders `NetworkImage` when URL present; camera icon toggles URL input; saves `photoURL` to Firestore `users` collection and Firebase Auth

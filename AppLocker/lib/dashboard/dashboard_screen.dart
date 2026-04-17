@@ -322,9 +322,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       switch (_selectedMenu) {
         case _DashboardMenu.dashboard: return _MobileDashboardHome(isDark: _isDark, userRole: userRole);
         case _DashboardMenu.devices: return _MobileDevicesView(isDark: _isDark, userRole: userRole, onNavigate: (menu) => setState(() => _selectedMenu = menu));
-        case _DashboardMenu.apps: return _MobileAppControlsView(isDark: _isDark);
+        case _DashboardMenu.apps: return _MobileAppControlsView(isDark: _isDark, onNavigate: (menu) => setState(() => _selectedMenu = menu));
         case _DashboardMenu.schedules: return _MobileSchedulesView(isDark: _isDark);
-        case _DashboardMenu.location: return _MobileLocationView(isDark: _isDark);
+        case _DashboardMenu.location: return _MobileLocationView(isDark: _isDark, onNavigate: (menu) => setState(() => _selectedMenu = menu));
         case _DashboardMenu.monitoring: return _MobileMonitoringView(isDark: _isDark);
         case _DashboardMenu.reports: return _MobileReportsView(isDark: _isDark);
         case _DashboardMenu.subscriptions: return _MobileSubscriptionView(isDark: _isDark, userRole: userRole);
@@ -338,7 +338,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case _DashboardMenu.devices: return SingleChildScrollView(child: _DevicesList(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor, isMobile: isMobile, userRole: userRole));
       case _DashboardMenu.apps: return SingleChildScrollView(child: _AppControls(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor));
       case _DashboardMenu.schedules: return SingleChildScrollView(child: _SchedulesView(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor));
-      case _DashboardMenu.location: return _LocationView(isDark: _isDark, textColor: textColor);
+      case _DashboardMenu.location: return _LocationView(isDark: _isDark, textColor: textColor, onBack: () => setState(() => _selectedMenu = _DashboardMenu.dashboard));
       case _DashboardMenu.monitoring: return _MonitoringView(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor, isMobile: isMobile);
       case _DashboardMenu.reports: return SingleChildScrollView(child: _ReportsView(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor));
       case _DashboardMenu.subscriptions: return SingleChildScrollView(child: _SubscriptionView(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor, userRole: userRole));
@@ -1572,6 +1572,28 @@ class _MobileDevicesViewState extends State<_MobileDevicesView> {
     );
   }
 
+  Future<void> _removeDevice(BuildContext context, String deviceId) async {
+    final bg = widget.isDark ? const Color(0xFF0F1A35) : Colors.white;
+    final textColor = widget.isDark ? Colors.white : const Color(0xFF1E293B);
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: bg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Remove Device?', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: textColor)),
+        content: Text('This will unlink the device and stop monitoring.', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8))),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Cancel', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8)))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Remove', style: GoogleFonts.outfit(color: Colors.redAccent, fontWeight: FontWeight.bold))),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      await FirebaseFirestore.instance.collection('devices').doc(deviceId).delete();
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Device removed.'), backgroundColor: Colors.redAccent));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final bg = widget.isDark ? const Color(0xFF060D1F) : const Color(0xFFF8FAFC);
@@ -1628,6 +1650,7 @@ class _MobileDevicesViewState extends State<_MobileDevicesView> {
                   onLock: () => _toggleLock(doc.id, isLocked),
                   onLocation: () => widget.onNavigate?.call(_DashboardMenu.location),
                   onSchedule: () => _openScheduleDialog(context, doc.id, data),
+                  onRemove: () => _removeDevice(context, doc.id),
                 );
               }),
               const SizedBox(height: 12),
@@ -1650,8 +1673,8 @@ class _MobileDevicesViewState extends State<_MobileDevicesView> {
 class _MobileDeviceListCard extends StatelessWidget {
   final String name; final String deviceId; final bool isOnline; final int battery; final bool isDark; final bool isLocked;
   final VoidCallback onChat; final VoidCallback onLock;
-  final VoidCallback? onLocation; final VoidCallback? onSchedule;
-  const _MobileDeviceListCard({required this.name, required this.deviceId, required this.isOnline, required this.battery, required this.isDark, required this.isLocked, required this.onChat, required this.onLock, this.onLocation, this.onSchedule});
+  final VoidCallback? onLocation; final VoidCallback? onSchedule; final VoidCallback? onRemove;
+  const _MobileDeviceListCard({required this.name, required this.deviceId, required this.isOnline, required this.battery, required this.isDark, required this.isLocked, required this.onChat, required this.onLock, this.onLocation, this.onSchedule, this.onRemove});
 
   @override
   Widget build(BuildContext context) {
@@ -1710,6 +1733,8 @@ class _MobileDeviceListCard extends StatelessWidget {
             _DevActCircle(icon: Icons.chat_bubble_rounded, color: const Color(0xFFFBBF24), label: 'Chat', onTap: onChat, badge: true),
             Container(width: 1, height: 36, color: isDark ? Colors.white10 : const Color(0xFFE2E8F0)),
             _DevActCircle(icon: Icons.calendar_month_rounded, color: const Color(0xFF6366F1), label: 'Schedule', onTap: onSchedule ?? () {}),
+            Container(width: 1, height: 36, color: isDark ? Colors.white10 : const Color(0xFFE2E8F0)),
+            _DevActCircle(icon: Icons.delete_outline_rounded, color: const Color(0xFFEF4444), label: 'Remove', onTap: onRemove ?? () {}),
           ]),
         ),
       ]),
@@ -2176,7 +2201,14 @@ class _MobileSchedulesView extends StatelessWidget {
               Row(children: [
                 Text('Schedules', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: textColor)),
                 const Spacer(),
-                Text('See All', style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF6366F1), fontWeight: FontWeight.w600)),
+                GestureDetector(
+                  onTap: () => Navigator.of(context).maybePop(),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.arrow_back_ios_new_rounded, size: 14, color: Color(0xFF6366F1)),
+                    const SizedBox(width: 4),
+                    Text('Back', style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF6366F1), fontWeight: FontWeight.w700)),
+                  ]),
+                ),
               ]),
               const SizedBox(height: 10),
               if (rules.isEmpty)
@@ -2281,7 +2313,8 @@ class _MobileScheduleCard extends StatelessWidget {
 // ─── App Controls ─────────────────────────────────────────────────────────────
 class _MobileAppControlsView extends StatefulWidget {
   final bool isDark;
-  const _MobileAppControlsView({required this.isDark});
+  final Function(_DashboardMenu)? onNavigate;
+  const _MobileAppControlsView({required this.isDark, this.onNavigate});
   @override State<_MobileAppControlsView> createState() => _MobileAppControlsViewState();
 }
 class _MobileAppControlsViewState extends State<_MobileAppControlsView> {
@@ -2337,6 +2370,25 @@ class _MobileAppControlsViewState extends State<_MobileAppControlsView> {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
+                Text('App Controls', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: textColor)),
+                const Spacer(),
+                GestureDetector(
+                  onTap: () {
+                    if (widget.onNavigate != null) {
+                      widget.onNavigate!(_DashboardMenu.dashboard);
+                    } else {
+                      Navigator.of(context).maybePop();
+                    }
+                  },
+                  child: Row(children: [
+                    const Icon(Icons.arrow_back_ios_new_rounded, size: 14, color: Color(0xFF6366F1)),
+                    const SizedBox(width: 4),
+                    Text('Back', style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF6366F1), fontWeight: FontWeight.w700)),
+                  ]),
+                ),
+              ]),
+              const SizedBox(height: 10),
+              Row(children: [
                 Expanded(child: _MobileDropBox(value: _selDeviceId!, items: devices.map((d) => d.id).toList(), icon: Icons.phone_android_rounded, isDark: widget.isDark, onChanged: (v) => setState(() => _selDeviceId = v))),
                 const SizedBox(width: 10),
                 Expanded(child: _MobileDropBox(value: _filterMode, items: const ['all', 'blocked', 'hidden', 'allowed'], icon: Icons.apps_rounded, isDark: widget.isDark, onChanged: (v) => setState(() => _filterMode = v))),
@@ -2358,21 +2410,13 @@ class _MobileAppControlsViewState extends State<_MobileAppControlsView> {
                 ),
               ),
               const SizedBox(height: 12),
-              Row(children: [
-                Text('Apps (${filtered.length})', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: textColor)),
-                const Spacer(),
-                GestureDetector(
-                  onTap: () => Navigator.of(context).maybePop(),
-                  child: Row(children: [
-                    const Icon(Icons.arrow_back_ios_new_rounded, size: 14, color: Color(0xFF6366F1)),
-                    const SizedBox(width: 4),
-                    Text('Back', style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF6366F1), fontWeight: FontWeight.w700)),
-                  ]),
-                ),
-              ]),
+              Text('Apps (${filtered.length})', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w700, color: subColor)),
               const SizedBox(height: 10),
               if (filtered.isEmpty)
-                Padding(padding: const EdgeInsets.symmetric(vertical: 32), child: Center(child: Text('No apps found.', style: GoogleFonts.outfit(color: subColor))))
+                Padding(padding: const EdgeInsets.symmetric(vertical: 32), child: Center(child: Text(
+                  _filterMode != 'all' ? 'No ${_filterMode} apps found.' : 'No apps found.',
+                  style: GoogleFonts.outfit(color: subColor),
+                )))
               else
                 ListView.builder(
                   shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
@@ -2764,7 +2808,8 @@ class _AppBlockScheduleSheetState extends State<_AppBlockScheduleSheet> {
 // ─── Location ─────────────────────────────────────────────────────────────────
 class _MobileLocationView extends StatefulWidget {
   final bool isDark;
-  const _MobileLocationView({required this.isDark});
+  final Function(_DashboardMenu)? onNavigate;
+  const _MobileLocationView({required this.isDark, this.onNavigate});
   @override State<_MobileLocationView> createState() => _MobileLocationViewState();
 }
 
@@ -2864,6 +2909,21 @@ class _MobileLocationViewState extends State<_MobileLocationView> with SingleTic
                         Text('Live Sync', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: _syncing ? Colors.white : const Color(0xFF22C55E))),
                       ]),
                     ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: () {
+                    if (widget.onNavigate != null) {
+                      widget.onNavigate!(_DashboardMenu.dashboard);
+                    } else {
+                      Navigator.of(context).maybePop();
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: const Color(0xFF6366F1).withOpacity(0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.3))),
+                    child: const Icon(Icons.arrow_back_rounded, color: Color(0xFF6366F1), size: 16),
                   ),
                 ),
               ]),
@@ -4907,7 +4967,7 @@ class _AppActionButton extends StatelessWidget {
   }
 }
 
-class _SchedulesView extends StatelessWidget {
+class _SchedulesView extends StatefulWidget {
   final bool isDark; 
   final Color cardColor; 
   final Color textColor; 
@@ -4919,6 +4979,111 @@ class _SchedulesView extends StatelessWidget {
     required this.textColor, 
     required this.borderColor
   });
+
+  @override
+  State<_SchedulesView> createState() => _SchedulesViewState();
+}
+
+class _SchedulesViewState extends State<_SchedulesView> {
+  void _editRule(BuildContext context, Map<String, dynamic> rule) async {
+    final deviceId = rule['deviceId'] as String;
+    final isDeviceLock = rule['type'] == 'Device Lock';
+    final currentRule = rule['rule'] as String;
+
+    if (isDeviceLock) {
+      // Parse "HH:MM AM - HH:MM PM" or "12:00 AM - 12:00 PM" time strings
+      TimeOfDay startTime = const TimeOfDay(hour: 22, minute: 0);
+      TimeOfDay endTime = const TimeOfDay(hour: 6, minute: 0);
+
+      final newStart = await showTimePicker(context: context, initialTime: startTime, helpText: 'Select Lock Start Time');
+      if (newStart == null || !context.mounted) return;
+      final newEnd = await showTimePicker(context: context, initialTime: endTime, helpText: 'Select Lock End Time');
+      if (newEnd == null || !context.mounted) return;
+
+      String fmt(TimeOfDay t) => '${t.hour.toString().padLeft(2,'0')}:${t.minute.toString().padLeft(2,'0')}';
+
+      final doc = await FirebaseFirestore.instance.collection('devices').doc(deviceId).get();
+      if (!doc.exists) return;
+      final data = doc.data() as Map<String, dynamic>;
+      final list = List<Map<String, dynamic>>.from(
+        (data['lockSchedules'] ?? []).map((s) => Map<String, dynamic>.from(s))
+      );
+      // Find and replace the matching rule
+      final idx = list.indexWhere((s) => '${s['start']} - ${s['end']}' == currentRule);
+      if (idx != -1) {
+        list[idx] = {'start': fmt(newStart), 'end': fmt(newEnd)};
+      } else {
+        list.add({'start': fmt(newStart), 'end': fmt(newEnd)});
+      }
+      await FirebaseFirestore.instance.collection('devices').doc(deviceId).update({'lockSchedules': list});
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Schedule updated.'), backgroundColor: Color(0xFF10B981)));
+    } else {
+      // App Restriction edit
+      final pkg = rule['pkgName'] as String? ?? '';
+      final target = rule['target'] as String? ?? pkg;
+      bool alwaysBlocked = currentRule == 'Always Blocked';
+      final startCtrl = TextEditingController(text: alwaysBlocked ? '12:00 AM' : currentRule.split(' - ').first);
+      final endCtrl = TextEditingController(text: alwaysBlocked ? '12:00 PM' : (currentRule.split(' - ').length > 1 ? currentRule.split(' - ').last : '12:00 PM'));
+
+      await showDialog(
+        context: context,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setS) => AlertDialog(
+            backgroundColor: widget.cardColor,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            title: Text('Edit App Rule', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: widget.textColor)),
+            content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(target, style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF94A3B8))),
+              const SizedBox(height: 16),
+              SwitchListTile(
+                title: Text('Always Blocked', style: GoogleFonts.outfit(color: widget.textColor, fontSize: 13, fontWeight: FontWeight.bold)),
+                subtitle: Text('Block 24/7', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 11)),
+                value: alwaysBlocked,
+                activeColor: const Color(0xFFEF4444),
+                onChanged: (v) => setS(() => alwaysBlocked = v),
+              ),
+              if (!alwaysBlocked) ...[
+                const SizedBox(height: 12),
+                InkWell(
+                  onTap: () async {
+                    final s = await showTimePicker(context: ctx, initialTime: TimeOfDay.now());
+                    if (s == null) return;
+                    final e = await showTimePicker(context: ctx, initialTime: const TimeOfDay(hour: 23, minute: 59));
+                    if (e == null) return;
+                    final startDt = DateTime(2022, 1, 1, s.hour, s.minute);
+                    final endDt = DateTime(2022, 1, 1, e.hour, e.minute);
+                    setS(() {
+                      startCtrl.text = DateFormat('h:mm a', 'en_US').format(startDt);
+                      endCtrl.text = DateFormat('h:mm a', 'en_US').format(endDt);
+                    });
+                  },
+                  child: Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: widget.isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFF64748B), width: 0.5)),
+                    child: Row(children: [const Icon(Icons.access_time_rounded, color: Color(0xFF6366F1), size: 18), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Time Window', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF94A3B8))), Text('${startCtrl.text} - ${endCtrl.text}', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: widget.textColor))])), const Icon(Icons.edit_rounded, size: 14, color: Color(0xFF94A3B8))])),
+                  ),
+              ],
+            ]),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8)))),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  final doc = await FirebaseFirestore.instance.collection('devices').doc(deviceId).get();
+                  if (!doc.exists) return;
+                  final data = doc.data() as Map<String, dynamic>;
+                  final schedules = Map<String, dynamic>.from(data['appSchedules'] ?? {});
+                  schedules[pkg] = {'start': startCtrl.text, 'end': endCtrl.text, 'alwaysBlocked': alwaysBlocked};
+                  await FirebaseFirestore.instance.collection('devices').doc(deviceId).update({'appSchedules': schedules});
+                  if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('App rule updated.'), backgroundColor: Color(0xFF10B981)));
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6366F1), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                child: Text('Save', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+  }
 
   @override 
   Widget build(BuildContext context) { 
@@ -4960,7 +5125,7 @@ class _SchedulesView extends StatelessWidget {
               'icon': Icons.apps_rounded,
               'color': const Color(0xFF6366F1),
             });
-          } );
+          });
         }
 
         if (allRules.isEmpty) {
@@ -4970,7 +5135,7 @@ class _SchedulesView extends StatelessWidget {
               children: [
                 const HeroIcon(HeroIcons.calendar, size: 64, color: Color(0xFFCBD5E1)), 
                 const SizedBox(height: 16), 
-                Text('No active rules found', style: GoogleFonts.outfit(fontSize: 18, color: textColor))
+                Text('No active rules found', style: GoogleFonts.outfit(fontSize: 18, color: widget.textColor))
               ]
             )
           );
@@ -4979,7 +5144,7 @@ class _SchedulesView extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Active Time Rules', style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w900, color: textColor)),
+            Text('Active Time Rules', style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w900, color: widget.textColor)),
             const SizedBox(height: 8),
             Text('Centralized overview of all device and app restrictions.', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 14)),
             const SizedBox(height: 32),
@@ -4993,7 +5158,7 @@ class _SchedulesView extends StatelessWidget {
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: cardColor,
+                    color: widget.cardColor,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: const Color(0xFF64748B), width: 0.5),
                   ),
@@ -5001,7 +5166,7 @@ class _SchedulesView extends StatelessWidget {
                     children: [
                       Container(
                         padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(color: rule['color'].withOpacity(0.1), shape: BoxShape.circle),
+                        decoration: BoxDecoration(color: (rule['color'] as Color).withOpacity(0.1), shape: BoxShape.circle),
                         child: Icon(rule['icon'] as IconData, color: rule['color'] as Color, size: 24),
                       ),
                       const SizedBox(width: 20),
@@ -5017,7 +5182,7 @@ class _SchedulesView extends StatelessWidget {
                               ],
                             ),
                             const SizedBox(height: 4),
-                            Text(rule['target'], style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, color: textColor)),
+                            Text(rule['target'], style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, color: widget.textColor)),
                             const SizedBox(height: 4),
                             Row(
                               children: [
@@ -5032,7 +5197,6 @@ class _SchedulesView extends StatelessWidget {
                       const SizedBox(width: 20),
                       IconButton(
                         onPressed: () {
-                          // DELETE LOGIC
                           if (rule['type'] == 'Device Lock') {
                             FirebaseFirestore.instance.collection('devices').doc(rule['deviceId']).get().then((doc) {
                               if (!doc.exists) return;
@@ -5042,7 +5206,6 @@ class _SchedulesView extends StatelessWidget {
                               FirebaseFirestore.instance.collection('devices').doc(rule['deviceId']).update({'lockSchedules': list});
                             });
                           } else {
-                            // App Restriction
                             FirebaseFirestore.instance.collection('devices').doc(rule['deviceId']).get().then((doc) {
                               if (!doc.exists) return;
                               final data = doc.data() as Map<String, dynamic>;
@@ -5056,10 +5219,9 @@ class _SchedulesView extends StatelessWidget {
                         icon: const Icon(Icons.delete_outline_rounded, size: 20, color: Color(0xFFEF4444)),
                       ),
                       IconButton(
-                        onPressed: () {
-                          // EDIT placeholder: In a full implementation, this would trigger the same dialogs as the cards.
-                        },
-                        icon: const Icon(Icons.edit_note_rounded, size: 22, color: Color(0xFF94A3B8)),
+                        onPressed: () => _editRule(context, rule),
+                        icon: const Icon(Icons.edit_note_rounded, size: 22, color: Color(0xFF6366F1)),
+                        tooltip: 'Edit Rule',
                       ),
                     ],
                   ),
@@ -5076,7 +5238,8 @@ class _SchedulesView extends StatelessWidget {
 class _LocationView extends StatelessWidget {
   final bool isDark; 
   final Color textColor;
-  const _LocationView({required this.isDark, required this.textColor});
+  final VoidCallback? onBack;
+  const _LocationView({required this.isDark, required this.textColor, this.onBack});
 
   @override 
   Widget build(BuildContext context) { 
@@ -5152,6 +5315,15 @@ class _LocationView extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (onBack != null) ...[
+                  const SizedBox(width: 12),
+                  IconButton(
+                    onPressed: onBack,
+                    icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF6366F1)),
+                    tooltip: 'Go Back',
+                    style: IconButton.styleFrom(backgroundColor: const Color(0xFF6366F1).withOpacity(0.1), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                  ),
+                ],
               ],
             ),
             const SizedBox(height: 32),
@@ -5368,6 +5540,7 @@ class _SettingsViewState extends State<_SettingsView> {
   final TextEditingController _unlockGreetingCtrl = TextEditingController();
   bool _isLoading = false;
   bool _uploadingImage = false;
+  bool _settingsInitialized = false;
 
   @override
   void initState() {
@@ -5510,11 +5683,13 @@ class _SettingsViewState extends State<_SettingsView> {
       stream: FirebaseService.instance.streamAdminDevices(),
       builder: (context, snapshot) {
         final devices = snapshot.data?.docs ?? [];
-        if (_selectedDeviceId == null && devices.isNotEmpty) {
-          _selectedDeviceId = devices.first.id;
-          // Initial load
+        if (!_settingsInitialized && devices.isNotEmpty) {
+          _settingsInitialized = true;
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            _loadDeviceSettings(_selectedDeviceId!, devices);
+            if (mounted) {
+              setState(() => _selectedDeviceId = devices.first.id);
+              _loadDeviceSettings(devices.first.id, devices);
+            }
           });
         }
 
@@ -6283,40 +6458,153 @@ class _SubscriptionView extends StatelessWidget {
   void _upgradePlan(BuildContext context, String planId, String planName) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: cardColor,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: Text('Upgrade to ${planName.toUpperCase()}', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: textColor)),
-        content: Text('Confirm selection of the ${planName.toUpperCase()} plan. This is a mock payment for testing.', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8))),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8)))),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await FirebaseFirestore.instance.collection('users').doc(uid).update({
-                'plan': planId,
-                'expiryDate': DateTime.now().add(const Duration(days: 30)),
-              });
-              
-              final devices = await FirebaseFirestore.instance.collection('devices').where('parentUid', isEqualTo: uid).get();
-              for (var doc in devices.docs) {
-                doc.reference.update({'subscriptionActive': true});
-              }
 
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Successfully upgraded to $planName!'), backgroundColor: const Color(0xFF10B981)));
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6366F1), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-            child: Text('Confirm & Pay', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+    // Step 1: Show payment method selection
+    String? selectedMethod;
+    String? proofUrl;
+    bool _submitting = false;
+
+    // Fetch payment methods from Firestore
+    final pmSnap = await FirebaseFirestore.instance.collection('payment_methods').get();
+    final paymentMethods = pmSnap.docs.map((d) => {...d.data(), 'id': d.id}).toList();
+    if (paymentMethods.isEmpty) {
+      paymentMethods.addAll([
+        {'id': 'gcash', 'name': 'GCash', 'icon': '📱', 'qrUrl': '', 'accountName': 'AppLocker PH', 'accountNumber': '09XX-XXX-XXXX'},
+        {'id': 'maya', 'name': 'Maya', 'icon': '💳', 'qrUrl': '', 'accountName': 'AppLocker PH', 'accountNumber': '09XX-XXX-XXXX'},
+        {'id': 'bank', 'name': 'Bank Transfer', 'icon': '🏦', 'qrUrl': '', 'accountName': 'AppLocker PH', 'accountNumber': '0000-0000-0000'},
+      ]);
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dlgCtx) => StatefulBuilder(
+        builder: (dlgCtx, setS) => AlertDialog(
+          backgroundColor: cardColor,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
+          title: Row(children: [
+            const Icon(Icons.payment_rounded, color: Color(0xFF6366F1)),
+            const SizedBox(width: 10),
+            Expanded(child: Text('Upgrade to $planName', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: textColor, fontSize: 18))),
+          ]),
+          content: SizedBox(
+            width: 400,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('SELECT PAYMENT METHOD', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF94A3B8), letterSpacing: 1.2)),
+                  const SizedBox(height: 12),
+                  ...paymentMethods.map((pm) {
+                    final isSelected = selectedMethod == pm['id'];
+                    return GestureDetector(
+                      onTap: () => setS(() => selectedMethod = pm['id'] as String),
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: isSelected ? const Color(0xFF6366F1).withOpacity(0.1) : (isDark ? Colors.white.withOpacity(0.04) : Colors.grey.withOpacity(0.05)),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: isSelected ? const Color(0xFF6366F1) : const Color(0xFF64748B).withOpacity(0.4), width: isSelected ? 1.5 : 0.5),
+                        ),
+                        child: Row(children: [
+                          Text(pm['icon'] as String? ?? '💰', style: const TextStyle(fontSize: 24)),
+                          const SizedBox(width: 12),
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(pm['name'] as String? ?? '', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: textColor)),
+                            if ((pm['accountName'] as String? ?? '').isNotEmpty)
+                              Text('${pm['accountName']} · ${pm['accountNumber']}', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF94A3B8))),
+                          ])),
+                          if (isSelected) const Icon(Icons.check_circle_rounded, color: Color(0xFF6366F1), size: 20),
+                        ]),
+                      ),
+                    );
+                  }).toList(),
+                  if (selectedMethod != null) ...[
+                    const SizedBox(height: 16),
+                    Divider(color: const Color(0xFF64748B).withOpacity(0.3)),
+                    const SizedBox(height: 12),
+                    // Show QR code if available
+                    Builder(builder: (_) {
+                      final pm = paymentMethods.firstWhere((p) => p['id'] == selectedMethod, orElse: () => {});
+                      final qrUrl = pm['qrUrl'] as String? ?? '';
+                      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        if (qrUrl.isNotEmpty) ...[
+                          Text('SCAN QR CODE', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF94A3B8), letterSpacing: 1.2)),
+                          const SizedBox(height: 8),
+                          Center(child: ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.network(qrUrl, height: 180, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const SizedBox.shrink()))),
+                          const SizedBox(height: 12),
+                        ],
+                        Text('PROOF OF PAYMENT', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF94A3B8), letterSpacing: 1.2)),
+                        const SizedBox(height: 8),
+                        Text('After paying, paste your screenshot URL or reference number below.', style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF94A3B8))),
+                        const SizedBox(height: 8),
+                        TextField(
+                          onChanged: (v) => setS(() => proofUrl = v.trim()),
+                          style: GoogleFonts.outfit(fontSize: 12, color: textColor),
+                          decoration: InputDecoration(
+                            hintText: 'Reference # or image URL of receipt…',
+                            hintStyle: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF94A3B8)),
+                            prefixIcon: const Icon(Icons.receipt_long_rounded, color: Color(0xFF6366F1), size: 18),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            filled: true, fillColor: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: const Color(0xFF6366F1).withOpacity(0.4))),
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: const Color(0xFF6366F1).withOpacity(0.25))),
+                          ),
+                        ),
+                      ]);
+                    }),
+                  ],
+                ],
+              ),
+            ),
           ),
-        ],
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dlgCtx, false), child: Text('Cancel', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8)))),
+            ElevatedButton(
+              onPressed: (selectedMethod == null || _submitting) ? null : () => Navigator.pop(dlgCtx, true),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6366F1), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+              child: _submitting 
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : Text('Submit for Approval', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
       ),
     );
+
+    if (confirmed != true || selectedMethod == null) return;
+
+    // Save transaction to Firestore
+    try {
+      await FirebaseFirestore.instance.collection('transactions').add({
+        'uid': uid,
+        'planId': planId,
+        'planName': planName,
+        'paymentMethod': selectedMethod,
+        'proofUrl': proofUrl ?? '',
+        'status': 'pending',
+        'submittedAt': FieldValue.serverTimestamp(),
+        'userEmail': FirebaseAuth.instance.currentUser?.email ?? '',
+      });
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Payment submitted! Awaiting admin approval for $planName plan.'),
+          backgroundColor: const Color(0xFF6366F1),
+          duration: const Duration(seconds: 4),
+        ));
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent));
+      }
+    }
+    // NOTE: Actual plan activation happens when super_admin approves the transaction
   }
+
 }
 
 // ─── Helper: format duration milliseconds to human-readable ───────────────────
@@ -6781,31 +7069,40 @@ class _MonitoringMessagesTab extends StatelessWidget {
         if (snapshot.hasError) return Center(child: SelectableText('Error: ${snapshot.error}', style: const TextStyle(color: Colors.red)));
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         final docs = snapshot.data!.docs;
-        if (docs.isEmpty) return _buildEmptyState('No messages intercepted yet.', Icons.message_outlined);
+        
+        // Pre-filter junk notifications before building the list
+        final filteredDocs = docs.where((doc) {
+          final d = doc.data() as Map<String, dynamic>;
+          final content = (d['content'] ?? d['subText'] ?? '').toString().trim();
+          final subText = (d['subText'] ?? '').toString().trim();
+          final senderStr = (d['sender'] ?? d['title'] ?? '').toString().trim();
+          final textLower = '$content $subText $senderStr'.toLowerCase();
+          if (textLower.contains('chat heads') || 
+              textLower.contains('active chat') || 
+              textLower.contains('running in background') ||
+              textLower.contains('displaying over other apps') ||
+              textLower.contains('chat head') ||
+              textLower.contains('bubbles')) return false;
+          if (content.isEmpty && subText.isEmpty) return false;
+          return true;
+        }).toList();
+        
+        if (filteredDocs.isEmpty) return _buildEmptyState('No messages intercepted yet.', Icons.message_outlined);
 
         return ListView.builder(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          itemCount: docs.length,
+          itemCount: filteredDocs.length,
           itemBuilder: (context, index) {
-            final data = docs[index].data() as Map<String, dynamic>;
+            final data = filteredDocs[index].data() as Map<String, dynamic>;
             
             final content = (data['content'] ?? data['subText'] ?? '').toString().trim();
             final subText = (data['subText'] ?? '').toString().trim();
-            final senderStr = (data['sender'] ?? data['title'] ?? 'Unknown').toString().trim();
+            final rawSender = (data['sender'] ?? '').toString().trim();
             final titleStr = (data['title'] ?? '').toString().trim();
+            // Default sender to "Me" when field is missing or empty
+            final senderStr = rawSender.isNotEmpty ? rawSender : (titleStr.isNotEmpty ? titleStr : 'Me');
             final appName = (data['appName'] ?? data['packageName'] ?? 'App').toString();
             final isGroupMsg = data['isGroupConversation'] as bool? ?? false;
-            
-            final textLower = '$content $subText $senderStr'.toLowerCase();
-            
-            // Pure junk filter
-            if (textLower.contains('chat heads') || 
-                textLower.contains('active chat') || 
-                textLower.contains('running in background') ||
-                textLower.contains('displaying over other apps')) {
-              return const SizedBox.shrink();
-            }
-            if (content.isEmpty && subText.isEmpty) return const SizedBox.shrink();
 
             final isMe = data['isMe'] as bool? ?? false;
             
@@ -6968,9 +7265,11 @@ class _MobileProfileView extends StatefulWidget {
 
 class _MobileProfileViewState extends State<_MobileProfileView> {
   bool _saving = false;
+  bool _editingPhoto = false;
   late TextEditingController _nameCtrl;
   late TextEditingController _emailCtrl;
   late TextEditingController _phoneCtrl;
+  late TextEditingController _photoUrlCtrl;
 
   @override
   void initState() {
@@ -6979,26 +7278,32 @@ class _MobileProfileViewState extends State<_MobileProfileView> {
     _nameCtrl = TextEditingController(text: user?.displayName ?? '');
     _emailCtrl = TextEditingController(text: user?.email ?? '');
     _phoneCtrl = TextEditingController(text: user?.phoneNumber ?? '');
+    _photoUrlCtrl = TextEditingController(text: user?.photoURL ?? '');
   }
 
   @override
   void dispose() {
-    _nameCtrl.dispose(); _emailCtrl.dispose(); _phoneCtrl.dispose();
+    _nameCtrl.dispose(); _emailCtrl.dispose(); _phoneCtrl.dispose(); _photoUrlCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
     setState(() => _saving = true);
     try {
-      await FirebaseAuth.instance.currentUser?.updateDisplayName(_nameCtrl.text.trim());
-      final uid = FirebaseAuth.instance.currentUser?.uid;
+      final user = FirebaseAuth.instance.currentUser;
+      await user?.updateDisplayName(_nameCtrl.text.trim());
+      final photoUrl = _photoUrlCtrl.text.trim();
+      if (photoUrl.isNotEmpty) await user?.updatePhotoURL(photoUrl);
+      final uid = user?.uid;
       if (uid != null) {
         await FirebaseFirestore.instance.collection('users').doc(uid).set({
           'displayName': _nameCtrl.text.trim(),
           'phone': _phoneCtrl.text.trim(),
+          if (photoUrl.isNotEmpty) 'photoURL': photoUrl,
           'updatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
       }
+      setState(() => _editingPhoto = false);
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile updated!'), backgroundColor: Color(0xFF22C55E)));
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent));
@@ -7026,6 +7331,9 @@ class _MobileProfileViewState extends State<_MobileProfileView> {
         final joined = extraData['createdAt'] as Timestamp?;
         final joinedStr = joined != null ? DateFormat('MMM d, yyyy').format(joined.toDate()) : 'N/A';
 
+        final storedPhotoUrl = extraData['photoURL']?.toString() ?? user?.photoURL ?? '';
+        final effectivePhotoUrl = _photoUrlCtrl.text.trim().isNotEmpty ? _photoUrlCtrl.text.trim() : storedPhotoUrl;
+
         return Container(
           color: bg,
           child: SingleChildScrollView(
@@ -7036,12 +7344,27 @@ class _MobileProfileViewState extends State<_MobileProfileView> {
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(20), border: Border.all(color: border)),
-                child: Row(children: [
-                  Container(
-                    width: 72, height: 72,
-                    decoration: BoxDecoration(shape: BoxShape.circle, gradient: const LinearGradient(colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)], begin: Alignment.topLeft, end: Alignment.bottomRight)),
-                    child: Center(child: Text(initial, style: GoogleFonts.outfit(fontSize: 30, fontWeight: FontWeight.w900, color: Colors.white))),
-                  ),
+                child: Column(children: [
+                Row(children: [
+                  Stack(alignment: Alignment.bottomRight, children: [
+                    Container(
+                      width: 72, height: 72,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: effectivePhotoUrl.isEmpty ? const LinearGradient(colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)], begin: Alignment.topLeft, end: Alignment.bottomRight) : null,
+                        image: effectivePhotoUrl.isNotEmpty ? DecorationImage(image: NetworkImage(effectivePhotoUrl), fit: BoxFit.cover) : null,
+                      ),
+                      child: effectivePhotoUrl.isEmpty ? Center(child: Text(initial, style: GoogleFonts.outfit(fontSize: 30, fontWeight: FontWeight.w900, color: Colors.white))) : null,
+                    ),
+                    GestureDetector(
+                      onTap: () => setState(() => _editingPhoto = !_editingPhoto),
+                      child: Container(
+                        padding: const EdgeInsets.all(5),
+                        decoration: const BoxDecoration(color: Color(0xFF6366F1), shape: BoxShape.circle),
+                        child: const Icon(Icons.camera_alt_rounded, size: 12, color: Colors.white),
+                      ),
+                    ),
+                  ]),
                   const SizedBox(width: 16),
                   Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(user?.displayName ?? user?.email?.split('@').first ?? 'Parent', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, color: textColor)),
@@ -7054,6 +7377,25 @@ class _MobileProfileViewState extends State<_MobileProfileView> {
                       Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: const Color(0xFF22C55E).withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: Text(plan, style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w700, color: const Color(0xFF22C55E)))),
                     ]),
                   ])),
+                ]),
+                if (_editingPhoto) ...[
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _photoUrlCtrl,
+                    style: GoogleFonts.outfit(fontSize: 12, color: textColor),
+                    decoration: InputDecoration(
+                      hintText: 'Paste image URL to set photo…',
+                      hintStyle: GoogleFonts.outfit(fontSize: 12, color: subColor),
+                      prefixIcon: const Icon(Icons.link_rounded, color: Color(0xFF6366F1), size: 18),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      suffixIcon: _photoUrlCtrl.text.isNotEmpty ? IconButton(icon: const Icon(Icons.check_rounded, size: 14, color: Color(0xFF22C55E)), onPressed: () => setState(() => _editingPhoto = false)) : null,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: const Color(0xFF6366F1).withOpacity(0.4))),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: const Color(0xFF6366F1).withOpacity(0.25))),
+                      filled: true, fillColor: widget.isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+                    ),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                ],
                 ]),
               ),
               const SizedBox(height: 16),
@@ -7084,6 +7426,8 @@ class _MobileProfileViewState extends State<_MobileProfileView> {
                   _ProfileField(label: 'Email', controller: _emailCtrl, icon: Icons.email_rounded, isDark: widget.isDark, readOnly: true),
                   const SizedBox(height: 10),
                   _ProfileField(label: 'Phone Number', controller: _phoneCtrl, icon: Icons.phone_rounded, isDark: widget.isDark),
+                  const SizedBox(height: 10),
+                  _ProfileField(label: 'Photo URL (optional)', controller: _photoUrlCtrl, icon: Icons.image_rounded, isDark: widget.isDark),
                   const SizedBox(height: 16),
                   SizedBox(
                     width: double.infinity,
@@ -7191,10 +7535,12 @@ class _ProfileView extends StatefulWidget {
 
 class _ProfileViewState extends State<_ProfileView> {
   bool _saving = false;
+  bool _editingPhoto = false;
   late TextEditingController _nameCtrl;
   late TextEditingController _emailCtrl;
   late TextEditingController _phoneCtrl;
   late TextEditingController _bioCtrl;
+  late TextEditingController _photoUrlCtrl;
 
   @override
   void initState() {
@@ -7204,27 +7550,34 @@ class _ProfileViewState extends State<_ProfileView> {
     _emailCtrl = TextEditingController(text: user?.email ?? '');
     _phoneCtrl = TextEditingController(text: user?.phoneNumber ?? '');
     _bioCtrl = TextEditingController();
+    _photoUrlCtrl = TextEditingController(text: user?.photoURL ?? '');
   }
 
   @override
   void dispose() {
-    _nameCtrl.dispose(); _emailCtrl.dispose(); _phoneCtrl.dispose(); _bioCtrl.dispose();
+    _nameCtrl.dispose(); _emailCtrl.dispose(); _phoneCtrl.dispose();
+    _bioCtrl.dispose(); _photoUrlCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
     setState(() => _saving = true);
     try {
-      await FirebaseAuth.instance.currentUser?.updateDisplayName(_nameCtrl.text.trim());
-      final uid = FirebaseAuth.instance.currentUser?.uid;
+      final user = FirebaseAuth.instance.currentUser;
+      await user?.updateDisplayName(_nameCtrl.text.trim());
+      final photoUrl = _photoUrlCtrl.text.trim();
+      if (photoUrl.isNotEmpty) await user?.updatePhotoURL(photoUrl);
+      final uid = user?.uid;
       if (uid != null) {
         await FirebaseFirestore.instance.collection('users').doc(uid).set({
           'displayName': _nameCtrl.text.trim(),
           'phone': _phoneCtrl.text.trim(),
           'bio': _bioCtrl.text.trim(),
+          if (photoUrl.isNotEmpty) 'photoURL': photoUrl,
           'updatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
       }
+      setState(() => _editingPhoto = false);
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile updated!'), backgroundColor: Color(0xFF22C55E)));
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent));
@@ -7247,6 +7600,8 @@ class _ProfileViewState extends State<_ProfileView> {
         final joined = extraData['createdAt'] as Timestamp?;
         final joinedStr = joined != null ? DateFormat('MMM d, yyyy').format(joined.toDate()) : 'N/A';
         if (_bioCtrl.text.isEmpty && extraData['bio'] != null) _bioCtrl.text = extraData['bio'].toString();
+        final storedPhotoUrl = extraData['photoURL']?.toString() ?? user?.photoURL ?? '';
+        final effectivePhotoUrl = _photoUrlCtrl.text.trim().isNotEmpty ? _photoUrlCtrl.text.trim() : storedPhotoUrl;
 
         return Padding(
           padding: const EdgeInsets.all(32),
@@ -7263,11 +7618,42 @@ class _ProfileViewState extends State<_ProfileView> {
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(color: widget.cardColor, borderRadius: BorderRadius.circular(24), border: Border.all(color: widget.borderColor)),
                   child: Column(children: [
-                    Container(
-                      width: 88, height: 88,
-                      decoration: BoxDecoration(shape: BoxShape.circle, gradient: const LinearGradient(colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)])),
-                      child: Center(child: Text(initial, style: GoogleFonts.outfit(fontSize: 38, fontWeight: FontWeight.w900, color: Colors.white))),
-                    ),
+                    Stack(alignment: Alignment.bottomRight, children: [
+                      Container(
+                        width: 88, height: 88,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: effectivePhotoUrl.isEmpty ? const LinearGradient(colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)]) : null,
+                          image: effectivePhotoUrl.isNotEmpty ? DecorationImage(image: NetworkImage(effectivePhotoUrl), fit: BoxFit.cover) : null,
+                        ),
+                        child: effectivePhotoUrl.isEmpty ? Center(child: Text(initial, style: GoogleFonts.outfit(fontSize: 38, fontWeight: FontWeight.w900, color: Colors.white))) : null,
+                      ),
+                      GestureDetector(
+                        onTap: () => setState(() => _editingPhoto = !_editingPhoto),
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: const BoxDecoration(color: Color(0xFF6366F1), shape: BoxShape.circle),
+                          child: const Icon(Icons.camera_alt_rounded, size: 14, color: Colors.white),
+                        ),
+                      ),
+                    ]),
+                    if (_editingPhoto) ...[
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _photoUrlCtrl,
+                        style: GoogleFonts.outfit(fontSize: 11, color: widget.textColor),
+                        decoration: InputDecoration(
+                          hintText: 'Paste image URL…',
+                          hintStyle: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF94A3B8)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          suffixIcon: _photoUrlCtrl.text.isNotEmpty ? IconButton(icon: const Icon(Icons.check_rounded, size: 14, color: Color(0xFF22C55E)), onPressed: () => setState(() => _editingPhoto = false)) : null,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: const Color(0xFF6366F1).withOpacity(0.4))),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: const Color(0xFF6366F1).withOpacity(0.25))),
+                          filled: true, fillColor: widget.isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+                        ),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                    ],
                     const SizedBox(height: 14),
                     Text(user?.displayName ?? user?.email?.split('@').first ?? 'Parent', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, color: widget.textColor), textAlign: TextAlign.center),
                     const SizedBox(height: 4),
@@ -7337,6 +7723,8 @@ class _ProfileViewState extends State<_ProfileView> {
                     const SizedBox(width: 16),
                     Expanded(child: _DesktopProfileField(label: 'Bio / Notes', controller: _bioCtrl, icon: Icons.notes_rounded, isDark: widget.isDark, maxLines: 1)),
                   ]),
+                  const SizedBox(height: 16),
+                  _DesktopProfileField(label: 'Photo URL (paste image link)', controller: _photoUrlCtrl, icon: Icons.image_rounded, isDark: widget.isDark),
                   const SizedBox(height: 24),
                   Row(children: [
                     const Spacer(),
