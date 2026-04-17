@@ -808,10 +808,34 @@ class _MobileTopBar extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // MOBILE DASHBOARD HOME (new design matching the image)
 // ─────────────────────────────────────────────────────────────────────────────
-class _MobileDashboardHome extends StatelessWidget {
+class _MobileDashboardHome extends StatefulWidget {
   final bool isDark;
   final String userRole;
   const _MobileDashboardHome({required this.isDark, required this.userRole});
+  @override
+  State<_MobileDashboardHome> createState() => _MobileDashboardHomeState();
+}
+
+class _MobileDashboardHomeState extends State<_MobileDashboardHome> with TickerProviderStateMixin {
+  late final AnimationController _ctrlRing1;
+  late final AnimationController _ctrlRing2;
+  late final AnimationController _ctrlRing3;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrlRing1 = AnimationController(vsync: this, duration: const Duration(seconds: 8))..repeat();
+    _ctrlRing2 = AnimationController(vsync: this, duration: const Duration(seconds: 12))..repeat();
+    _ctrlRing3 = AnimationController(vsync: this, duration: const Duration(seconds: 6))..repeat();
+  }
+
+  @override
+  void dispose() {
+    _ctrlRing1.dispose();
+    _ctrlRing2.dispose();
+    _ctrlRing3.dispose();
+    super.dispose();
+  }
 
   String _formatCount(int n) {
     if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}K';
@@ -846,8 +870,8 @@ class _MobileDashboardHome extends StatelessWidget {
           totalApps = pkgs.length;
         }
 
-        final bg = isDark ? const Color(0xFF060D1F) : const Color(0xFFF0F4FF);
-        final textColor = isDark ? Colors.white : const Color(0xFF1E293B);
+        final bg = widget.isDark ? const Color(0xFF060D1F) : const Color(0xFFF0F4FF);
+        final textColor = widget.isDark ? Colors.white : const Color(0xFF1E293B);
 
         return Container(
           color: bg,
@@ -857,28 +881,34 @@ class _MobileDashboardHome extends StatelessWidget {
             child: Column(
               children: [
                 const SizedBox(height: 8),
-                // ── Circular Gauge ──
+                // ── Circular Gauge (animated rings) ──
                 SizedBox(
                   height: 260,
                   child: Center(
-                    child: CustomPaint(
-                      size: const Size(220, 220),
-                      painter: _GaugePainter(
-                        isDark: isDark,
-                        value: totalApps,
-                        total: max(totalApps, 1),
-                      ),
-                      child: SizedBox(
-                        width: 220,
-                        height: 220,
-                        child: Center(
-                          child: Text(
-                            _formatCount(totalApps),
-                            style: GoogleFonts.outfit(
-                              fontSize: 44,
-                              fontWeight: FontWeight.w900,
-                              color: Colors.white,
-                              letterSpacing: -1,
+                    child: AnimatedBuilder(
+                      animation: Listenable.merge([_ctrlRing1, _ctrlRing2, _ctrlRing3]),
+                      builder: (_, __) => CustomPaint(
+                        size: const Size(220, 220),
+                        painter: _GaugePainter(
+                          isDark: widget.isDark,
+                          value: totalApps,
+                          total: max(totalApps, 1),
+                          rotAngle1: _ctrlRing1.value * 2 * pi,
+                          rotAngle2: -(_ctrlRing2.value * 2 * pi),
+                          rotAngle3: _ctrlRing3.value * 2 * pi,
+                        ),
+                        child: SizedBox(
+                          width: 220,
+                          height: 220,
+                          child: Center(
+                            child: Text(
+                              _formatCount(totalApps),
+                              style: GoogleFonts.outfit(
+                                fontSize: 44,
+                                fontWeight: FontWeight.w900,
+                                color: widget.isDark ? Colors.white : const Color(0xFF1E293B),
+                                letterSpacing: -1,
+                              ),
                             ),
                           ),
                         ),
@@ -900,28 +930,28 @@ class _MobileDashboardHome extends StatelessWidget {
                         label: 'Devices',
                         value: totalDevices,
                         iconColor: const Color(0xFF38BDF8),
-                        isDark: isDark,
+                        isDark: widget.isDark,
                       ),
                       _MobileQuickStat(
                         icon: Icons.wifi_rounded,
                         label: 'Online',
                         value: onlineDevices,
                         iconColor: const Color(0xFF34D399),
-                        isDark: isDark,
+                        isDark: widget.isDark,
                       ),
                       _MobileQuickStat(
                         icon: Icons.remove_circle_outline_rounded,
                         label: 'Offline',
                         value: offlineDevices,
                         iconColor: const Color(0xFFF87171),
-                        isDark: isDark,
+                        isDark: widget.isDark,
                       ),
                       _MobileQuickStat(
                         icon: Icons.apps_rounded,
                         label: 'Apps',
                         value: totalApps,
                         iconColor: const Color(0xFFA78BFA),
-                        isDark: isDark,
+                        isDark: widget.isDark,
                       ),
                     ],
                   ),
@@ -945,7 +975,7 @@ class _MobileDashboardHome extends StatelessWidget {
                       const Spacer(),
                       Builder(builder: (ctx) => GestureDetector(
                         onTap: () {
-                          final cardColor = isDark ? const Color(0xFF18181B) : Colors.white;
+                          final cardColor = widget.isDark ? const Color(0xFF18181B) : Colors.white;
                           showAppLockerPairingDialog(ctx, cardColor, textColor);
                         },
                         child: Row(
@@ -975,7 +1005,7 @@ class _MobileDashboardHome extends StatelessWidget {
                       textAlign: TextAlign.center,
                       style: GoogleFonts.outfit(
                         fontSize: 14,
-                        color: isDark ? Colors.white38 : const Color(0xFF94A3B8),
+                        color: widget.isDark ? Colors.white38 : const Color(0xFF94A3B8),
                         height: 1.6,
                       ),
                     ),
@@ -1019,7 +1049,7 @@ class _MobileDashboardHome extends StatelessWidget {
                         battery: battery is int ? battery : (battery as num).toInt(),
                         timeLabel: timeLabel,
                         isOnline: isOnline,
-                        isDark: isDark,
+                        isDark: widget.isDark,
                       ),
                     );
                   }),
@@ -1031,7 +1061,7 @@ class _MobileDashboardHome extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Builder(builder: (ctx) => GestureDetector(
                     onTap: () {
-                      final cardColor = isDark ? const Color(0xFF18181B) : Colors.white;
+                      final cardColor = widget.isDark ? const Color(0xFF18181B) : Colors.white;
                       showAppLockerPairingDialog(ctx, cardColor, textColor);
                     },
                     child: Container(
@@ -1078,7 +1108,18 @@ class _GaugePainter extends CustomPainter {
   final bool isDark;
   final int value;
   final int total;
-  const _GaugePainter({required this.isDark, required this.value, required this.total});
+  final double rotAngle1;
+  final double rotAngle2;
+  final double rotAngle3;
+
+  const _GaugePainter({
+    required this.isDark,
+    required this.value,
+    required this.total,
+    this.rotAngle1 = 0,
+    this.rotAngle2 = 0,
+    this.rotAngle3 = 0,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1090,20 +1131,20 @@ class _GaugePainter extends CustomPainter {
     final r2 = size.width * 0.33;
     final r3 = size.width * 0.23;
 
-    const double startAngle = pi * 0.82;
     const double fullSweep = pi * 1.56;
 
+    final trackColor = isDark ? const Color(0xFF131D3B) : const Color(0xFFDDE3F0);
     final trackPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 10
-      ..color = const Color(0xFF131D3B);
+      ..color = trackColor;
 
     canvas.drawCircle(center, r1, trackPaint..strokeWidth = 11);
     canvas.drawCircle(center, r2, trackPaint..strokeWidth = 9);
     canvas.drawCircle(center, r3, trackPaint..strokeWidth = 7);
 
     void drawGradientArc(double radius, double sweep, double strokeW,
-        List<Color> colors, List<double> stops) {
+        List<Color> colors, List<double> stops, double rotOffset) {
+      final startAngle = pi * 0.82 + rotOffset;
       final rect = Rect.fromCircle(center: center, radius: radius);
       final paint = Paint()
         ..style = PaintingStyle.stroke
@@ -1121,17 +1162,17 @@ class _GaugePainter extends CustomPainter {
 
     drawGradientArc(r1, fullSweep, 11,
         [const Color(0xFF7C3AED), const Color(0xFF6366F1), const Color(0xFF38BDF8)],
-        [0.0, 0.5, 1.0]);
+        [0.0, 0.5, 1.0], rotAngle1);
     drawGradientArc(r2, fullSweep * 0.72, 9,
         [const Color(0xFF4F46E5), const Color(0xFF818CF8)],
-        [0.0, 1.0]);
+        [0.0, 1.0], rotAngle2);
     drawGradientArc(r3, fullSweep * 0.48, 7,
         [const Color(0xFF7C3AED), const Color(0xFFA78BFA)],
-        [0.0, 1.0]);
+        [0.0, 1.0], rotAngle3);
 
     // Tick marks at the bottom
     final tickPaint = Paint()
-      ..color = const Color(0xFF2D3A6B)
+      ..color = isDark ? const Color(0xFF2D3A6B) : const Color(0xFFBBC8E0)
       ..style = PaintingStyle.fill;
 
     const int tickCount = 7;
@@ -1154,7 +1195,7 @@ class _GaugePainter extends CustomPainter {
         ),
         tickPaint..color = i == tickCount ~/ 2
             ? const Color(0xFF6366F1)
-            : const Color(0xFF2D3A6B),
+            : (isDark ? const Color(0xFF2D3A6B) : const Color(0xFFBBC8E0)),
       );
       canvas.restore();
     }
@@ -1162,7 +1203,8 @@ class _GaugePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _GaugePainter old) =>
-      old.value != value || old.isDark != isDark;
+      old.value != value || old.isDark != isDark ||
+      old.rotAngle1 != rotAngle1 || old.rotAngle2 != rotAngle2 || old.rotAngle3 != rotAngle3;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2545,6 +2587,17 @@ class _MobileAppControlsViewState extends State<_MobileAppControlsView> {
     super.dispose();
   }
 
+  String _to12hMobile(String t24) {
+    final p = t24.split(':');
+    if (p.length < 2) return t24;
+    int h = int.tryParse(p[0]) ?? 0;
+    final m = int.tryParse(p[1]) ?? 0;
+    final period = h < 12 ? 'AM' : 'PM';
+    h = h % 12;
+    if (h == 0) h = 12;
+    return '$h:${m.toString().padLeft(2, '0')}$period';
+  }
+
   @override
   Widget build(BuildContext context) {
     final bg = widget.isDark ? const Color(0xFF060D1F) : const Color(0xFFF8FAFC);
@@ -2577,12 +2630,10 @@ class _MobileAppControlsViewState extends State<_MobileAppControlsView> {
           final eMin = (int.tryParse(ep[0]) ?? 0) * 60 + (int.tryParse(ep[1]) ?? 0);
           return sMin <= eMin ? nowMin >= sMin && nowMin < eMin : nowMin >= sMin || nowMin < eMin;
         }
-        // All packages that are blocked either explicitly or via active schedule
+        // All packages that are blocked explicitly OR have any schedule (active or not)
         final effectivelyBlocked = <String>{
           ...blockedApps,
-          ...appSchedulesMap.entries
-              .where((e) => e.value is Map && isSchedActive(Map<String, dynamic>.from(e.value as Map)))
-              .map((e) => e.key),
+          ...appSchedulesMap.keys,
         };
         // Build a lookup map from packageName -> app data for enrichment
         final installedMap = <String, Map<String, dynamic>>{};
@@ -2738,6 +2789,13 @@ class _MobileAppControlsViewState extends State<_MobileAppControlsView> {
                                 scheduleActiveNow ? '⏱ Blocking Now' : '⏱ Scheduled',
                                 scheduleActiveNow ? const Color(0xFFEF4444) : const Color(0xFF6366F1),
                               ),
+                              if (appSchedEntry != null && appSchedEntry['alwaysBlocked'] != true) ...[
+                                const SizedBox(width: 4),
+                                _AppStatusBadge(
+                                  '${_to12hMobile(appSchedEntry['start'] ?? '')}–${_to12hMobile(appSchedEntry['end'] ?? '')}',
+                                  const Color(0xFF94A3B8),
+                                ),
+                              ],
                             ],
                           ]),
                         ])),
@@ -2881,10 +2939,14 @@ class _AppBlockScheduleSheetState extends State<_AppBlockScheduleSheet> {
         patch['blockedApps'] = blocked;
       }
       await FirebaseFirestore.instance.collection('devices').doc(widget.deviceId).update(patch);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(activeNow ? 'Schedule saved & app blocked now!' : 'Block schedule saved!'),
-        backgroundColor: const Color(0xFF22C55E),
-      ));
+      if (mounted) {
+        final messenger = ScaffoldMessenger.of(context);
+        Navigator.of(context).pop();
+        messenger.showSnackBar(SnackBar(
+          content: Text(activeNow ? 'Schedule saved & app blocked now!' : 'Block schedule saved!'),
+          backgroundColor: const Color(0xFF22C55E),
+        ));
+      }
     } finally { if (mounted) setState(() => _saving = false); }
   }
 
@@ -4997,12 +5059,10 @@ class _AppControlsState extends State<_AppControls> {
           final eMin = (int.tryParse(ep[0]) ?? 0) * 60 + (int.tryParse(ep[1]) ?? 0);
           return sMin <= eMin ? nowMin >= sMin && nowMin < eMin : nowMin >= sMin || nowMin < eMin;
         }
-        // All packages blocked explicitly or via active schedule
+        // All packages blocked explicitly OR with any schedule (active or not)
         final effectivelyBlockedDesktop = <String>{
           ...blockedApps,
-          ...appSchedules.entries
-              .where((e) => e.value is Map && isSchedActiveDesktop(Map<String, dynamic>.from(e.value as Map)))
-              .map((e) => e.key),
+          ...appSchedules.keys,
         };
 
         // Build a lookup map from packageName -> app data for enrichment
