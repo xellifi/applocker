@@ -294,24 +294,103 @@ class _PwaInstallBannerState extends State<_PwaInstallBanner>
   void _handleInstall() {
     final hasPrompt = js.context.callMethod('hasPwaPrompt', []) == true;
     if (!hasPrompt) {
-      // Browser hasn't provided an install prompt yet — guide the user
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: const Color(0xFF1E293B),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          content: Text(
-            'To install: tap the browser menu (⋮) and choose "Add to Home screen".',
-            style: GoogleFonts.outfit(color: Colors.white, fontSize: 13),
-          ),
-          duration: const Duration(seconds: 5),
-        ),
-      );
+      _showManualInstallGuide();
       return;
     }
     _PwaInstallManager.prompt().then((triggered) {
       if (triggered && mounted) widget.onInstall();
     });
+  }
+
+  void _showManualInstallGuide() {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.75),
+      builder: (_) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 60),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 380),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E293B),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.4), width: 1.5),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.6), blurRadius: 32)],
+          ),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Container(
+                  width: 40, height: 40,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)]),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.install_mobile_rounded, color: Colors.white, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(child: Text('Install AppLocker',
+                  style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white, decoration: TextDecoration.none))),
+                GestureDetector(
+                  onTap: () => Navigator.of(context, rootNavigator: true).pop(),
+                  child: const Icon(Icons.close_rounded, color: Colors.white38, size: 20),
+                ),
+              ]),
+              const SizedBox(height: 8),
+              Text('Chrome is not ready to install right now. Use this quick method instead:',
+                style: GoogleFonts.outfit(fontSize: 12, color: Colors.white54, height: 1.5, decoration: TextDecoration.none)),
+              const SizedBox(height: 20),
+              _guideStep('1', Icons.more_vert_rounded, 'Tap the menu (⋮)',
+                  'Top-right corner of Chrome browser'),
+              const SizedBox(height: 14),
+              _guideStep('2', Icons.add_to_home_screen_rounded, 'Tap "Add to Home screen"',
+                  'Or "Install app" — both do the same thing'),
+              const SizedBox(height: 14),
+              _guideStep('3', Icons.check_circle_outline_rounded, 'Tap "Add" to confirm',
+                  'AppLocker appears on your home screen instantly'),
+              const SizedBox(height: 24),
+              GestureDetector(
+                onTap: () => Navigator.of(context, rootNavigator: true).pop(),
+                child: Container(
+                  width: double.infinity, height: 46,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)]),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Center(child: Text('Got it!',
+                    style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15, decoration: TextDecoration.none))),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _guideStep(String num, IconData icon, String label, String sub) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 28, height: 28,
+          decoration: BoxDecoration(
+            color: const Color(0xFF6366F1).withOpacity(0.2),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Center(child: Text(num,
+            style: GoogleFonts.outfit(color: const Color(0xFF6366F1), fontWeight: FontWeight.w800, fontSize: 13, decoration: TextDecoration.none))),
+        ),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label, style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13, decoration: TextDecoration.none)),
+          Text(sub, style: GoogleFonts.outfit(color: Colors.white54, fontSize: 11, height: 1.4, decoration: TextDecoration.none)),
+        ])),
+      ],
+    );
   }
 
   // DEAD CODE kept for reference — no longer called

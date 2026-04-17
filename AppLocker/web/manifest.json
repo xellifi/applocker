@@ -1,8 +1,9 @@
 {
+  "id": "/",
   "name": "AppLocker - Parent Control",
   "short_name": "AppLocker",
   "description": "Monitor and control your child's device remotely",
-  "start_url": ".",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#060D1F",
   "theme_color": "#6366F1",
