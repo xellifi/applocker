@@ -860,11 +860,25 @@ class LockOverlayService : Service() {
         callBtn.setOnClickListener {
             if (numberStr.isNotEmpty()) {
                 try {
-                    val dialIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$numberStr"))
-                    dialIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    startActivity(dialIntent)
+                    // ACTION_CALL directly places the call — its InCallUI is a
+                    // system window that renders ABOVE TYPE_APPLICATION_OVERLAY,
+                    // so it will appear over our lock screen without removing it.
+                    val callIntent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$numberStr"))
+                    callIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    startActivity(callIntent)
+                    Log.d(TAG, "📞 Calling: $numberStr")
+                } catch (e: SecurityException) {
+                    // CALL_PHONE permission not granted yet — fall back to dialer UI
+                    Log.w(TAG, "CALL_PHONE denied, falling back to ACTION_DIAL: ${e.message}")
+                    try {
+                        val dialIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$numberStr"))
+                        dialIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        startActivity(dialIntent)
+                    } catch (ex: Exception) {
+                        Log.e(TAG, "Dial fallback also failed: ${ex.message}")
+                    }
                 } catch (e: Exception) {
-                    Log.e(TAG, "DIAL intent failed: ${e.message}")
+                    Log.e(TAG, "Call intent failed: ${e.message}")
                 }
             }
         }

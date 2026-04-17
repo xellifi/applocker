@@ -367,6 +367,10 @@ class _ChildInitScreenState extends State<ChildInitScreen> {
     final cameraStatus = await Permission.camera.request();
     debugPrint('//TEST: Camera permission: $cameraStatus');
 
+    // Phone — needed for emergency calls from lock screen
+    final phoneStatus = await Permission.phone.request();
+    debugPrint('//TEST: Phone permission: $phoneStatus');
+
     // Usage Stats - only open settings if NOT already granted
     await _requestUsageStatsIfNeeded();
   }

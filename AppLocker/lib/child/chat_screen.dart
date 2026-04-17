@@ -119,7 +119,7 @@ class _ChildChatScreenState extends State<ChildChatScreen> {
                 WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
                 return ListView.builder(
                   controller: _scrollCtrl,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.fromLTRB(15, 12, 15, 15),
                   itemCount: docs.length,
                   itemBuilder: (context, i) {
                     final data = docs[i].data() as Map<String, dynamic>;
@@ -214,12 +214,13 @@ class _ChildChatScreenState extends State<ChildChatScreen> {
             ),
           ),
           Container(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            padding: const EdgeInsets.fromLTRB(15, 8, 15, 15),
             decoration: const BoxDecoration(
               color: Color(0xFFFBBC05),
               border: Border(top: BorderSide(color: Colors.black26, width: 1)),
             ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Expanded(
                   child: Container(
@@ -232,8 +233,8 @@ class _ChildChatScreenState extends State<ChildChatScreen> {
                     child: TextField(
                       controller: _msgCtrl,
                       keyboardType: TextInputType.multiline,
-                      maxLines: 3,
-                      minLines: 1,
+                      maxLines: 6,
+                      minLines: 3,
                       style: const TextStyle(
                           color: Colors.black,
                           fontSize: 14,
