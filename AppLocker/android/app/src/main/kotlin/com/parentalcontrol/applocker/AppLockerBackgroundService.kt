@@ -308,6 +308,7 @@ class AppLockerBackgroundService : Service() {
         val restrictedMessage  = doc.getString("restrictedMessage")  ?: "This app is restricted by your parent."
         val warningTitle      = doc.getString("warningTitle")      ?: "Restricted Access"
         val warningListRaw    = doc.get("warningList") as? List<String> ?: listOf()
+        val smsReceiverNumber = doc.getString("smsReceiverNumber") ?: ""
 
         localPrefs.edit()
             .putString("lockHeadline",       lockHeadline)
@@ -318,6 +319,7 @@ class AppLockerBackgroundService : Service() {
             .putString("restrictedMessage",  restrictedMessage)
             .putString("warningTitle",       warningTitle)
             .putString("warningList",        warningListRaw.joinToString("\n"))
+            .putString("smsReceiverNumber",  smsReceiverNumber)
             .putLong(KEY_LAST_SYNC, System.currentTimeMillis())
             .apply()
 

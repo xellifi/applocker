@@ -6494,6 +6494,7 @@ class _SettingsViewState extends State<_SettingsView> {
   final TextEditingController _parentQuoteCtrl = TextEditingController();
   final TextEditingController _profileImageUrlCtrl = TextEditingController();
   final TextEditingController _unlockGreetingCtrl = TextEditingController();
+  final TextEditingController _smsReceiverCtrl = TextEditingController();
   bool _isLoading = false;
   bool _uploadingImage = false;
   bool _settingsInitialized = false;
@@ -6582,6 +6583,7 @@ class _SettingsViewState extends State<_SettingsView> {
         'parentQuote': _parentQuoteCtrl.text.trim(),
         'profileImageUrl': _profileImageUrlCtrl.text.trim(),
         'unlockGreeting': _unlockGreetingCtrl.text.trim(),
+        'smsReceiverNumber': _smsReceiverCtrl.text.trim(),
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -6614,6 +6616,7 @@ class _SettingsViewState extends State<_SettingsView> {
       _parentQuoteCtrl.text = data['parentQuote'] ?? '';
       _profileImageUrlCtrl.text = data['profileImageUrl'] ?? '';
       _unlockGreetingCtrl.text = data['unlockGreeting'] ?? 'Enjoy Your Day';
+      _smsReceiverCtrl.text = data['smsReceiverNumber'] ?? '';
     } catch (e) {
       debugPrint('Error loading device settings: $e');
     }
@@ -6632,6 +6635,7 @@ class _SettingsViewState extends State<_SettingsView> {
     _parentQuoteCtrl.dispose();
     _profileImageUrlCtrl.dispose();
     _unlockGreetingCtrl.dispose();
+    _smsReceiverCtrl.dispose();
     super.dispose();
   }
 
@@ -6686,6 +6690,7 @@ class _SettingsViewState extends State<_SettingsView> {
                   _desktopTf('Paste your URL here', _profileImageUrlCtrl, hint: 'https://example.com/photo.jpg'),
                   _desktopTf('Parent Quote', _parentQuoteCtrl, maxLines: 3, hint: '"I love you more than words can ever say.\nMama missed you so much"'),
                   _desktopTf('Unlock Greetings', _unlockGreetingCtrl, hint: '" Enjoy Your Day My Child. "'),
+                  _desktopTf('Emergency SMS Number', _smsReceiverCtrl, hint: '+639XXXXXXXXX  (child can SMS this number from lock screen)'),
                 ])),
                 const SizedBox(width: 16),
                 Column(children: [

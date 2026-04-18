@@ -59,6 +59,9 @@ class LockOverlayService : Service() {
     private var chatMessagesLayout: LinearLayout? = null
     private var chatScrollView: ScrollView? = null
 
+    // Keyboard detection listener (removed when chat panel closes)
+    private var keyboardListener: ViewTreeObserver.OnGlobalLayoutListener? = null
+
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
@@ -266,10 +269,12 @@ class LockOverlayService : Service() {
             text = "🔒"
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 46f)
         })
+        iconFrame.isClickable = true
+        iconFrame.isFocusable = true
         iconFrame.setOnClickListener {
             tapCount++
             tapResetHandler.removeCallbacks(tapResetRunnable)
-            tapResetHandler.postDelayed(tapResetRunnable, 3000)
+            tapResetHandler.postDelayed(tapResetRunnable, 5000)
             if (tapCount >= 10) { tapCount = 0; showEmergencyPinPanel(root) }
         }
         content.addView(iconFrame)
@@ -355,20 +360,20 @@ class LockOverlayService : Service() {
         }
 
         val msgBtn = createActionButton(ctx, "💬", "MESSAGE")
-        val callBtn = createActionButton(ctx, "📞", "CALL")
+        val smsBtn = createActionButton(ctx, "📲", "SMS")
 
         (msgBtn.layoutParams as LinearLayout.LayoutParams).apply {
             weight = 1f; width = 0; rightMargin = dp(6)
         }
-        (callBtn.layoutParams as LinearLayout.LayoutParams).apply {
+        (smsBtn.layoutParams as LinearLayout.LayoutParams).apply {
             weight = 1f; width = 0; leftMargin = dp(6)
         }
 
-        msgBtn.setOnClickListener  { showChatPanel(root) }
-        callBtn.setOnClickListener { showDialerPanel(root) }
+        msgBtn.setOnClickListener { showChatPanel(root) }
+        smsBtn.setOnClickListener { showSmsPanel(root) }
 
         btnRow.addView(msgBtn)
-        btnRow.addView(callBtn)
+        btnRow.addView(smsBtn)
         content.addView(btnRow)
         content.addView(spacer(20))
 
@@ -511,6 +516,8 @@ class LockOverlayService : Service() {
             isClickable = true; isFocusable = true
         }
         closeBtn.setOnClickListener {
+            keyboardListener?.let { overlayView?.viewTreeObserver?.removeOnGlobalLayoutListener(it) }
+            keyboardListener = null
             chatListener?.remove(); chatListener = null
             root.removeView(panel)
             makeUnfocusable()
@@ -643,6 +650,24 @@ class LockOverlayService : Service() {
         panel.addView(card)
         root.addView(panel)
 
+        // ── Keyboard-aware layout: adjust card bottom margin when keyboard appears
+        keyboardListener?.let { overlayView?.viewTreeObserver?.removeOnGlobalLayoutListener(it) }
+        keyboardListener = ViewTreeObserver.OnGlobalLayoutListener {
+            val r = android.graphics.Rect()
+            overlayView?.getWindowVisibleDisplayFrame(r)
+            val rootH = overlayView?.height ?: return@OnGlobalLayoutListener
+            val kbH = rootH - r.bottom
+            val cardLp = card.layoutParams as FrameLayout.LayoutParams
+            val newBot = if (kbH > dp(100)) kbH + dp(8) else dp(15)
+            if (cardLp.bottomMargin != newBot) {
+                cardLp.setMargins(dp(15), dp(50), dp(15), newBot)
+                card.layoutParams = cardLp
+                // Scroll to bottom of messages when keyboard opens
+                msgScroll.post { msgScroll.fullScroll(View.FOCUS_DOWN) }
+            }
+        }
+        overlayView?.viewTreeObserver?.addOnGlobalLayoutListener(keyboardListener)
+
         // Request focus on input box + show keyboard after layout settles
         inputBox.postDelayed({
             inputBox.requestFocus()
@@ -752,12 +777,16 @@ class LockOverlayService : Service() {
         return row
     }
 
-    // ── Dialer panel ───────────────────────────────────────────────────────────
+    // ── SMS panel ──────────────────────────────────────────────────────────────
 
-    private fun showDialerPanel(root: FrameLayout) {
+    private fun showSmsPanel(root: FrameLayout) {
         root.findViewWithTag<View>("panel")?.let { root.removeView(it) }
+        makeFocusable()
 
         val ctx = this
+        val prefs = getSharedPreferences("applocker_local_settings", Context.MODE_PRIVATE)
+        val receiverNumber = prefs.getString("smsReceiverNumber", "") ?: ""
+
         val panel = FrameLayout(ctx).apply {
             tag = "panel"
             layoutParams = FrameLayout.LayoutParams(
@@ -783,7 +812,7 @@ class LockOverlayService : Service() {
             setPadding(dp(20), dp(16), dp(20), dp(20))
         }
 
-        // ── Dialer header
+        // ── Header
         val header = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -797,22 +826,32 @@ class LockOverlayService : Service() {
                 setColor(Color.parseColor("#25FBBC05"))
             }
             addView(TextView(ctx).apply {
-                text = "📞"
+                text = "📲"
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
                 gravity = Gravity.CENTER
                 layoutParams = FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
             })
         })
-        header.addView(TextView(ctx).apply {
-            text = "Emergency Call"
+        val headerText = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { leftMargin = dp(10) }
+        }
+        headerText.addView(TextView(ctx).apply {
+            text = "Send SMS"
             setTextColor(Color.WHITE)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             setTypeface(null, Typeface.BOLD)
-            layoutParams = LinearLayout.LayoutParams(
-                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { leftMargin = dp(10) }
         })
-        val closeBtn2 = TextView(ctx).apply {
+        val numLabel = if (receiverNumber.isNotEmpty()) "To: $receiverNumber" else "No number configured in admin"
+        headerText.addView(TextView(ctx).apply {
+            text = numLabel
+            setTextColor(Color.parseColor("#94A3B8"))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+        })
+        header.addView(headerText)
+        val closeSmsBtn = TextView(ctx).apply {
             text = "✕"
             setTextColor(Color.parseColor("#66FFFFFF"))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
@@ -825,155 +864,129 @@ class LockOverlayService : Service() {
             }
             isClickable = true; isFocusable = true
         }
-        closeBtn2.setOnClickListener { root.removeView(panel); makeUnfocusable() }
-        header.addView(closeBtn2)
+        closeSmsBtn.setOnClickListener { root.removeView(panel); makeUnfocusable() }
+        header.addView(closeSmsBtn)
         card.addView(header)
         card.addView(spacer(16))
 
-        // ── Number display
-        var numberStr = ""
-        val numberDisplay = TextView(ctx).apply {
-            text = "Enter number..."
-            setTextColor(Color.parseColor("#64748B"))
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
-            setTypeface(null, Typeface.BOLD)
-            letterSpacing = 0.15f
-            gravity = Gravity.CENTER
+        // ── Message input
+        val msgInput = EditText(ctx).apply {
             layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(56))
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(100))
+            setTextColor(Color.WHITE)
+            setHintTextColor(Color.parseColor("#64748B"))
+            hint = "Type your message..."
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+                InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            maxLines = 4
+            gravity = Gravity.TOP or Gravity.START
             background = GradientDrawable().apply {
                 cornerRadius = dp(14).toFloat()
                 setColor(Color.parseColor("#2D2D44"))
-                setStroke(dp(1), Color.parseColor("#20FBBC05"))
+                setStroke(dp(1), Color.parseColor("#40FBBC05"))
             }
+            setPadding(dp(14), dp(12), dp(14), dp(12))
         }
-        card.addView(numberDisplay)
-        card.addView(spacer(14))
+        card.addView(msgInput)
+        card.addView(spacer(12))
 
-        fun updateDisplay() {
-            if (numberStr.isEmpty()) {
-                numberDisplay.text = "Enter number..."
-                numberDisplay.setTextColor(Color.parseColor("#64748B"))
-                numberDisplay.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
-            } else {
-                numberDisplay.text = numberStr
-                numberDisplay.setTextColor(Color.WHITE)
-                numberDisplay.setTextSize(TypedValue.COMPLEX_UNIT_SP,
-                    if (numberStr.length > 10) 20f else 24f)
-            }
-        }
-
-        // ── Dialpad rows
-        val dialRows = listOf(
-            listOf("1", "2", "3"),
-            listOf("4", "5", "6"),
-            listOf("7", "8", "9"),
-            listOf("*", "0", "#")
-        )
-        dialRows.forEach { row ->
-            val rowLayout = LinearLayout(ctx).apply {
-                orientation = LinearLayout.HORIZONTAL
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, dp(54)).apply { bottomMargin = dp(10) }
-                weightSum = 3f
-            }
-            row.forEach { digit ->
-                val key = TextView(ctx).apply {
-                    text = digit
-                    setTextColor(Color.WHITE)
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
-                    setTypeface(null, Typeface.BOLD)
-                    gravity = Gravity.CENTER
-                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
-                        .apply { if (digit != "#") rightMargin = dp(10) }
-                    background = GradientDrawable().apply {
-                        cornerRadius = dp(14).toFloat()
-                        setColor(Color.parseColor("#2D2D44"))
-                        setStroke(dp(1), Color.parseColor("#10FFFFFF"))
-                    }
-                    isClickable = true; isFocusable = true
-                }
-                key.setOnClickListener {
-                    if (numberStr.length < 15) {
-                        numberStr += digit
-                        updateDisplay()
-                    }
-                }
-                rowLayout.addView(key)
-            }
-            card.addView(rowLayout)
-        }
-
-        // Backspace row
-        val bsRow = LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-                .apply { bottomMargin = dp(8) }
-            gravity = Gravity.END
-        }
-        bsRow.addView(TextView(ctx).apply {
-            text = "⌫  Clear"
-            setTextColor(Color.parseColor("#94A3B8"))
+        // ── Status label (shows success/error feedback)
+        val statusTv = TextView(ctx).apply {
+            text = ""
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             setTypeface(null, Typeface.BOLD)
-            isClickable = true; isFocusable = true
-            setOnClickListener { numberStr = ""; updateDisplay() }
+            gravity = Gravity.CENTER
+            visibility = View.GONE
             layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-        })
-        card.addView(bsRow)
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                .apply { bottomMargin = dp(10) }
+        }
+        card.addView(statusTv)
 
-        // ── CALL button
-        val callBtn = LinearLayout(ctx).apply {
+        // ── SEND button
+        val sendSmsBtn = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(54))
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(52))
             background = GradientDrawable().apply {
                 cornerRadius = dp(16).toFloat()
-                setColor(Color.parseColor("#22C55E"))
+                setColor(if (receiverNumber.isNotEmpty()) Color.parseColor("#FBBC05") else Color.parseColor("#374151"))
             }
-            isClickable = true; isFocusable = true
+            isClickable = receiverNumber.isNotEmpty()
+            isFocusable = receiverNumber.isNotEmpty()
         }
-        callBtn.addView(TextView(ctx).apply {
-            text = "📞  CALL"
-            setTextColor(Color.WHITE)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
+        sendSmsBtn.addView(TextView(ctx).apply {
+            text = if (receiverNumber.isNotEmpty()) "📲  SEND SMS" else "⚙️  Configure number in Admin"
+            setTextColor(if (receiverNumber.isNotEmpty()) Color.BLACK else Color.parseColor("#9CA3AF"))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
             setTypeface(null, Typeface.BOLD)
-            letterSpacing = 0.15f
+            letterSpacing = 0.1f
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         })
-        callBtn.setOnClickListener {
-            if (numberStr.isNotEmpty()) {
+        if (receiverNumber.isNotEmpty()) {
+            sendSmsBtn.setOnClickListener {
+                val msg = msgInput.text.toString().trim()
+                if (msg.isEmpty()) {
+                    statusTv.text = "Please type a message first."
+                    statusTv.setTextColor(Color.parseColor("#F87171"))
+                    statusTv.visibility = View.VISIBLE
+                    return@setOnClickListener
+                }
                 try {
-                    // ACTION_CALL directly places the call — its InCallUI is a
-                    // system window that renders ABOVE TYPE_APPLICATION_OVERLAY,
-                    // so it will appear over our lock screen without removing it.
-                    val callIntent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$numberStr"))
-                    callIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    startActivity(callIntent)
-                    Log.d(TAG, "📞 Calling: $numberStr")
-                } catch (e: SecurityException) {
-                    // CALL_PHONE permission not granted yet — fall back to dialer UI
-                    Log.w(TAG, "CALL_PHONE denied, falling back to ACTION_DIAL: ${e.message}")
-                    try {
-                        val dialIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$numberStr"))
-                        dialIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        startActivity(dialIntent)
-                    } catch (ex: Exception) {
-                        Log.e(TAG, "Dial fallback also failed: ${ex.message}")
-                    }
+                    @Suppress("DEPRECATION")
+                    val smsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+                        getSystemService(android.telephony.SmsManager::class.java)
+                    else android.telephony.SmsManager.getDefault()
+                    val parts = smsManager.divideMessage(msg)
+                    smsManager.sendMultipartTextMessage(receiverNumber, null, parts, null, null)
+                    msgInput.text.clear()
+                    statusTv.text = "✓ SMS sent to $receiverNumber"
+                    statusTv.setTextColor(Color.parseColor("#4ADE80"))
+                    statusTv.visibility = View.VISIBLE
+                    statusTv.postDelayed({ root.removeView(panel); makeUnfocusable() }, 1500)
+                    Log.d(TAG, "SMS sent to $receiverNumber")
                 } catch (e: Exception) {
-                    Log.e(TAG, "Call intent failed: ${e.message}")
+                    statusTv.text = "Failed to send SMS: ${e.message}"
+                    statusTv.setTextColor(Color.parseColor("#F87171"))
+                    statusTv.visibility = View.VISIBLE
+                    Log.e(TAG, "SMS send error: ${e.message}")
                 }
             }
         }
-        card.addView(callBtn)
+        card.addView(sendSmsBtn)
+
         panel.addView(card)
         root.addView(panel)
+
+        // Keyboard listener for SMS panel
+        val smsKbListener = ViewTreeObserver.OnGlobalLayoutListener {
+            val r = android.graphics.Rect()
+            overlayView?.getWindowVisibleDisplayFrame(r)
+            val rootH = overlayView?.height ?: return@OnGlobalLayoutListener
+            val kbH = rootH - r.bottom
+            val cardLp = card.layoutParams as FrameLayout.LayoutParams
+            val newBot = if (kbH > dp(100)) kbH else 0
+            if (cardLp.bottomMargin != newBot) {
+                cardLp.bottomMargin = newBot
+                card.layoutParams = cardLp
+            }
+        }
+        overlayView?.viewTreeObserver?.addOnGlobalLayoutListener(smsKbListener)
+        closeSmsBtn.setOnClickListener {
+            overlayView?.viewTreeObserver?.removeOnGlobalLayoutListener(smsKbListener)
+            root.removeView(panel); makeUnfocusable()
+        }
+
+        // Show keyboard
+        msgInput.postDelayed({
+            msgInput.requestFocus()
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            imm.showSoftInput(msgInput, InputMethodManager.SHOW_IMPLICIT)
+        }, 200)
     }
 
     // ── Emergency PIN panel ────────────────────────────────────────────────────

@@ -48,6 +48,9 @@
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <!-- SMS (for emergency SMS from lock screen) -->
+    <uses-permission android:name="android.permission.SEND_SMS" />
+
     <queries>
         <package android:name="android" />
         <intent>
@@ -67,7 +70,7 @@
     <application
         android:label="AppLocker"
         android:name="${applicationName}"
-        android:icon="@android:drawable/sym_def_app_icon"
+        android:icon="@mipmap/ic_launcher"
         android:allowBackup="false"
         android:fullBackupContent="false">
 
