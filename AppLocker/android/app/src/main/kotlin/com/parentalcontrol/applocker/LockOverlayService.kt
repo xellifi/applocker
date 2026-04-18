@@ -928,23 +928,106 @@ class LockOverlayService : Service() {
                     statusTv.visibility = View.VISIBLE
                     return@setOnClickListener
                 }
+
+                // Save to Firestore chat log so it appears in the conversation
+                val devId = overlayDeviceId.ifEmpty {
+                    getSharedPreferences("applocker_local_settings", Context.MODE_PRIVATE)
+                        .getString("deviceId", "") ?: ""
+                }
+                if (devId.isNotEmpty()) {
+                    Thread {
+                        try {
+                            com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                .collection("devices").document(devId)
+                                .collection("messages")
+                                .add(mapOf(
+                                    "text" to "📲 SMS: $msg",
+                                    "sender" to "child",
+                                    "type" to "sms",
+                                    "smsTo" to receiverNumber,
+                                    "timestamp" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                                    "read" to false
+                                ))
+                        } catch (e: Exception) {
+                            Log.e(TAG, "SMS Firestore log error: ${e.message}")
+                        }
+                    }.start()
+                }
+
+                // Clear input and show sending status immediately
+                msgInput.text.clear()
+                statusTv.text = "Sending SMS..."
+                statusTv.setTextColor(Color.parseColor("#94A3B8"))
+                statusTv.visibility = View.VISIBLE
+
+                // Use PendingIntent to get real sent result (not fire-and-forget)
+                val sentAction = "APPLOCKER_SMS_SENT_${System.currentTimeMillis()}"
+                val sentPI = android.app.PendingIntent.getBroadcast(
+                    ctx, 0, Intent(sentAction),
+                    android.app.PendingIntent.FLAG_ONE_SHOT or android.app.PendingIntent.FLAG_IMMUTABLE
+                )
+                val sentReceiver = object : android.content.BroadcastReceiver() {
+                    override fun onReceive(context: Context, intent: Intent) {
+                        Handler(Looper.getMainLooper()).post {
+                            when (resultCode) {
+                                android.app.Activity.RESULT_OK -> {
+                                    statusTv.text = "✓ SMS sent to $receiverNumber"
+                                    statusTv.setTextColor(Color.parseColor("#4ADE80"))
+                                    statusTv.postDelayed({ closeActivePanel(root); makeUnfocusable() }, 2000)
+                                }
+                                android.telephony.SmsManager.RESULT_ERROR_NO_SERVICE -> {
+                                    statusTv.text = "❌ No signal — SMS not sent"
+                                    statusTv.setTextColor(Color.parseColor("#F87171"))
+                                }
+                                android.telephony.SmsManager.RESULT_ERROR_RADIO_OFF -> {
+                                    statusTv.text = "❌ Radio/airplane mode off — SMS not sent"
+                                    statusTv.setTextColor(Color.parseColor("#F87171"))
+                                }
+                                android.telephony.SmsManager.RESULT_ERROR_GENERIC_FAILURE -> {
+                                    statusTv.text = "❌ Failed — check SIM credit/load"
+                                    statusTv.setTextColor(Color.parseColor("#F87171"))
+                                }
+                                else -> {
+                                    statusTv.text = "❌ SMS failed (code $resultCode)"
+                                    statusTv.setTextColor(Color.parseColor("#F87171"))
+                                }
+                            }
+                        }
+                        try { context.unregisterReceiver(this) } catch (_: Exception) {}
+                    }
+                }
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        ctx.registerReceiver(sentReceiver, IntentFilter(sentAction), Context.RECEIVER_NOT_EXPORTED)
+                    } else {
+                        @Suppress("UnspecifiedRegisterReceiverFlag")
+                        ctx.registerReceiver(sentReceiver, IntentFilter(sentAction))
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "registerReceiver error: ${e.message}")
+                }
+
                 try {
                     @Suppress("DEPRECATION")
                     val smsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
                         getSystemService(android.telephony.SmsManager::class.java)
                     else android.telephony.SmsManager.getDefault()
                     val parts = smsManager.divideMessage(msg)
-                    smsManager.sendMultipartTextMessage(receiverNumber, null, parts, null, null)
-                    msgInput.text.clear()
-                    statusTv.text = "✓ SMS sent to $receiverNumber"
-                    statusTv.setTextColor(Color.parseColor("#4ADE80"))
-                    statusTv.visibility = View.VISIBLE
-                    statusTv.postDelayed({ closeActivePanel(root); makeUnfocusable() }, 1500)
-                    Log.d(TAG, "SMS sent to $receiverNumber")
+                    // Track result for first part only; rest are fire-and-forget
+                    val sentIntents = ArrayList<android.app.PendingIntent?>().apply {
+                        add(sentPI)
+                        repeat(parts.size - 1) { add(null) }
+                    }
+                    @Suppress("UNCHECKED_CAST")
+                    smsManager.sendMultipartTextMessage(
+                        receiverNumber, null, parts,
+                        sentIntents as ArrayList<android.app.PendingIntent>, null
+                    )
+                    Log.d(TAG, "SMS dispatched to $receiverNumber (${parts.size} parts)")
                 } catch (e: Exception) {
-                    statusTv.text = "Failed to send SMS: ${e.message}"
+                    statusTv.text = "❌ Failed: ${e.message}"
                     statusTv.setTextColor(Color.parseColor("#F87171"))
-                    statusTv.visibility = View.VISIBLE
+                    try { ctx.unregisterReceiver(sentReceiver) } catch (_: Exception) {}
                     Log.e(TAG, "SMS send error: ${e.message}")
                 }
             }

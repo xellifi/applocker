@@ -99,6 +99,7 @@ Configured as a static deployment:
 ## Child App Fixes (April 2026 — Latest)
 1. **Lock Screen Chat & SMS Keyboard Gap**: Added 15px gap between the Android keyboard and both the Flutter chat bottom sheet (`AnimatedPadding` bottom = `viewInsets.bottom + 15`) and the native overlay panels (`attachKeyboardLift` bottom bumped from `dp(15)` to `dp(30)`).
 2. **SMS Permission (SEND_SMS)**: Added runtime SEND_SMS permission request in `MainActivity.onResume`. Added `hasSmsPermission` and `requestSmsPermission` MethodChannel handlers. The child home screen now shows an "SMS Permission" setup card and checks the grant status in the periodic timer.
+3. **SMS Conversation Log + Accurate Status**: SMS messages are now saved to Firestore `messages` collection (`sender: 'child'`, `type: 'sms'`, `text: '📲 SMS: ...'`) so they appear in the chat conversation flow. Replaced fire-and-forget `sendMultipartTextMessage` with a `PendingIntent` BroadcastReceiver so the status reflects the real result — success, no signal, radio off, or generic failure (including no credit/load).
 
 ## Previous Child App Fixes (April 2026)
 1. **Locked Overlay Message/SMS Keyboard Fix**: Recreated the native Android MESSAGE and SMS overlay panels with a keyboard-height listener that lifts and resizes the active panel above the Android keyboard. Chat still sends/receives through Firestore, and SMS still sends to the configured emergency number.
