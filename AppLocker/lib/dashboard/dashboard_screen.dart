@@ -3980,7 +3980,6 @@ class _MobileSettingsViewState extends State<_MobileSettingsView> {
   final _imageUrlCtrl = TextEditingController();
   final _quoteCtrl = TextEditingController();
   final _greetingCtrl = TextEditingController();
-  final _smsCtrl = TextEditingController();
   final _headingCtrl = TextEditingController();
   final _titleCtrl = TextEditingController();
   final _tasksCtrl = TextEditingController();
@@ -3993,13 +3992,13 @@ class _MobileSettingsViewState extends State<_MobileSettingsView> {
 
   @override void initState() {
     super.initState();
-    for (var c in [_imageUrlCtrl, _quoteCtrl, _greetingCtrl, _smsCtrl, _headingCtrl, _titleCtrl, _tasksCtrl, _rHeadCtrl, _rMsgCtrl, _rTasksCtrl]) {
+    for (var c in [_imageUrlCtrl, _quoteCtrl, _greetingCtrl, _headingCtrl, _titleCtrl, _tasksCtrl, _rHeadCtrl, _rMsgCtrl, _rTasksCtrl]) {
       c.addListener(() => setState(() {}));
     }
     _load();
   }
   @override void dispose() {
-    for (var c in [_imageUrlCtrl, _quoteCtrl, _greetingCtrl, _smsCtrl, _headingCtrl, _titleCtrl, _tasksCtrl, _rHeadCtrl, _rMsgCtrl, _rTasksCtrl, _pinCtrl]) c.dispose();
+    for (var c in [_imageUrlCtrl, _quoteCtrl, _greetingCtrl, _headingCtrl, _titleCtrl, _tasksCtrl, _rHeadCtrl, _rMsgCtrl, _rTasksCtrl, _pinCtrl]) c.dispose();
     super.dispose();
   }
 
@@ -4034,7 +4033,6 @@ class _MobileSettingsViewState extends State<_MobileSettingsView> {
     _imageUrlCtrl.text = data['profileImageUrl'] ?? _imageUrlCtrl.text;
     _quoteCtrl.text = data['parentQuote'] ?? _quoteCtrl.text;
     _greetingCtrl.text = data['unlockGreeting'] ?? _greetingCtrl.text;
-    _smsCtrl.text = data['smsReceiverNumber'] ?? '';
     _headingCtrl.text = data['lockHeadline'] ?? data['lockScreenHeading'] ?? _headingCtrl.text;
     _titleCtrl.text = data['taskTitle'] ?? data['lockScreenTitle'] ?? _titleCtrl.text;
     _tasksCtrl.text = (data['taskList'] as List? ?? data['lockScreenTasks'] as List? ?? []).join('\n');
@@ -4054,7 +4052,6 @@ class _MobileSettingsViewState extends State<_MobileSettingsView> {
         'profileImageUrl': _imageUrlCtrl.text.trim(),
         'parentQuote': _quoteCtrl.text.trim(),
         'unlockGreeting': _greetingCtrl.text.trim(),
-        'smsReceiverNumber': _smsCtrl.text.trim(),
       };
       devicePayload = payload;
     }
@@ -4398,7 +4395,6 @@ class _MobileSettingsViewState extends State<_MobileSettingsView> {
               _tf('Paste your URL here', _imageUrlCtrl, hint: 'https://example.com/photo.jpg'),
               _tf('Parent Quote', _quoteCtrl, maxLines: 3, hint: '"I love you more than words can say"'),
               _tf('Unlock Greetings', _greetingCtrl, hint: 'Enjoy Your Day My Child.'),
-              _tf('Emergency SMS Number', _smsCtrl, hint: '+639XXXXXXXXX  (child can SMS this number from lock screen)'),
             ])),
             const SizedBox(width: 10),
             Column(children: [
@@ -6574,7 +6570,6 @@ class _SettingsViewState extends State<_SettingsView> {
   final TextEditingController _parentQuoteCtrl = TextEditingController();
   final TextEditingController _profileImageUrlCtrl = TextEditingController();
   final TextEditingController _unlockGreetingCtrl = TextEditingController();
-  final TextEditingController _smsReceiverCtrl = TextEditingController();
   bool _isLoading = false;
   bool _uploadingImage = false;
   bool _settingsInitialized = false;
@@ -6663,7 +6658,6 @@ class _SettingsViewState extends State<_SettingsView> {
         'parentQuote': _parentQuoteCtrl.text.trim(),
         'profileImageUrl': _profileImageUrlCtrl.text.trim(),
         'unlockGreeting': _unlockGreetingCtrl.text.trim(),
-        'smsReceiverNumber': _smsReceiverCtrl.text.trim(),
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -6696,7 +6690,6 @@ class _SettingsViewState extends State<_SettingsView> {
       _parentQuoteCtrl.text = data['parentQuote'] ?? '';
       _profileImageUrlCtrl.text = data['profileImageUrl'] ?? '';
       _unlockGreetingCtrl.text = data['unlockGreeting'] ?? 'Enjoy Your Day';
-      _smsReceiverCtrl.text = data['smsReceiverNumber'] ?? '';
     } catch (e) {
       debugPrint('Error loading device settings: $e');
     }
@@ -6715,7 +6708,6 @@ class _SettingsViewState extends State<_SettingsView> {
     _parentQuoteCtrl.dispose();
     _profileImageUrlCtrl.dispose();
     _unlockGreetingCtrl.dispose();
-    _smsReceiverCtrl.dispose();
     super.dispose();
   }
 
@@ -6770,7 +6762,6 @@ class _SettingsViewState extends State<_SettingsView> {
                   _desktopTf('Paste your URL here', _profileImageUrlCtrl, hint: 'https://example.com/photo.jpg'),
                   _desktopTf('Parent Quote', _parentQuoteCtrl, maxLines: 3, hint: '"I love you more than words can ever say.\nMama missed you so much"'),
                   _desktopTf('Unlock Greetings', _unlockGreetingCtrl, hint: '" Enjoy Your Day My Child. "'),
-                  _desktopTf('Emergency SMS Number', _smsReceiverCtrl, hint: '+639XXXXXXXXX  (child can SMS this number from lock screen)'),
                 ])),
                 const SizedBox(width: 16),
                 Column(children: [
