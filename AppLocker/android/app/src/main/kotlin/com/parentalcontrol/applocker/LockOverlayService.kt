@@ -192,61 +192,6 @@ class LockOverlayService : Service() {
             setPadding(dp(28), dp(44), dp(28), dp(36))
         }
 
-        // ── Profile photo (set by admin in dashboard settings)
-        val profileImageUrl = prefs.getString("profileImageUrl", "") ?: ""
-        if (profileImageUrl.isNotEmpty()) {
-            val avatarSize = dp(88)
-            val avatarView = android.widget.ImageView(ctx).apply {
-                layoutParams = LinearLayout.LayoutParams(avatarSize, avatarSize).apply {
-                    gravity = Gravity.CENTER_HORIZONTAL
-                }
-                scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
-                background = GradientDrawable().apply {
-                    shape = GradientDrawable.OVAL
-                    setColor(Color.parseColor("#22000000"))
-                    setStroke(dp(3), Color.BLACK)
-                }
-            }
-            content.addView(avatarView)
-            content.addView(spacer(14))
-            // Load image on background thread, render circular bitmap
-            Thread {
-                try {
-                    val url = java.net.URL(profileImageUrl)
-                    val conn = url.openConnection() as java.net.HttpURLConnection
-                    conn.connectTimeout = 6000
-                    conn.readTimeout = 10000
-                    conn.connect()
-                    val rawBmp = android.graphics.BitmapFactory.decodeStream(conn.inputStream)
-                    conn.disconnect()
-                    if (rawBmp != null) {
-                        val dim = minOf(rawBmp.width, rawBmp.height)
-                        val xOff = (rawBmp.width - dim) / 2
-                        val yOff = (rawBmp.height - dim) / 2
-                        val square = android.graphics.Bitmap.createBitmap(rawBmp, xOff, yOff, dim, dim)
-                        val sz = dp(88)
-                        val scaled = android.graphics.Bitmap.createScaledBitmap(square, sz, sz, true)
-                        val circular = android.graphics.Bitmap.createBitmap(sz, sz, android.graphics.Bitmap.Config.ARGB_8888)
-                        val canvas = android.graphics.Canvas(circular)
-                        val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
-                        paint.shader = android.graphics.BitmapShader(scaled, android.graphics.Shader.TileMode.CLAMP, android.graphics.Shader.TileMode.CLAMP)
-                        canvas.drawCircle(sz / 2f, sz / 2f, sz / 2f, paint)
-                        paint.shader = null
-                        paint.style = android.graphics.Paint.Style.STROKE
-                        paint.strokeWidth = dp(3).toFloat()
-                        paint.color = Color.BLACK
-                        canvas.drawCircle(sz / 2f, sz / 2f, sz / 2f - dp(2).toFloat(), paint)
-                        Handler(Looper.getMainLooper()).post {
-                            avatarView.background = null
-                            avatarView.setImageBitmap(circular)
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Profile photo load failed: ${e.message}")
-                }
-            }.start()
-        }
-
         // ── Lock icon (tap 10× for emergency PIN)
         var tapCount = 0
         val iconSize = dp(100)

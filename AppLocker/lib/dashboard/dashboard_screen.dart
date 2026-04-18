@@ -208,6 +208,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   _DashboardMenu _selectedMenu = _DashboardMenu.dashboard;
   bool _isSidebarOpen = true;
   bool _isDark = true;
+  bool _isExpiredFlag = false;
+  String _userPlan = 'free';
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
@@ -226,6 +228,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _setSelectedMenu(_DashboardMenu menu) {
+    if (_isExpiredFlag && menu != _DashboardMenu.subscriptions) return;
     html.window.localStorage['applocker_dashboard_menu'] = menu.name;
     setState(() => _selectedMenu = menu);
   }
@@ -262,6 +265,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (userSnapshot.hasData && userSnapshot.data?.data() != null) {
           final data = userSnapshot.data!.data() as Map<String, dynamic>;
           userRole = data['role'] ?? 'parent';
+          final plan = (data['plan'] ?? 'free').toString().toLowerCase();
+          final expiryDate = (data['expiryDate'] as Timestamp?)?.toDate();
+          final expired = expiryDate != null && expiryDate.isBefore(DateTime.now()) && plan != 'free' && userRole != 'super_admin';
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            if (_isExpiredFlag != expired || _userPlan != plan) {
+              setState(() { _isExpiredFlag = expired; _userPlan = plan; });
+              if (expired && _selectedMenu != _DashboardMenu.subscriptions) {
+                setState(() => _selectedMenu = _DashboardMenu.subscriptions);
+              }
+            }
+          });
         }
 
         final bool isMobile = MediaQuery.of(context).size.width <= 1024;
@@ -370,6 +385,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildContent(Color textColor, Color cardColor, Color borderColor, bool isMobile, String userRole) {
+    if (_isExpiredFlag) {
+      return isMobile
+          ? _MobileSubscriptionView(isDark: _isDark, userRole: userRole)
+          : SingleChildScrollView(child: _SubscriptionView(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor, userRole: userRole));
+    }
     if (isMobile) {
       switch (_selectedMenu) {
         case _DashboardMenu.dashboard: return _MobileDashboardHome(isDark: _isDark, userRole: userRole, onNavigate: _setSelectedMenu);
@@ -2426,9 +2446,9 @@ class _ScheduleLockSheetState extends State<_ScheduleLockSheet> {
                     Text('Lock From', style: GoogleFonts.outfit(fontSize: 11, color: subColor, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 6),
                     Row(children: [
-                      const Icon(Icons.access_time_rounded, color: Color(0xFF6366F1), size: 18),
-                      const SizedBox(width: 8),
-                      Text(_fmtTime(_startTime), style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: textColor)),
+                      const Icon(Icons.access_time_rounded, color: Color(0xFF6366F1), size: 16),
+                      const SizedBox(width: 6),
+                      Flexible(child: Text(_fmtTime(_startTime), style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: textColor), overflow: TextOverflow.ellipsis)),
                     ]),
                   ]),
                 ),
@@ -2443,9 +2463,9 @@ class _ScheduleLockSheetState extends State<_ScheduleLockSheet> {
                     Text('Unlock At', style: GoogleFonts.outfit(fontSize: 11, color: subColor, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 6),
                     Row(children: [
-                      const Icon(Icons.access_time_filled_rounded, color: Color(0xFF22C55E), size: 18),
-                      const SizedBox(width: 8),
-                      Text(_fmtTime(_endTime), style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: textColor)),
+                      const Icon(Icons.access_time_filled_rounded, color: Color(0xFF22C55E), size: 16),
+                      const SizedBox(width: 6),
+                      Flexible(child: Text(_fmtTime(_endTime), style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: textColor), overflow: TextOverflow.ellipsis)),
                     ]),
                   ]),
                 ),
@@ -3257,9 +3277,9 @@ class _AppBlockScheduleSheetState extends State<_AppBlockScheduleSheet> {
                         Text('Block From', style: GoogleFonts.outfit(fontSize: 11, color: subColor, fontWeight: FontWeight.w600)),
                         const SizedBox(height: 6),
                         Row(children: [
-                          const Icon(Icons.access_time_rounded, color: Color(0xFF6366F1), size: 18),
-                          const SizedBox(width: 8),
-                          Text(_fmt12(_startTime), style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: textColor)),
+                          const Icon(Icons.access_time_rounded, color: Color(0xFF6366F1), size: 16),
+                          const SizedBox(width: 6),
+                          Flexible(child: Text(_fmt12(_startTime), style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: textColor), overflow: TextOverflow.ellipsis)),
                         ]),
                       ]),
                     ),
@@ -3274,9 +3294,9 @@ class _AppBlockScheduleSheetState extends State<_AppBlockScheduleSheet> {
                         Text('Unblock At', style: GoogleFonts.outfit(fontSize: 11, color: subColor, fontWeight: FontWeight.w600)),
                         const SizedBox(height: 6),
                         Row(children: [
-                          const Icon(Icons.access_time_filled_rounded, color: Color(0xFF22C55E), size: 18),
-                          const SizedBox(width: 8),
-                          Text(_fmt12(_endTime), style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: textColor)),
+                          const Icon(Icons.access_time_filled_rounded, color: Color(0xFF22C55E), size: 16),
+                          const SizedBox(width: 6),
+                          Flexible(child: Text(_fmt12(_endTime), style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: textColor), overflow: TextOverflow.ellipsis)),
                         ]),
                       ]),
                     ),
@@ -4212,6 +4232,7 @@ class _MobileSubscriptionViewState extends State<_MobileSubscriptionView> {
                         if (blocked > 0) _bullet('$blocked Blocked Apps Allowed', color),
                         if (hidden > 0) _bullet('$hidden Hidden Apps Allowed', color),
                         if (hasTracking) _bullet('Realtime Tracking', color),
+                        ...((p['features'] as List?)?.map((f) => _bullet(f.toString(), color)) ?? []),
                         const SizedBox(height: 20),
                         if (!isCurrent)
                           GestureDetector(
@@ -8393,9 +8414,18 @@ class _SubscriptionView extends StatelessWidget {
 
     final devices = await FirebaseFirestore.instance.collection('devices').where('parentUid', isEqualTo: uid).get();
     for (var doc in devices.docs) {
-      if ((doc.data())['subscriptionActive'] != isActive) {
-         doc.reference.update({'subscriptionActive': isActive});
+      final data = doc.data();
+      final Map<String, dynamic> updates = {};
+      if (data['subscriptionActive'] != isActive) updates['subscriptionActive'] = isActive;
+      if (!isActive) {
+        final hasSchedules = (data['lockSchedules'] as List?)?.isNotEmpty == true;
+        final hasAppSchedules = (data['appSchedules'] as Map?)?.isNotEmpty == true;
+        final isLocked = data['locked'] == true;
+        if (hasSchedules) updates['lockSchedules'] = [];
+        if (hasAppSchedules) updates['appSchedules'] = {};
+        if (isLocked) updates['locked'] = false;
       }
+      if (updates.isNotEmpty) doc.reference.update(updates);
     }
   }
 
