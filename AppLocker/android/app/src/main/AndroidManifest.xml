@@ -48,14 +48,16 @@
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
-    <!-- Emergency calling from lock screen -->
-    <uses-permission android:name="android.permission.CALL_PHONE" />
-    
     <queries>
         <package android:name="android" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <!-- Allow opening the system phone dialer (no CALL_PHONE permission needed) -->
+        <intent>
+            <action android:name="android.intent.action.DIAL" />
+            <data android:scheme="tel" />
         </intent>
     </queries>
 
