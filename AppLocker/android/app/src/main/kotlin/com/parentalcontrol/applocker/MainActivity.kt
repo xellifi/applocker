@@ -17,6 +17,7 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     private val LOCK_CHANNEL = "com.parentalcontrol/lock"
     private var channel: MethodChannel? = null
+    private val REQ_DEVICE_ADMIN = 1001
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -83,21 +84,32 @@ class MainActivity : FlutterActivity() {
 
                 "requestAdminPermission" -> {
                     try {
-                        val intent = Intent(android.app.admin.DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
-                        val componentName = android.content.ComponentName(
-                            this,
-                            AppLockerAdminReceiver::class.java
-                        )
-                        intent.putExtra(android.app.admin.DevicePolicyManager.EXTRA_DEVICE_ADMIN, componentName)
-                        intent.putExtra(
-                            android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION,
-                            "AppLocker needs Device Admin to lock the screen when activated by parent."
-                        )
-                        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                        startActivity(intent)
-                        result.success(true)
+                        val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
+                        val componentName = android.content.ComponentName(this, AppLockerAdminReceiver::class.java)
+                        if (dpm.isAdminActive(componentName)) {
+                            // Already active — nothing to do
+                            result.success(true)
+                        } else {
+                            val intent = Intent(android.app.admin.DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
+                            intent.putExtra(android.app.admin.DevicePolicyManager.EXTRA_DEVICE_ADMIN, componentName)
+                            intent.putExtra(
+                                android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                                "AppLocker needs Device Admin to lock the screen when activated by parent."
+                            )
+                            // Do NOT set FLAG_ACTIVITY_NEW_TASK — we're already in an Activity
+                            // and that flag prevents the system dialog from showing properly.
+                            startActivityForResult(intent, REQ_DEVICE_ADMIN)
+                            result.success(true)
+                        }
                     } catch (e: Exception) {
-                        result.error("ADMIN_PERM_FAILED", e.message, null)
+                        // Last resort: open Security settings so user can enable manually
+                        try {
+                            val fallback = Intent(Settings.ACTION_SECURITY_SETTINGS)
+                            startActivity(fallback)
+                            result.success(false)
+                        } catch (e2: Exception) {
+                            result.error("ADMIN_PERM_FAILED", e.message, null)
+                        }
                     }
                 }
 
