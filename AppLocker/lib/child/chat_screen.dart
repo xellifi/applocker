@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../shared/firebase_service.dart';
 
 class ChildChatScreen extends StatefulWidget {
@@ -17,10 +18,56 @@ class _ChildChatScreenState extends State<ChildChatScreen> {
   final _scrollCtrl = ScrollController();
   bool _sending = false;
 
+  // Local clear: messages before this timestamp are hidden only on the child side
+  DateTime? _clearedAt;
+
+  String get _clearedAtKey => 'chat_cleared_at_${widget.deviceId}';
+
   @override
   void initState() {
     super.initState();
     FirebaseService.instance.markMessagesRead(widget.deviceId, 'parent');
+    _loadClearedAt();
+  }
+
+  Future<void> _loadClearedAt() async {
+    final prefs = await SharedPreferences.getInstance();
+    final ms = prefs.getInt(_clearedAtKey);
+    if (ms != null && mounted) {
+      setState(() => _clearedAt = DateTime.fromMillisecondsSinceEpoch(ms));
+    }
+  }
+
+  Future<void> _clearLocalHistory() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Clear Chat?',
+            style: TextStyle(fontWeight: FontWeight.w900, color: Colors.black)),
+        content: const Text(
+          'Messages will be hidden from your view only. Your parent will still be able to see the full history.',
+          style: TextStyle(color: Colors.black54, fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.black45)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Clear My View',
+                style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final now = DateTime.now();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_clearedAtKey, now.millisecondsSinceEpoch);
+    if (mounted) setState(() => _clearedAt = now);
   }
 
   @override
@@ -87,6 +134,13 @@ class _ChildChatScreenState extends State<ChildChatScreen> {
             ),
           ],
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.delete_sweep_rounded, color: Colors.black54),
+            tooltip: 'Clear my view',
+            onPressed: _clearLocalHistory,
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -99,7 +153,17 @@ class _ChildChatScreenState extends State<ChildChatScreen> {
                     child: CircularProgressIndicator(color: Colors.black54),
                   );
                 }
-                final docs = snapshot.data?.docs ?? [];
+                final allDocs = snapshot.data?.docs ?? [];
+                // Filter out messages before the local clear timestamp
+                final docs = _clearedAt == null
+                    ? allDocs
+                    : allDocs.where((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final ts = data['timestamp'] as Timestamp?;
+                        if (ts == null) return true;
+                        return ts.toDate().isAfter(_clearedAt!);
+                      }).toList();
+
                 if (docs.isEmpty) {
                   return const Center(
                     child: Padding(

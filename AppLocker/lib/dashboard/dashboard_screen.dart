@@ -2090,18 +2090,50 @@ class _MobileChatSheet extends StatefulWidget {
 class _MobileChatSheetState extends State<_MobileChatSheet> {
   final _ctrl = TextEditingController();
   final _scrollCtrl = ScrollController();
+  bool _clearing = false;
+
   @override
   void initState() {
     super.initState();
     FirebaseService.instance.markMessagesRead(widget.deviceId, 'child');
   }
+
   @override void dispose() { _ctrl.dispose(); _scrollCtrl.dispose(); super.dispose(); }
+
   Future<void> _send() async {
     final t = _ctrl.text.trim(); if (t.isEmpty) return; _ctrl.clear();
     await FirebaseService.instance.sendChatMessage(widget.deviceId, t, 'parent');
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollCtrl.hasClients) _scrollCtrl.animateTo(_scrollCtrl.position.maxScrollExtent, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
     });
+  }
+
+  Future<void> _clearChat() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: widget.isDark ? const Color(0xFF0F1A35) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Clear Chat History?', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: widget.isDark ? Colors.white : const Color(0xFF1E293B))),
+        content: Text('This will permanently delete all messages for both you and the child. This cannot be undone.', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 14, height: 1.5)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Cancel', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8)))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Clear All', style: GoogleFonts.outfit(color: const Color(0xFFEF4444), fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _clearing = true);
+    try {
+      await FirebaseService.instance.clearChatHistory(widget.deviceId);
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to clear chat.'), backgroundColor: Color(0xFFEF4444)));
+    } finally {
+      if (mounted) setState(() => _clearing = false);
+    }
   }
   @override
   Widget build(BuildContext context) {
@@ -2126,6 +2158,17 @@ class _MobileChatSheetState extends State<_MobileChatSheet> {
             const SizedBox(width: 14),
             Text('Chat Now', style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.white)),
             const Spacer(),
+            GestureDetector(
+              onTap: _clearing ? null : _clearChat,
+              child: Container(
+                width: 36, height: 36,
+                margin: const EdgeInsets.only(right: 8),
+                decoration: BoxDecoration(color: Colors.white.withOpacity(0.25), shape: BoxShape.circle),
+                child: _clearing
+                    ? const Padding(padding: EdgeInsets.all(9), child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.delete_sweep_rounded, color: Colors.white, size: 20),
+              ),
+            ),
             GestureDetector(
               onTap: () => Navigator.pop(context),
               child: Container(

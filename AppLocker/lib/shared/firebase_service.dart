@@ -782,4 +782,30 @@ class FirebaseService {
       debugPrint('//TEST: markMessagesRead error: $e');
     }
   }
+
+  /// Permanently deletes every message in the device's messages subcollection.
+  /// Called by the admin — clears chat history for BOTH sides.
+  Future<void> clearChatHistory(String deviceId) async {
+    try {
+      const batchSize = 400;
+      while (true) {
+        final snap = await _db
+            .collection('devices')
+            .doc(deviceId)
+            .collection('messages')
+            .limit(batchSize)
+            .get();
+        if (snap.docs.isEmpty) break;
+        final batch = _db.batch();
+        for (final doc in snap.docs) {
+          batch.delete(doc.reference);
+        }
+        await batch.commit();
+        if (snap.docs.length < batchSize) break;
+      }
+    } catch (e) {
+      debugPrint('clearChatHistory error: $e');
+      rethrow;
+    }
+  }
 }

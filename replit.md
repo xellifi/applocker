@@ -98,6 +98,8 @@ Configured as a static deployment:
 - **`_MobileDeviceListCard`** (My Devices page): Converted to `StatefulWidget`. Streams unread child message count; Chat button shows real badge count. Added reverse geocoding via Nominatim (OpenStreetMap) — shows suburb/city location label next to Online/Offline status.
 - **`_DevActCircle`**: Updated `badge: true` → `badgeCount: int` so the badge shows the actual unread count number.
 - **Chat read state**: `_MobileChatSheetState.initState` now calls `markMessagesRead(deviceId, 'child')` so badges clear when parent opens chat.
+- **Admin clear chat**: Trash icon (`delete_sweep`) in the admin chat header opens a confirm dialog, then calls `FirebaseService.clearChatHistory()` which batch-deletes all messages from Firestore (clears for both sides permanently).
+- **Child clear chat**: Trash icon in the child `ChildChatScreen` AppBar saves the current timestamp to SharedPreferences (`chat_cleared_at_{deviceId}`). The StreamBuilder filters out messages with timestamps before that stored time — visible only on the child's device; admin still sees full history.
 
 ## Recent Dashboard Bug Fixes & Enhancements (April 2026)
 1. **My Devices**: Added remove device button to mobile device list cards
