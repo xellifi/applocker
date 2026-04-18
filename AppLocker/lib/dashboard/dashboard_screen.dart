@@ -4013,6 +4013,10 @@ class _MobileSubscriptionViewState extends State<_MobileSubscriptionView> {
     final colorCtrl   = TextEditingController(text: existing?['color'] ?? '0xFF6366F1');
     final List<TextEditingController> featureCtrls = ((existing?['features'] as List?) ?? ['']).map((f) => TextEditingController(text: f.toString())).toList();
 
+    String durationUnit = existing?['durationUnit'] ?? 'months';
+    int durationValue   = existing?['durationValue'] ?? 1;
+    final durValueCtrl  = TextEditingController(text: durationValue.toString());
+
     Widget field(String label, TextEditingController ctrl, {bool isNum = false}) => Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: TextField(
@@ -4035,14 +4039,66 @@ class _MobileSubscriptionViewState extends State<_MobileSubscriptionView> {
           title: Text(id == null ? 'Create New Plan' : 'Edit Plan', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: textColor)),
           content: SizedBox(
             width: 380,
-            child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+            child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
               field('Plan Name', nameCtrl),
-              field(r'Monthly Price ($)', priceCtrl, isNum: true),
+              field(r'Price ($)', priceCtrl, isNum: true),
               field('Max Devices', limitCtrl, isNum: true),
               field('Max Blocked Apps', blockedCtrl, isNum: true),
               field('Max Hidden Apps', hiddenCtrl, isNum: true),
               field('Hex Color (e.g. 0xFF6366F1)', colorCtrl),
+              const SizedBox(height: 4),
+              Text('PLAN DURATION', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF94A3B8), letterSpacing: 1.5)),
               const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(border: Border.all(color: borderColor.withOpacity(0.5)), borderRadius: BorderRadius.circular(12), color: cardColor),
+                child: DropdownButton<String>(
+                  value: durationUnit,
+                  isExpanded: true,
+                  underline: const SizedBox(),
+                  dropdownColor: cardColor,
+                  style: GoogleFonts.outfit(color: textColor, fontSize: 14),
+                  items: const [
+                    DropdownMenuItem(value: 'days',     child: Text('Days (1–30)')),
+                    DropdownMenuItem(value: 'months',   child: Text('Months')),
+                    DropdownMenuItem(value: 'years',    child: Text('Years')),
+                    DropdownMenuItem(value: 'lifetime', child: Text('Lifetime')),
+                  ],
+                  onChanged: (v) { if (v != null) setS(() { durationUnit = v; durationValue = 1; durValueCtrl.text = '1'; }); },
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (durationUnit == 'days') ...[
+                Text('SELECT DAYS', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF94A3B8), letterSpacing: 1.4)),
+                const SizedBox(height: 8),
+                Wrap(spacing: 6, runSpacing: 6, children: List.generate(30, (i) {
+                  final v = i + 1; final sel = durationValue == v;
+                  return GestureDetector(
+                    onTap: () => setS(() { durationValue = v; durValueCtrl.text = v.toString(); }),
+                    child: Container(
+                      width: 38, height: 34,
+                      decoration: BoxDecoration(
+                        color: sel ? const Color(0xFF6366F1) : const Color(0xFF6366F1).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFF6366F1).withOpacity(sel ? 1 : 0.3)),
+                      ),
+                      child: Center(child: Text('$v', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w700, color: sel ? Colors.white : const Color(0xFF6366F1)))),
+                    ),
+                  );
+                })),
+              ] else if (durationUnit == 'lifetime')
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: const Color(0xFFFBBF24).withOpacity(0.1), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFFBBF24).withOpacity(0.4))),
+                  child: Row(children: [
+                    const Icon(Icons.all_inclusive_rounded, color: Color(0xFFFBBF24), size: 20),
+                    const SizedBox(width: 8),
+                    Text('Access never expires', style: GoogleFonts.outfit(color: const Color(0xFFFBBF24), fontWeight: FontWeight.w700, fontSize: 13)),
+                  ]),
+                )
+              else
+                field(durationUnit == 'months' ? 'Number of Months' : 'Number of Years', durValueCtrl, isNum: true),
+              const SizedBox(height: 12),
               Row(children: [
                 Text('FEATURES', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF94A3B8), letterSpacing: 1.5)),
                 const Spacer(),
@@ -4063,6 +4119,7 @@ class _MobileSubscriptionViewState extends State<_MobileSubscriptionView> {
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6366F1), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
               onPressed: () async {
                 if (nameCtrl.text.trim().isEmpty) return;
+                final parsedDurValue = durationUnit == 'lifetime' ? 0 : (int.tryParse(durValueCtrl.text) ?? durationValue).clamp(1, durationUnit == 'days' ? 30 : 999);
                 final planData = {
                   'name': nameCtrl.text.trim(),
                   'price': double.tryParse(priceCtrl.text) ?? 0.0,
@@ -4071,6 +4128,8 @@ class _MobileSubscriptionViewState extends State<_MobileSubscriptionView> {
                   'hiddenAppsLimit': int.tryParse(hiddenCtrl.text) ?? 0,
                   'features': featureCtrls.map((c) => c.text.trim()).where((s) => s.isNotEmpty).toList(),
                   'color': colorCtrl.text.trim(),
+                  'durationUnit': durationUnit,
+                  'durationValue': parsedDurValue,
                 };
                 if (id == null) {
                   await FirebaseFirestore.instance.collection('plans').doc(nameCtrl.text.trim().toLowerCase()).set(planData);
@@ -8383,14 +8442,18 @@ class _SubscriptionView extends StatelessWidget {
   }
 
   void _showPlanDialog(BuildContext context, {String? id, Map<String, dynamic>? existing}) {
-    final nameCtrl = TextEditingController(text: existing?['name']);
-    final priceCtrl = TextEditingController(text: existing?['price']);
-    final limitCtrl = TextEditingController(text: existing?['deviceLimit']);
+    final nameCtrl    = TextEditingController(text: existing?['name']);
+    final priceCtrl   = TextEditingController(text: (existing?['price'] ?? '').toString());
+    final limitCtrl   = TextEditingController(text: (existing?['deviceLimit'] ?? '').toString());
     final blockedCtrl = TextEditingController(text: (existing?['blockedAppsLimit'] ?? '5').toString());
-    final hiddenCtrl = TextEditingController(text: (existing?['hiddenAppsLimit'] ?? '2').toString());
+    final hiddenCtrl  = TextEditingController(text: (existing?['hiddenAppsLimit'] ?? '2').toString());
+    final colorCtrl   = TextEditingController(text: existing?['color'] ?? '0xFF6366F1');
     final List<TextEditingController> featureCtrls = (existing?['features'] as List? ?? [''])
         .map((f) => TextEditingController(text: f.toString())).toList();
-    final colorCtrl = TextEditingController(text: existing?['color'] ?? '0xFF6366F1');
+
+    String durationUnit = existing?['durationUnit'] ?? 'months';
+    int durationValue   = existing?['durationValue'] ?? 1;
+    final durValueCtrl  = TextEditingController(text: durationValue.toString());
 
     showDialog(
       context: context,
@@ -8402,14 +8465,68 @@ class _SubscriptionView extends StatelessWidget {
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildField('Plan Name', nameCtrl),
-                _buildField(r'Monthly Price ($)', priceCtrl, isNum: true),
+                _buildField(r'Price ($)', priceCtrl, isNum: true),
                 _buildField('Max Devices', limitCtrl, isNum: true),
                 _buildField('Max Blocked Apps', blockedCtrl, isNum: true),
                 _buildField('Max Hidden Apps', hiddenCtrl, isNum: true),
-                
-                const SizedBox(height: 16),
+                _buildField('Hex Color (e.g. 0xFF6366F1)', colorCtrl),
+
+                Text('PLAN DURATION', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF94A3B8), letterSpacing: 1.5)),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(border: Border.all(color: borderColor.withOpacity(0.3)), borderRadius: BorderRadius.circular(12), color: cardColor),
+                  child: DropdownButton<String>(
+                    value: durationUnit,
+                    isExpanded: true,
+                    underline: const SizedBox(),
+                    dropdownColor: cardColor,
+                    style: GoogleFonts.outfit(color: textColor, fontSize: 14),
+                    items: const [
+                      DropdownMenuItem(value: 'days',     child: Text('Days (1–30)')),
+                      DropdownMenuItem(value: 'months',   child: Text('Months')),
+                      DropdownMenuItem(value: 'years',    child: Text('Years')),
+                      DropdownMenuItem(value: 'lifetime', child: Text('Lifetime')),
+                    ],
+                    onChanged: (v) { if (v != null) setDialogState(() { durationUnit = v; durationValue = 1; durValueCtrl.text = '1'; }); },
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (durationUnit == 'days') ...[
+                  Text('SELECT DAYS', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF94A3B8), letterSpacing: 1.4)),
+                  const SizedBox(height: 8),
+                  Wrap(spacing: 6, runSpacing: 6, children: List.generate(30, (i) {
+                    final v = i + 1; final sel = durationValue == v;
+                    return GestureDetector(
+                      onTap: () => setDialogState(() { durationValue = v; durValueCtrl.text = v.toString(); }),
+                      child: Container(
+                        width: 40, height: 36,
+                        decoration: BoxDecoration(
+                          color: sel ? const Color(0xFF6366F1) : const Color(0xFF6366F1).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFF6366F1).withOpacity(sel ? 1 : 0.3)),
+                        ),
+                        child: Center(child: Text('$v', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: sel ? Colors.white : const Color(0xFF6366F1)))),
+                      ),
+                    );
+                  })),
+                ] else if (durationUnit == 'lifetime')
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: const Color(0xFFFBBF24).withOpacity(0.1), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFFBBF24).withOpacity(0.4))),
+                    child: Row(children: [
+                      const Icon(Icons.all_inclusive_rounded, color: Color(0xFFFBBF24), size: 20),
+                      const SizedBox(width: 8),
+                      Text('Access never expires', style: GoogleFonts.outfit(color: const Color(0xFFFBBF24), fontWeight: FontWeight.w700, fontSize: 13)),
+                    ]),
+                  )
+                else
+                  _buildField(durationUnit == 'months' ? 'Number of Months' : 'Number of Years', durValueCtrl, isNum: true),
+
+                const SizedBox(height: 4),
                 Row(
                   children: [
                     Text('FEATURES', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF94A3B8), letterSpacing: 1.5)),
@@ -8421,23 +8538,18 @@ class _SubscriptionView extends StatelessWidget {
                   ],
                 ),
                 ...featureCtrls.asMap().entries.map((entry) {
-                  int idx = entry.key;
-                  var ctrl = entry.value;
+                  int idx = entry.key; var ctrl = entry.value;
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 8),
-                    child: Row(
-                      children: [
-                        Expanded(child: _buildField('Feature ${idx + 1}', ctrl)),
-                        IconButton(
-                          onPressed: () => setDialogState(() => featureCtrls.removeAt(idx)),
-                          icon: const Icon(Icons.remove_circle_outline_rounded, size: 20, color: Colors.redAccent),
-                        ),
-                      ],
-                    ),
+                    child: Row(children: [
+                      Expanded(child: _buildField('Feature ${idx + 1}', ctrl)),
+                      IconButton(
+                        onPressed: () => setDialogState(() => featureCtrls.removeAt(idx)),
+                        icon: const Icon(Icons.remove_circle_outline_rounded, size: 20, color: Colors.redAccent),
+                      ),
+                    ]),
                   );
                 }).toList(),
-
-                _buildField('Hex Color (e.g. 0xFF6366F1)', colorCtrl),
               ],
             ),
           ),
@@ -8445,6 +8557,7 @@ class _SubscriptionView extends StatelessWidget {
             TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8)))),
             ElevatedButton(
               onPressed: () async {
+                final parsedDurValue = durationUnit == 'lifetime' ? 0 : (int.tryParse(durValueCtrl.text) ?? durationValue).clamp(1, durationUnit == 'days' ? 30 : 999);
                 final planData = {
                   'name': nameCtrl.text.trim(),
                   'price': double.tryParse(priceCtrl.text) ?? 0.0,
@@ -8453,6 +8566,8 @@ class _SubscriptionView extends StatelessWidget {
                   'hiddenAppsLimit': int.tryParse(hiddenCtrl.text) ?? 0,
                   'features': featureCtrls.map((c) => c.text.trim()).where((s) => s.isNotEmpty).toList(),
                   'color': colorCtrl.text.trim(),
+                  'durationUnit': durationUnit,
+                  'durationValue': parsedDurValue,
                 };
                 if (id == null) {
                   await FirebaseFirestore.instance.collection('plans').doc(nameCtrl.text.trim().toLowerCase()).set(planData);
