@@ -59,8 +59,6 @@ class LockOverlayService : Service() {
     private var chatMessagesLayout: LinearLayout? = null
     private var chatScrollView: ScrollView? = null
 
-    // Keyboard detection listener (removed when chat panel closes)
-    private var keyboardListener: ViewTreeObserver.OnGlobalLayoutListener? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -516,8 +514,6 @@ class LockOverlayService : Service() {
             isClickable = true; isFocusable = true
         }
         closeBtn.setOnClickListener {
-            keyboardListener?.let { overlayView?.viewTreeObserver?.removeOnGlobalLayoutListener(it) }
-            keyboardListener = null
             chatListener?.remove(); chatListener = null
             root.removeView(panel)
             makeUnfocusable()
@@ -649,24 +645,6 @@ class LockOverlayService : Service() {
 
         panel.addView(card)
         root.addView(panel)
-
-        // ── Keyboard-aware layout: adjust card bottom margin when keyboard appears
-        keyboardListener?.let { overlayView?.viewTreeObserver?.removeOnGlobalLayoutListener(it) }
-        keyboardListener = ViewTreeObserver.OnGlobalLayoutListener {
-            val r = android.graphics.Rect()
-            overlayView?.getWindowVisibleDisplayFrame(r)
-            val rootH = overlayView?.height ?: return@OnGlobalLayoutListener
-            val kbH = rootH - r.bottom
-            val cardLp = card.layoutParams as FrameLayout.LayoutParams
-            val newBot = if (kbH > dp(100)) kbH + dp(8) else dp(15)
-            if (cardLp.bottomMargin != newBot) {
-                cardLp.setMargins(dp(15), dp(50), dp(15), newBot)
-                card.layoutParams = cardLp
-                // Scroll to bottom of messages when keyboard opens
-                msgScroll.post { msgScroll.fullScroll(View.FOCUS_DOWN) }
-            }
-        }
-        overlayView?.viewTreeObserver?.addOnGlobalLayoutListener(keyboardListener)
 
         // Request focus on input box + show keyboard after layout settles
         inputBox.postDelayed({
@@ -962,22 +940,7 @@ class LockOverlayService : Service() {
         panel.addView(card)
         root.addView(panel)
 
-        // Keyboard listener for SMS panel
-        val smsKbListener = ViewTreeObserver.OnGlobalLayoutListener {
-            val r = android.graphics.Rect()
-            overlayView?.getWindowVisibleDisplayFrame(r)
-            val rootH = overlayView?.height ?: return@OnGlobalLayoutListener
-            val kbH = rootH - r.bottom
-            val cardLp = card.layoutParams as FrameLayout.LayoutParams
-            val newBot = if (kbH > dp(100)) kbH else 0
-            if (cardLp.bottomMargin != newBot) {
-                cardLp.bottomMargin = newBot
-                card.layoutParams = cardLp
-            }
-        }
-        overlayView?.viewTreeObserver?.addOnGlobalLayoutListener(smsKbListener)
         closeSmsBtn.setOnClickListener {
-            overlayView?.viewTreeObserver?.removeOnGlobalLayoutListener(smsKbListener)
             root.removeView(panel); makeUnfocusable()
         }
 
@@ -1104,7 +1067,10 @@ class LockOverlayService : Service() {
     private fun makeFocusable() {
         try {
             val params = overlayView?.layoutParams as? WindowManager.LayoutParams ?: return
+            // Remove FLAG_NOT_FOCUSABLE so keyboard can appear
             params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
+            // Remove FLAG_LAYOUT_NO_LIMITS so SOFT_INPUT_ADJUST_RESIZE can shrink the window
+            params.flags = params.flags and WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS.inv()
             @Suppress("DEPRECATION")
             params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE or
                 WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE
@@ -1116,6 +1082,8 @@ class LockOverlayService : Service() {
         try {
             val params = overlayView?.layoutParams as? WindowManager.LayoutParams ?: return
             params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+            // Restore FLAG_LAYOUT_NO_LIMITS for edge-to-edge lock screen
+            params.flags = params.flags or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
             params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN
             windowManager?.updateViewLayout(overlayView, params)
             val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
