@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "AppLocker - Parent Control",
-  "short_name": "AppLocker",
+  "name": "AppLocker Admin",
+  "short_name": "AppLocker Admin",
   "description": "Monitor and control your child's device remotely",
   "start_url": "/",
   "display": "standalone",

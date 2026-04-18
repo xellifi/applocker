@@ -13,15 +13,15 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="AppLocker">
+  <meta name="apple-mobile-web-app-title" content="AppLocker Admin">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Open Graph -->
-  <meta property="og:title" content="AppLocker - Parent Control">
+  <meta property="og:title" content="AppLocker Admin">
   <meta property="og:description" content="Premium Parental Control & Device Management">
   <meta property="og:type" content="website">
 
-  <title>AppLocker - Parent Dashboard</title>
+  <title>AppLocker Admin</title>
   <link rel="manifest" href="manifest.json">
 
   <!-- Favicon -->
@@ -270,99 +270,23 @@
   </div>
 
   <script>
-    function hideLoading() {
-      var el = document.getElementById('loading');
-      if (el) {
-        el.style.opacity = '0';
-        setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 500);
-      }
-    }
-    // Flutter fires this event on its very first rendered frame
-    window.addEventListener('flutter-first-frame', hideLoading);
-    // Hard fallback — never block the user longer than 8 seconds
-    setTimeout(hideLoading, 8000);
-  </script>
-
-  <!-- Pull-to-refresh: Flutter's CanvasKit captures touch events so we handle
-       pull-down-from-top at the document level and trigger a reload. -->
-  <style>
-    #ptr-indicator {
-      position: fixed;
-      top: 0; left: 0; right: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 0;
-      overflow: hidden;
-      background: linear-gradient(180deg, rgba(99,102,241,0.18) 0%, transparent 100%);
-      z-index: 99998;
-      transition: height 0.15s ease;
-      pointer-events: none;
-    }
-    #ptr-indicator .ptr-spinner {
-      width: 28px; height: 28px;
-      border: 3px solid rgba(99,102,241,0.2);
-      border-top-color: #6366F1;
-      border-radius: 50%;
-      opacity: 0;
-      transition: opacity 0.2s;
-    }
-    #ptr-indicator.ptr-ready .ptr-spinner {
-      opacity: 1;
-      animation: ptr-spin 0.8s linear infinite;
-    }
-    #ptr-indicator.ptr-loading .ptr-spinner {
-      opacity: 1;
-      animation: ptr-spin 0.5s linear infinite;
-    }
-    @keyframes ptr-spin { to { transform: rotate(360deg); } }
-  </style>
-  <div id="ptr-indicator"><div class="ptr-spinner"></div></div>
-  <script>
     (function () {
-      var indicator = document.getElementById('ptr-indicator');
-      var startY = 0;
-      var currentY = 0;
-      var pulling = false;
-      var threshold = 90;
-      var maxPull = 130;
-      var reloading = false;
-
-      document.addEventListener('touchstart', function (e) {
-        if (reloading) return;
-        startY = e.touches[0].clientY;
-        pulling = true;
-      }, { passive: true });
-
-      document.addEventListener('touchmove', function (e) {
-        if (!pulling || reloading) return;
-        currentY = e.touches[0].clientY;
-        var delta = currentY - startY;
-        if (delta <= 0) { indicator.style.height = '0px'; return; }
-        var pull = Math.min(delta * 0.5, maxPull);
-        indicator.style.height = pull + 'px';
-        if (pull >= threshold * 0.5) {
-          indicator.classList.add('ptr-ready');
-        } else {
-          indicator.classList.remove('ptr-ready');
+      function hideLoading() {
+        var el = document.getElementById('loading');
+        if (el) {
+          el.style.opacity = '0';
+          setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 500);
         }
-      }, { passive: true });
-
-      document.addEventListener('touchend', function (e) {
-        if (!pulling || reloading) return;
-        pulling = false;
-        var delta = currentY - startY;
-        if (delta * 0.5 >= threshold * 0.5) {
-          reloading = true;
-          indicator.style.height = '56px';
-          indicator.classList.remove('ptr-ready');
-          indicator.classList.add('ptr-loading');
-          setTimeout(function () { window.location.reload(); }, 400);
-        } else {
-          indicator.style.height = '0px';
-          indicator.classList.remove('ptr-ready');
-        }
-      }, { passive: true });
+      }
+      // If the user was previously logged in, skip the splash entirely
+      if (localStorage.getItem('applocker_logged_in') === 'true') {
+        var el = document.getElementById('loading');
+        if (el) el.style.display = 'none';
+      }
+      // Flutter fires this event on its very first rendered frame
+      window.addEventListener('flutter-first-frame', hideLoading);
+      // Hard fallback — never block the user longer than 8 seconds
+      setTimeout(hideLoading, 8000);
     })();
   </script>
 

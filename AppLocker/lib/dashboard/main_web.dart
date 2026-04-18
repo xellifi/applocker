@@ -212,7 +212,7 @@ class _ParentDashboardAppState extends State<ParentDashboardApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'AppLocker Admin Dashboard',
+      title: 'AppLocker Admin',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
@@ -285,7 +285,11 @@ class _AppShellState extends State<_AppShell> {
             ),
           );
         }
-        if (!snapshot.hasData) return const LoginScreen();
+        if (!snapshot.hasData) {
+          html.window.localStorage.remove('applocker_logged_in');
+          return const LoginScreen();
+        }
+        html.window.localStorage['applocker_logged_in'] = 'true';
         return const DashboardScreen();
       },
     );
