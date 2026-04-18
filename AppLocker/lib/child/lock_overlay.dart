@@ -187,8 +187,10 @@ class _LockOverlayState extends State<LockOverlay>
   // ── Chat Dialog ────────────────────────────────────────────────────────────
   void _showChatDialog() {
     FirebaseService.instance.markMessagesRead(widget.deviceId, 'parent');
-    showDialog(
+    showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       barrierColor: Colors.black.withOpacity(0.65),
       builder: (ctx) => _ChildChatDialog(deviceId: widget.deviceId),
     );
@@ -480,12 +482,23 @@ class _ChildChatDialog extends StatefulWidget {
 class _ChildChatDialogState extends State<_ChildChatDialog> {
   final _msgCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
+  final _focusNode = FocusNode();
   bool _sending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Scroll to bottom whenever keyboard appears/disappears
+    _focusNode.addListener(() {
+      if (_focusNode.hasFocus) _scrollToBottom();
+    });
+  }
 
   @override
   void dispose() {
     _msgCtrl.dispose();
     _scrollCtrl.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -506,287 +519,280 @@ class _ChildChatDialogState extends State<_ChildChatDialog> {
     if (text.isEmpty || _sending) return;
     setState(() => _sending = true);
     _msgCtrl.clear();
+    _focusNode.requestFocus();
     try {
       await FirebaseService.instance
           .sendChatMessage(widget.deviceId, text, 'child');
       _scrollToBottom();
-    } catch (_) {} finally {
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to send. Please try again.')),
+        );
+      }
+    } finally {
       if (mounted) setState(() => _sending = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 40),
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 440),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.25),
-              blurRadius: 30,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // ── Header ──
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              decoration: const BoxDecoration(
-                color: Color(0xFFFBBC05),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.chat_bubble_outline_rounded,
-                      color: Colors.white, size: 30),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Text(
-                      'Chat Now',
-                      style: TextStyle(
-                        color: Colors.black,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: () => Navigator.of(context, rootNavigator: true).pop(),
-                    child: Container(
-                      width: 36,
-                      height: 36,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFEF4444),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.close_rounded,
-                          color: Colors.white, size: 20),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final screenHeight = MediaQuery.of(context).size.height;
 
-            // ── Messages ──
-            Container(
-              height: 340,
-              color: Colors.white,
-              child: StreamBuilder<QuerySnapshot>(
-                stream: FirebaseService.instance.streamChatMessages(widget.deviceId),
-                builder: (context, snapshot) {
-                  final docs = snapshot.data?.docs ?? [];
-                  if (docs.isNotEmpty) _scrollToBottom();
-                  if (docs.isEmpty) {
-                    return const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(24),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text('💬', style: TextStyle(fontSize: 36)),
-                            SizedBox(height: 8),
-                            Text(
-                              'No messages yet.\nSend your parent a message!',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: Color(0xFF94A3B8),
-                                fontSize: 13,
-                                height: 1.5,
+    return Container(
+      height: screenHeight * 0.85,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        children: [
+          // ── Drag handle ──
+          Container(
+            margin: const EdgeInsets.only(top: 10, bottom: 4),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+
+          // ── Header ──
+          Container(
+            padding: const EdgeInsets.fromLTRB(20, 10, 16, 14),
+            decoration: const BoxDecoration(
+              color: Color(0xFFFBBC05),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.chat_bubble_outline_rounded,
+                    color: Colors.black, size: 26),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'Chat with Parent',
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => Navigator.of(context).pop(),
+                  child: Container(
+                    width: 34,
+                    height: 34,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFEF4444),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.close_rounded,
+                        color: Colors.white, size: 18),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // ── Messages ──
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseService.instance
+                  .streamChatMessages(widget.deviceId),
+              builder: (context, snapshot) {
+                final docs = snapshot.data?.docs ?? [];
+                if (docs.isNotEmpty) _scrollToBottom();
+                if (docs.isEmpty) {
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('💬', style: TextStyle(fontSize: 40)),
+                          SizedBox(height: 10),
+                          Text(
+                            'No messages yet.\nSend your parent a message!',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Color(0xFF94A3B8),
+                              fontSize: 14,
+                              height: 1.6,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+                return ListView.builder(
+                  controller: _scrollCtrl,
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+                  itemCount: docs.length,
+                  itemBuilder: (context, i) {
+                    final data = docs[i].data() as Map<String, dynamic>;
+                    final isChild = data['sender'] == 'child';
+                    final msgText = data['text'] as String? ?? '';
+                    final ts = data['timestamp'] as Timestamp?;
+                    final timeStr =
+                        ts != null ? _formatTime(ts.toDate()) : '';
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: Row(
+                        mainAxisAlignment: isChild
+                            ? MainAxisAlignment.end
+                            : MainAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          if (!isChild) ...[
+                            Container(
+                              width: 30,
+                              height: 30,
+                              margin: const EdgeInsets.only(right: 8, bottom: 2),
+                              decoration: const BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Color(0xFFFBBC05),
+                              ),
+                              child: const Center(
+                                child: Text('👨‍👩‍👦',
+                                    style: TextStyle(fontSize: 14)),
                               ),
                             ),
                           ],
-                        ),
+                          Flexible(
+                            child: Column(
+                              crossAxisAlignment: isChild
+                                  ? CrossAxisAlignment.end
+                                  : CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 14, vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: isChild
+                                        ? const Color(0xFF7C3AED)
+                                        : const Color(0xFFF3F4F6),
+                                    borderRadius: BorderRadius.only(
+                                      topLeft: const Radius.circular(18),
+                                      topRight: const Radius.circular(18),
+                                      bottomLeft: isChild
+                                          ? const Radius.circular(18)
+                                          : const Radius.circular(4),
+                                      bottomRight: isChild
+                                          ? const Radius.circular(4)
+                                          : const Radius.circular(18),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    msgText,
+                                    style: TextStyle(
+                                      color: isChild
+                                          ? Colors.white
+                                          : const Color(0xFF1E293B),
+                                      fontSize: 14,
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                ),
+                                if (timeStr.isNotEmpty)
+                                  Padding(
+                                    padding: EdgeInsets.only(
+                                      top: 4,
+                                      left: isChild ? 0 : 4,
+                                      right: isChild ? 4 : 0,
+                                    ),
+                                    child: Text(
+                                      timeStr,
+                                      style: const TextStyle(
+                                          color: Color(0xFF94A3B8),
+                                          fontSize: 11),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     );
-                  }
-                  return ListView.builder(
-                    controller: _scrollCtrl,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    itemCount: docs.length,
-                    itemBuilder: (context, i) {
-                      final data = docs[i].data() as Map<String, dynamic>;
-                      final isChild = data['sender'] == 'child';
-                      final text = data['text'] as String? ?? '';
-                      final ts = data['timestamp'] as Timestamp?;
-                      final timeStr = ts != null ? _formatTime(ts.toDate()) : '';
-
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 14),
-                        child: Row(
-                          mainAxisAlignment: isChild
-                              ? MainAxisAlignment.start
-                              : MainAxisAlignment.end,
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            if (isChild) ...[
-                              Flexible(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 16, vertical: 12),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFFFF9E6),
-                                        borderRadius: const BorderRadius.only(
-                                          topLeft: Radius.circular(18),
-                                          topRight: Radius.circular(18),
-                                          bottomRight: Radius.circular(18),
-                                          bottomLeft: Radius.circular(4),
-                                        ),
-                                        border: Border.all(
-                                            color: const Color(0xFFE5D9B6),
-                                            width: 1),
-                                      ),
-                                      child: Text(
-                                        text,
-                                        style: const TextStyle(
-                                          color: Color(0xFF1E293B),
-                                          fontSize: 14,
-                                          height: 1.5,
-                                        ),
-                                      ),
-                                    ),
-                                    if (timeStr.isNotEmpty)
-                                      Padding(
-                                        padding:
-                                            const EdgeInsets.only(top: 4, left: 4),
-                                        child: Text(
-                                          timeStr,
-                                          style: const TextStyle(
-                                              color: Color(0xFF94A3B8),
-                                              fontSize: 11),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ] else ...[
-                              Flexible(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 16, vertical: 12),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFEEEBF8),
-                                        borderRadius: const BorderRadius.only(
-                                          topLeft: Radius.circular(18),
-                                          topRight: Radius.circular(18),
-                                          bottomLeft: Radius.circular(18),
-                                          bottomRight: Radius.circular(4),
-                                        ),
-                                        border: Border.all(
-                                            color: const Color(0xFFD4CEED),
-                                            width: 1),
-                                      ),
-                                      child: Text(
-                                        text,
-                                        style: const TextStyle(
-                                          color: Color(0xFF1E293B),
-                                          fontSize: 14,
-                                          height: 1.5,
-                                        ),
-                                      ),
-                                    ),
-                                    if (timeStr.isNotEmpty)
-                                      Padding(
-                                        padding:
-                                            const EdgeInsets.only(top: 4, right: 4),
-                                        child: Text(
-                                          timeStr,
-                                          style: const TextStyle(
-                                              color: Color(0xFF94A3B8),
-                                              fontSize: 11),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      );
-                    },
-                  );
-                },
-              ),
+                  },
+                );
+              },
             ),
+          ),
 
-            // ── Input ──
-            Container(
-              padding: const EdgeInsets.fromLTRB(14, 10, 14, 16),
+          // ── Input bar — pinned above keyboard ──
+          AnimatedPadding(
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOut,
+            padding: EdgeInsets.only(bottom: bottomInset),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius:
-                    const BorderRadius.vertical(bottom: Radius.circular(20)),
                 border: Border(
                     top: BorderSide(color: Colors.grey.shade200, width: 1)),
               ),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Expanded(
                     child: Container(
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(28),
-                        border:
-                            Border.all(color: Colors.grey.shade300, width: 1.2),
+                        color: const Color(0xFFF3F4F6),
+                        borderRadius: BorderRadius.circular(24),
                       ),
                       child: TextField(
                         controller: _msgCtrl,
-                        keyboardType: TextInputType.multiline,
-                        maxLines: 3,
+                        focusNode: _focusNode,
+                        keyboardType: TextInputType.text,
+                        textInputAction: TextInputAction.send,
+                        maxLines: 4,
                         minLines: 1,
                         style: const TextStyle(
-                            color: Color(0xFF1E293B),
-                            fontSize: 14),
+                            color: Color(0xFF1E293B), fontSize: 14),
                         decoration: const InputDecoration(
                           hintText: 'Type a message...',
-                          hintStyle:
-                              TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
+                          hintStyle: TextStyle(
+                              color: Color(0xFF94A3B8), fontSize: 14),
                           border: InputBorder.none,
                           contentPadding: EdgeInsets.symmetric(
-                              horizontal: 18, vertical: 12),
+                              horizontal: 16, vertical: 10),
                         ),
                         onSubmitted: (_) => _send(),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
                   GestureDetector(
                     onTap: _send,
                     child: Container(
-                      width: 50,
-                      height: 50,
+                      width: 46,
+                      height: 46,
                       decoration: const BoxDecoration(
                         color: Color(0xFF7C3AED),
                         shape: BoxShape.circle,
                       ),
                       child: _sending
                           ? const Padding(
-                              padding: EdgeInsets.all(13),
+                              padding: EdgeInsets.all(12),
                               child: CircularProgressIndicator(
                                   strokeWidth: 2, color: Colors.white),
                             )
                           : const Icon(Icons.send_rounded,
-                              color: Colors.white, size: 22),
+                              color: Colors.white, size: 20),
                     ),
                   ),
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -796,9 +802,8 @@ class _ChildChatDialogState extends State<_ChildChatDialog> {
     final isToday =
         dt.year == now.year && dt.month == now.month && dt.day == now.day;
     if (isToday) {
-      final h = dt.hour > 12
-          ? dt.hour - 12
-          : (dt.hour == 0 ? 12 : dt.hour);
+      final h =
+          dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
       final m = dt.minute.toString().padLeft(2, '0');
       final ampm = dt.hour >= 12 ? 'PM' : 'AM';
       return '$h:$m $ampm';
@@ -807,7 +812,8 @@ class _ChildChatDialogState extends State<_ChildChatDialog> {
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
     ];
-    final h = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
+    final h =
+        dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
     final m = dt.minute.toString().padLeft(2, '0');
     final ampm = dt.hour >= 12 ? 'PM' : 'AM';
     return '${months[dt.month - 1]} ${dt.day}, ${dt.year} $h:$m $ampm';
