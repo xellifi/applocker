@@ -159,6 +159,7 @@ class LockOverlayService : Service() {
 
     private fun createOverlayView(): View {
         val ctx = this
+        val prefs = getSharedPreferences("applocker_local_settings", Context.MODE_PRIVATE)
 
         // ── Root: amber background, full screen
         val root = FrameLayout(ctx).apply {
@@ -275,7 +276,6 @@ class LockOverlayService : Service() {
         content.addView(spacer(20))
 
         // ── LOCKED headline
-        val prefs = getSharedPreferences("applocker_local_settings", Context.MODE_PRIVATE)
         content.addView(TextView(ctx).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
