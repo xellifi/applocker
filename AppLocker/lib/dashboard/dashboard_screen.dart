@@ -4294,7 +4294,7 @@ class _MobileSubscriptionViewState extends State<_MobileSubscriptionView> {
                           RichText(text: TextSpan(children: [
                             TextSpan(text: '\$', style: GoogleFonts.outfit(fontSize: 11, color: textColor, fontWeight: FontWeight.w700)),
                             TextSpan(text: '$price', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: textColor)),
-                            TextSpan(text: isLifetime ? '\none-time' : '\n/mo', style: GoogleFonts.outfit(fontSize: 9, color: const Color(0xFF94A3B8))),
+                            TextSpan(text: '\n${_planDurationLabel(p)}', style: GoogleFonts.outfit(fontSize: 9, color: const Color(0xFF94A3B8))),
                           ])),
                           const SizedBox(width: 8),
                           if (isAdmin) ...[
@@ -4342,6 +4342,16 @@ class _MobileSubscriptionViewState extends State<_MobileSubscriptionView> {
     padding: const EdgeInsets.only(bottom: 8),
     child: Row(children: [Icon(Icons.circle, size: 6, color: color), const SizedBox(width: 10), Text(text, style: GoogleFonts.outfit(fontSize: 14, color: color, fontWeight: FontWeight.w700))]),
   );
+
+  String _planDurationLabel(Map<String, dynamic> p) {
+    final unit  = (p['durationUnit'] ?? '').toString();
+    final value = (p['durationValue'] as num?)?.toInt() ?? 1;
+    if (unit == 'lifetime') return 'one-time';
+    if (unit == 'days')     return value == 1 ? '/day'  : '/$value days';
+    if (unit == 'years')    return value == 1 ? '/yr'   : '/$value yrs';
+    // default months
+    return value == 1 ? '/mo' : '/$value mo';
+  }
 }
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
@@ -8339,6 +8349,8 @@ class _SubscriptionView extends StatelessWidget {
                     final features = (p['features'] as List? ?? []).map((e) => e.toString()).toList();
                     final colorHex = p['color'] ?? '0xFF64748B';
                     final Color planColor = Color(int.parse(colorHex));
+                    final planDurationUnit  = (p['durationUnit']  ?? 'months').toString();
+                    final planDurationValue = (p['durationValue'] as num?)?.toInt() ?? 1;
 
                     final currentDoc = plans.firstWhere((element) => element.id == currentPlan, orElse: () => plans.first);
                     final currentPrice = double.tryParse((currentDoc.data() as Map)['price'].toString()) ?? 0.0;
@@ -8360,6 +8372,8 @@ class _SubscriptionView extends StatelessWidget {
                          hiddenLimit: hiddenLimit,
                          thisPrice: thisPrice,
                          currentPrice: currentPrice,
+                         durationUnit: planDurationUnit,
+                         durationValue: planDurationValue,
                        ),
                     );
                   }).toList(),
@@ -8398,7 +8412,7 @@ class _SubscriptionView extends StatelessWidget {
     await batch.commit();
   }
 
-  Widget _buildPlanCard(BuildContext context, String id, String name, String price, String limit, List<String> features, bool isActive, bool isCurrent, Color color, {String blockedLimit = "0", String hiddenLimit = "0", double thisPrice = 0, double currentPrice = 0}) {
+  Widget _buildPlanCard(BuildContext context, String id, String name, String price, String limit, List<String> features, bool isActive, bool isCurrent, Color color, {String blockedLimit = "0", String hiddenLimit = "0", double thisPrice = 0, double currentPrice = 0, String durationUnit = 'months', int durationValue = 1}) {
     return Container(
       padding: const EdgeInsets.all(32),
       decoration: BoxDecoration(
@@ -8419,7 +8433,8 @@ class _SubscriptionView extends StatelessWidget {
                   children: [
                     IconButton(onPressed: () => _showPlanDialog(context, id: id, existing: {
                        'name': name, 'price': price, 'deviceLimit': limit.split(' ')[0], 'features': features, 'color': '0x${color.value.toRadixString(16).toUpperCase()}',
-                       'blockedAppsLimit': blockedLimit, 'hiddenAppsLimit': hiddenLimit
+                       'blockedAppsLimit': blockedLimit, 'hiddenAppsLimit': hiddenLimit,
+                       'durationUnit': durationUnit, 'durationValue': durationValue,
                     }), icon: const Icon(Icons.edit_rounded, size: 18), color: const Color(0xFF94A3B8)),
                     IconButton(onPressed: () => FirebaseFirestore.instance.collection('plans').doc(id).delete(), icon: const Icon(Icons.delete_outline_rounded, size: 18), color: Colors.redAccent),
                   ],
@@ -8432,7 +8447,7 @@ class _SubscriptionView extends StatelessWidget {
           Row(children: [
             Text('\$', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
             Text(price, style: GoogleFonts.outfit(fontSize: 36, fontWeight: FontWeight.w900, color: textColor)),
-            Text('/mo', style: GoogleFonts.outfit(fontSize: 14, color: const Color(0xFF94A3B8))),
+            Text(_durationSuffix(durationUnit, durationValue), style: GoogleFonts.outfit(fontSize: 14, color: const Color(0xFF94A3B8))),
           ]),
           const SizedBox(height: 16),
           Text(limit, style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold, color: color)),
@@ -8607,6 +8622,13 @@ class _SubscriptionView extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _durationSuffix(String unit, int value) {
+    if (unit == 'lifetime') return ' one-time';
+    if (unit == 'days')     return value == 1 ? '/day'  : '/$value days';
+    if (unit == 'years')    return value == 1 ? '/yr'   : '/$value yrs';
+    return value == 1 ? '/mo' : '/$value mo';
   }
 
   Widget _buildField(String label, TextEditingController ctrl, {bool isNum = false, int maxLines = 1}) {
