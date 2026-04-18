@@ -7873,9 +7873,22 @@ class _PendingTransactionsView extends StatelessWidget {
   const _PendingTransactionsView({required this.isDark, required this.cardColor, required this.textColor, required this.borderColor});
 
   Future<void> _approve(BuildContext context, String txId, String uid, String planId, Color cardColor, Color textColor) async {
+    // Auto-load duration from the plan definition
     String durationUnit = 'months';
     int durationValue = 1;
-    final valueCtrl = TextEditingController(text: '1');
+    bool autoFilled = false;
+    try {
+      final planDoc = await FirebaseFirestore.instance.collection('plans').doc(planId).get();
+      if (planDoc.exists) {
+        final pd = planDoc.data() as Map<String, dynamic>;
+        if (pd['durationUnit'] != null) {
+          durationUnit = pd['durationUnit'] as String;
+          durationValue = (pd['durationValue'] as num?)?.toInt() ?? 1;
+          autoFilled = true;
+        }
+      }
+    } catch (_) {}
+    final valueCtrl = TextEditingController(text: durationValue.toString());
 
     final ok = await showDialog<bool>(
       context: context,
@@ -7885,6 +7898,17 @@ class _PendingTransactionsView extends StatelessWidget {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Text('Approve Payment', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: textColor)),
           content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            if (autoFilled)
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(color: const Color(0xFF22C55E).withOpacity(0.1), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFF22C55E).withOpacity(0.4))),
+                child: Row(children: [
+                  const Icon(Icons.auto_awesome_rounded, color: Color(0xFF22C55E), size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text('Duration auto-filled from plan: $durationValue ${durationUnit == 'lifetime' ? 'lifetime' : durationUnit}', style: GoogleFonts.outfit(color: const Color(0xFF22C55E), fontSize: 12, fontWeight: FontWeight.w600))),
+                ]),
+              ),
             Text('This will activate the plan for this user.', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8))),
             const SizedBox(height: 16),
             Text('DURATION TYPE', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF94A3B8), letterSpacing: 1.4)),
