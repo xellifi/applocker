@@ -3980,6 +3980,7 @@ class _MobileSettingsViewState extends State<_MobileSettingsView> {
   final _imageUrlCtrl = TextEditingController();
   final _quoteCtrl = TextEditingController();
   final _greetingCtrl = TextEditingController();
+  final _smsCtrl = TextEditingController();
   final _headingCtrl = TextEditingController();
   final _titleCtrl = TextEditingController();
   final _tasksCtrl = TextEditingController();
@@ -3992,13 +3993,13 @@ class _MobileSettingsViewState extends State<_MobileSettingsView> {
 
   @override void initState() {
     super.initState();
-    for (var c in [_imageUrlCtrl, _headingCtrl, _titleCtrl, _tasksCtrl, _rHeadCtrl, _rMsgCtrl, _rTasksCtrl]) {
+    for (var c in [_imageUrlCtrl, _quoteCtrl, _greetingCtrl, _smsCtrl, _headingCtrl, _titleCtrl, _tasksCtrl, _rHeadCtrl, _rMsgCtrl, _rTasksCtrl]) {
       c.addListener(() => setState(() {}));
     }
     _load();
   }
   @override void dispose() {
-    for (var c in [_imageUrlCtrl, _quoteCtrl, _greetingCtrl, _headingCtrl, _titleCtrl, _tasksCtrl, _rHeadCtrl, _rMsgCtrl, _rTasksCtrl, _pinCtrl]) c.dispose();
+    for (var c in [_imageUrlCtrl, _quoteCtrl, _greetingCtrl, _smsCtrl, _headingCtrl, _titleCtrl, _tasksCtrl, _rHeadCtrl, _rMsgCtrl, _rTasksCtrl, _pinCtrl]) c.dispose();
     super.dispose();
   }
 
@@ -4006,6 +4007,10 @@ class _MobileSettingsViewState extends State<_MobileSettingsView> {
     final uid = FirebaseAuth.instance.currentUser?.uid; if (uid == null) return;
     final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
     final data = doc.data() ?? {};
+    final role = data['role'] ?? 'parent';
+    final devices = role == 'super_admin'
+        ? await FirebaseFirestore.instance.collection('devices').limit(1).get()
+        : await FirebaseFirestore.instance.collection('devices').where('parentUid', isEqualTo: uid).limit(1).get();
     setState(() {
       _imageUrlCtrl.text = data['profileImageUrl'] ?? '';
       _quoteCtrl.text = data['parentQuote'] ?? '';
@@ -4017,20 +4022,50 @@ class _MobileSettingsViewState extends State<_MobileSettingsView> {
       _rMsgCtrl.text = data['restrictedMessage'] ?? 'Access to this application is restricted by parent settings.';
       _rTasksCtrl.text = (data['restrictedTasks'] as List<dynamic>? ?? []).join('\n');
       _pinCtrl.text = data['masterPin'] ?? '';
+      if (devices.docs.isNotEmpty) {
+        _selDevice = devices.docs.first.id;
+        _applyDeviceSettings(devices.docs.first.data());
+      }
       _loaded = true;
     });
+  }
+
+  void _applyDeviceSettings(Map<String, dynamic> data) {
+    _imageUrlCtrl.text = data['profileImageUrl'] ?? _imageUrlCtrl.text;
+    _quoteCtrl.text = data['parentQuote'] ?? _quoteCtrl.text;
+    _greetingCtrl.text = data['unlockGreeting'] ?? _greetingCtrl.text;
+    _smsCtrl.text = data['smsReceiverNumber'] ?? '';
+    _headingCtrl.text = data['lockHeadline'] ?? data['lockScreenHeading'] ?? _headingCtrl.text;
+    _titleCtrl.text = data['taskTitle'] ?? data['lockScreenTitle'] ?? _titleCtrl.text;
+    _tasksCtrl.text = (data['taskList'] as List? ?? data['lockScreenTasks'] as List? ?? []).join('\n');
+    _rHeadCtrl.text = data['restrictedHeadline'] ?? _rHeadCtrl.text;
+    _rMsgCtrl.text = data['restrictedMessage'] ?? _rMsgCtrl.text;
+    _rTasksCtrl.text = (data['warningList'] as List? ?? data['restrictedTasks'] as List? ?? []).join('\n');
+    _pinCtrl.text = data['pin'] ?? _pinCtrl.text;
   }
 
   Future<void> _save(String section) async {
     final uid = FirebaseAuth.instance.currentUser?.uid; if (uid == null) return;
     setState(() => _saving = true);
     Map<String, dynamic> payload = {};
-    if (section == 'child') payload = {'profileImageUrl': _imageUrlCtrl.text.trim(), 'parentQuote': _quoteCtrl.text.trim(), 'unlockGreeting': _greetingCtrl.text.trim()};
+    Map<String, dynamic>? devicePayload;
+    if (section == 'child') {
+      payload = {
+        'profileImageUrl': _imageUrlCtrl.text.trim(),
+        'parentQuote': _quoteCtrl.text.trim(),
+        'unlockGreeting': _greetingCtrl.text.trim(),
+        'smsReceiverNumber': _smsCtrl.text.trim(),
+      };
+      devicePayload = payload;
+    }
     else if (section == 'lock') {
-      payload = {'lockScreenHeading': _headingCtrl.text.trim(), 'lockScreenTitle': _titleCtrl.text.trim(), 'lockScreenTasks': _tasksCtrl.text.trim().split('\n').where((l) => l.trim().isNotEmpty).toList()};
-      if (_selDevice != null) await FirebaseFirestore.instance.collection('devices').doc(_selDevice).update(payload).catchError((_) {});
+      final tasks = _tasksCtrl.text.trim().split('\n').where((l) => l.trim().isNotEmpty).toList();
+      payload = {'lockScreenHeading': _headingCtrl.text.trim(), 'lockScreenTitle': _titleCtrl.text.trim(), 'lockScreenTasks': tasks};
+      devicePayload = {'lockHeadline': _headingCtrl.text.trim(), 'taskTitle': _titleCtrl.text.trim(), 'taskList': tasks};
     } else if (section == 'restrict') {
-      payload = {'restrictedHeadline': _rHeadCtrl.text.trim(), 'restrictedMessage': _rMsgCtrl.text.trim(), 'restrictedTasks': _rTasksCtrl.text.trim().split('\n').where((l) => l.trim().isNotEmpty).toList()};
+      final tasks = _rTasksCtrl.text.trim().split('\n').where((l) => l.trim().isNotEmpty).toList();
+      payload = {'restrictedHeadline': _rHeadCtrl.text.trim(), 'restrictedMessage': _rMsgCtrl.text.trim(), 'restrictedTasks': tasks};
+      devicePayload = {'restrictedHeadline': _rHeadCtrl.text.trim(), 'restrictedMessage': _rMsgCtrl.text.trim(), 'warningList': tasks};
     } else if (section == 'pin') {
       final pin = _pinCtrl.text.trim();
       payload = {'masterPin': pin};
@@ -4039,9 +4074,17 @@ class _MobileSettingsViewState extends State<_MobileSettingsView> {
         await d.reference.update({'pin': pin}).catchError((_) {});
       }
     }
-    await FirebaseFirestore.instance.collection('users').doc(uid).update(payload);
-    setState(() => _saving = false);
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Saved successfully!'), backgroundColor: Color(0xFF22C55E)));
+    try {
+      if (devicePayload != null && _selDevice != null) {
+        await FirebaseFirestore.instance.collection('devices').doc(_selDevice).update(devicePayload);
+      }
+      await FirebaseFirestore.instance.collection('users').doc(uid).set(payload, SetOptions(merge: true));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Saved successfully!'), backgroundColor: Color(0xFF22C55E)));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Save failed: $e'), backgroundColor: Colors.redAccent));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   Future<void> _pickImage() async {
@@ -4316,9 +4359,46 @@ class _MobileSettingsViewState extends State<_MobileSettingsView> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           _sectionWrap('Child App View Data', 'child', Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              StreamBuilder<QuerySnapshot>(
+                stream: FirebaseService.instance.streamAdminDevices(),
+                builder: (context, snap) {
+                  final devices = snap.data?.docs ?? [];
+                  if (_selDevice == null && devices.isNotEmpty) {
+                    _selDevice = devices.first.id;
+                  }
+                  final textColor = widget.isDark ? Colors.white : const Color(0xFF1E293B);
+                  if (devices.isEmpty) return const SizedBox.shrink();
+                  return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('Target Device', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(color: widget.isDark ? const Color(0xFF0F1A35) : Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFF22C55E).withOpacity(0.8))),
+                      child: DropdownButton<String>(
+                        value: devices.any((d) => d.id == _selDevice) ? _selDevice : devices.first.id,
+                        isExpanded: true,
+                        underline: const SizedBox(),
+                        dropdownColor: widget.isDark ? const Color(0xFF0F1A35) : Colors.white,
+                        style: GoogleFonts.outfit(fontSize: 13, color: textColor),
+                        items: devices.map((d) => DropdownMenuItem(value: d.id, child: Text(d.id))).toList(),
+                        onChanged: (v) {
+                          if (v == null) return;
+                          final doc = devices.firstWhere((d) => d.id == v);
+                          setState(() {
+                            _selDevice = v;
+                            _applyDeviceSettings(doc.data() as Map<String, dynamic>);
+                          });
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                  ]);
+                },
+              ),
               _tf('Paste your URL here', _imageUrlCtrl, hint: 'https://example.com/photo.jpg'),
               _tf('Parent Quote', _quoteCtrl, maxLines: 3, hint: '"I love you more than words can say"'),
               _tf('Unlock Greetings', _greetingCtrl, hint: 'Enjoy Your Day My Child.'),
+              _tf('Emergency SMS Number', _smsCtrl, hint: '+639XXXXXXXXX  (child can SMS this number from lock screen)'),
             ])),
             const SizedBox(width: 10),
             Column(children: [

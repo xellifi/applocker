@@ -94,6 +94,7 @@ Configured as a static deployment:
 6. **Subscriptions**: `_upgradePlan` replaced with full payment flow — GCash/Maya/Bank Transfer selection, QR code display, proof-of-payment URL input, transaction saved to `transactions` Firestore collection with `pending` status for admin approval
 7. **Settings**: Initialization bug fixed — uses `_settingsInitialized` flag with `addPostFrameCallback` + `setState` to avoid duplicate calls
 8. **Profile (Mobile + Desktop)**: Photo URL field added; avatar renders `NetworkImage` when URL present; camera icon toggles URL input; saves `photoURL` to Firestore `users` collection and Firebase Auth
+9. **Mobile Settings SMS Save Fix**: Added the Emergency SMS Number field and target device selector to mobile Settings, and changed mobile Settings saves to update the selected `devices/{id}` document using the same Firestore fields as desktop (`smsReceiverNumber`, child customisation, lock screen, and restricted screen fields).
 
 ## Recent Child App Fixes (April 2026)
 1. **Locked Overlay Message/SMS Keyboard Fix**: Recreated the native Android MESSAGE and SMS overlay panels with a keyboard-height listener that lifts and resizes the active panel above the Android keyboard. Chat still sends/receives through Firestore, and SMS still sends to the configured emergency number.
