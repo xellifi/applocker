@@ -247,6 +247,15 @@ class MainActivity : FlutterActivity() {
                     try {
                         val pin = call.argument<String>("pin") ?: "1234"
                         val devId = call.argument<String>("deviceId") ?: ""
+                        val profileImageUrl = call.argument<String>("profileImageUrl") ?: ""
+
+                        // Persist these settings so the overlay can read them on restart
+                        val prefs = getSharedPreferences("applocker_local_settings", android.content.Context.MODE_PRIVATE)
+                        prefs.edit()
+                            .putString("deviceId", devId)
+                            .putString("pin", pin)
+                            .putString("profileImageUrl", profileImageUrl)
+                            .apply()
                         
                         if (!Settings.canDrawOverlays(this)) {
                             // No overlay permission — request it
@@ -264,6 +273,7 @@ class MainActivity : FlutterActivity() {
                             putExtra("action", "show")
                             putExtra("pin", pin)
                             putExtra("deviceId", devId)
+                            putExtra("profileImageUrl", profileImageUrl)
                         }
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                             startForegroundService(intent)

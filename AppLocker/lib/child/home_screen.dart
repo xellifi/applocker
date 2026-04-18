@@ -425,8 +425,9 @@ class _ChildHomeScreenState extends State<ChildHomeScreen> {
           _unlockGreeting = device.unlockGreeting;
         });
 
-        // Update PIN on the lock controller and native side
+        // Update PIN and profile image on the lock controller (passed to native overlay)
         ChildLockController.instance.setPin(device.pin);
+        ChildLockController.instance.setProfileImageUrl(device.profileImageUrl);
 
         _syncHiddenApps(device); // Pass the whole device for mode/access checks
         _syncToNativeService(device.blockedApps);

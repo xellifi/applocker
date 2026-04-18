@@ -80,9 +80,11 @@ class ChildLockController extends ChangeNotifier {
 
   String _deviceId = '';
   String _pin = '1234';
+  String _profileImageUrl = '';
 
   void setDeviceId(String id) => _deviceId = id;
   void setPin(String pin) => _pin = pin;
+  void setProfileImageUrl(String url) => _profileImageUrl = url;
 
   void lock() {
     if (!_locked) {
@@ -118,6 +120,7 @@ class ChildLockController extends ChangeNotifier {
       await _platform.invokeMethod('showNativeOverlay', {
         'pin': _pin,
         'deviceId': _deviceId,
+        'profileImageUrl': _profileImageUrl,
       });
       debugPrint('//TEST: Native system overlay SHOWN');
     } catch (e) {

@@ -76,11 +76,28 @@ class LockOverlayService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         try {
+            val prefs = getSharedPreferences("applocker_local_settings", Context.MODE_PRIVATE)
             val action = intent?.getStringExtra("action") ?: "show"
             val pin   = intent?.getStringExtra("pin")
             val devId = intent?.getStringExtra("deviceId")
-            if (pin   != null) overlayPin      = pin
-            if (devId != null) overlayDeviceId = devId
+            // Update and persist if provided
+            if (pin != null) {
+                overlayPin = pin
+                prefs.edit().putString("pin", pin).apply()
+            }
+            if (devId != null) {
+                overlayDeviceId = devId
+                prefs.edit().putString("deviceId", devId).apply()
+            }
+            // Fallback: load from SharedPreferences if companion vars are still empty
+            // (happens when process is killed and START_STICKY restarts service with null intent)
+            if (overlayPin.isEmpty() || overlayPin == "1234") {
+                val savedPin = prefs.getString("pin", "") ?: ""
+                if (savedPin.isNotEmpty()) overlayPin = savedPin
+            }
+            if (overlayDeviceId.isEmpty()) {
+                overlayDeviceId = prefs.getString("deviceId", "") ?: ""
+            }
             when (action) {
                 "show" -> showOverlay()
                 "hide" -> hideOverlay()
@@ -167,6 +184,61 @@ class LockOverlayService : Service() {
                 LinearLayout.LayoutParams.MATCH_PARENT
             )
             setPadding(dp(28), dp(44), dp(28), dp(36))
+        }
+
+        // ── Profile photo (set by admin in dashboard settings)
+        val profileImageUrl = prefs.getString("profileImageUrl", "") ?: ""
+        if (profileImageUrl.isNotEmpty()) {
+            val avatarSize = dp(88)
+            val avatarView = android.widget.ImageView(ctx).apply {
+                layoutParams = LinearLayout.LayoutParams(avatarSize, avatarSize).apply {
+                    gravity = Gravity.CENTER_HORIZONTAL
+                }
+                scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(Color.parseColor("#22000000"))
+                    setStroke(dp(3), Color.BLACK)
+                }
+            }
+            content.addView(avatarView)
+            content.addView(spacer(14))
+            // Load image on background thread, render circular bitmap
+            Thread {
+                try {
+                    val url = java.net.URL(profileImageUrl)
+                    val conn = url.openConnection() as java.net.HttpURLConnection
+                    conn.connectTimeout = 6000
+                    conn.readTimeout = 10000
+                    conn.connect()
+                    val rawBmp = android.graphics.BitmapFactory.decodeStream(conn.inputStream)
+                    conn.disconnect()
+                    if (rawBmp != null) {
+                        val dim = minOf(rawBmp.width, rawBmp.height)
+                        val xOff = (rawBmp.width - dim) / 2
+                        val yOff = (rawBmp.height - dim) / 2
+                        val square = android.graphics.Bitmap.createBitmap(rawBmp, xOff, yOff, dim, dim)
+                        val sz = dp(88)
+                        val scaled = android.graphics.Bitmap.createScaledBitmap(square, sz, sz, true)
+                        val circular = android.graphics.Bitmap.createBitmap(sz, sz, android.graphics.Bitmap.Config.ARGB_8888)
+                        val canvas = android.graphics.Canvas(circular)
+                        val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+                        paint.shader = android.graphics.BitmapShader(scaled, android.graphics.Shader.TileMode.CLAMP, android.graphics.Shader.TileMode.CLAMP)
+                        canvas.drawCircle(sz / 2f, sz / 2f, sz / 2f, paint)
+                        paint.shader = null
+                        paint.style = android.graphics.Paint.Style.STROKE
+                        paint.strokeWidth = dp(3).toFloat()
+                        paint.color = Color.BLACK
+                        canvas.drawCircle(sz / 2f, sz / 2f, sz / 2f - dp(2).toFloat(), paint)
+                        Handler(Looper.getMainLooper()).post {
+                            avatarView.background = null
+                            avatarView.setImageBitmap(circular)
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Profile photo load failed: ${e.message}")
+                }
+            }.start()
         }
 
         // ── Lock icon (tap 10× for emergency PIN)
@@ -371,26 +443,20 @@ class LockOverlayService : Service() {
             isFocusable = true; isClickable = true
         }
 
-        // Card
+        // Card — full screen floating with 15dp margins on all sides
         val card = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            layoutParams = FrameLayout.LayoutParams(
+            val lp = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                Gravity.BOTTOM
+                FrameLayout.LayoutParams.MATCH_PARENT
             )
+            lp.setMargins(dp(15), dp(15), dp(15), dp(15))
+            layoutParams = lp
             background = GradientDrawable().apply {
-                cornerRadius = 0f
-                setColor(Color.parseColor("#1A1A2E"))
-                // Top corners rounded
-            }
-            val roundBg = GradientDrawable().apply {
-                cornerRadii = floatArrayOf(dp(24).toFloat(), dp(24).toFloat(),
-                    dp(24).toFloat(), dp(24).toFloat(), 0f, 0f, 0f, 0f)
+                cornerRadius = dp(24).toFloat()
                 setColor(Color.parseColor("#1A1A2E"))
                 setStroke(dp(1), Color.parseColor("#40FBBC05"))
             }
-            background = roundBg
             setPadding(0, 0, 0, 0)
         }
 
@@ -452,11 +518,12 @@ class LockOverlayService : Service() {
         header.addView(closeBtn)
         card.addView(header)
 
-        // ── Messages scroll area
+        // ── Messages scroll area — fills all remaining space between header and input
         val msgScroll = ScrollView(ctx).apply {
             layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(280))
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
             setPadding(dp(12), dp(8), dp(12), dp(8))
+            isFillViewport = true
         }
         val msgLayout = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
@@ -471,12 +538,11 @@ class LockOverlayService : Service() {
             text = "No messages yet.\nSend your parent a message!"
             setTextColor(Color.parseColor("#64748B"))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-            gravity = Gravity.CENTER
             textAlignment = View.TEXT_ALIGNMENT_CENTER
             setLineSpacing(dp(3).toFloat(), 1f)
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(240))
             gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT)
         }
         msgLayout.addView(emptyView)
         msgScroll.addView(msgLayout)
@@ -535,13 +601,19 @@ class LockOverlayService : Service() {
 
         val doSend: () -> Unit = {
             val text = inputBox.text.toString().trim()
+            // Resolve deviceId from SharedPreferences if companion var is still empty
+            if (overlayDeviceId.isEmpty()) {
+                overlayDeviceId = getSharedPreferences("applocker_local_settings", Context.MODE_PRIVATE)
+                    .getString("deviceId", "") ?: ""
+            }
             if (text.isNotEmpty() && overlayDeviceId.isNotEmpty()) {
                 inputBox.text.clear()
+                val devId = overlayDeviceId // capture for thread
                 Thread {
                     try {
                         com.google.firebase.firestore.FirebaseFirestore.getInstance()
                             .collection("devices")
-                            .document(overlayDeviceId)
+                            .document(devId)
                             .collection("chat")
                             .add(mapOf(
                                 "text" to text,
@@ -554,6 +626,8 @@ class LockOverlayService : Service() {
                         Log.e(TAG, "Send chat error: ${e.message}")
                     }
                 }.start()
+            } else if (overlayDeviceId.isEmpty()) {
+                Log.w(TAG, "doSend: overlayDeviceId is empty, cannot send message")
             }
         }
 
@@ -569,6 +643,13 @@ class LockOverlayService : Service() {
         panel.addView(card)
         root.addView(panel)
 
+        // Request focus on input box + show keyboard after layout settles
+        inputBox.postDelayed({
+            inputBox.requestFocus()
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+            imm.showSoftInput(inputBox, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+        }, 250)
+
         // ── Start Firestore listener for messages
         startChatListener(msgLayout, emptyView, msgScroll)
     }
@@ -578,7 +659,15 @@ class LockOverlayService : Service() {
         emptyView: TextView,
         scroll: ScrollView
     ) {
-        if (overlayDeviceId.isEmpty()) return
+        // Ensure we have a deviceId — load from SharedPreferences if still empty
+        if (overlayDeviceId.isEmpty()) {
+            overlayDeviceId = getSharedPreferences("applocker_local_settings", Context.MODE_PRIVATE)
+                .getString("deviceId", "") ?: ""
+        }
+        if (overlayDeviceId.isEmpty()) {
+            Log.w(TAG, "startChatListener: overlayDeviceId is empty, cannot listen")
+            return
+        }
         chatListener?.remove()
         chatListener = com.google.firebase.firestore.FirebaseFirestore.getInstance()
             .collection("devices")
