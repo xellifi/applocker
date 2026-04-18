@@ -403,28 +403,26 @@ class AppLockerBackgroundService : Service() {
     /**
      * Checks if any enabled lock schedule is currently active.
      *
-     * The Flutter dashboard saves lock schedule times in "h:mm a" 12-hour AM/PM
-     * format (e.g. "1:30 PM", "10:00 PM") via DateFormat('h:mm a').
-     * We must parse with the same format here — the old "HH:mm" split approach
-     * silently failed because "30 PM".toIntOrNull() always returns null.
+     * Flutter saves times in "HH:mm" 24-hour format (e.g. "22:00", "06:30").
+     * We parse by splitting on ":" directly — no SimpleDateFormat needed.
      */
     private fun isScheduleActive(doc: com.google.firebase.firestore.DocumentSnapshot): Boolean {
         try {
             val schedules = doc.get("lockSchedules") as? List<Map<String, Any>> ?: return false
             if (schedules.isEmpty()) return false
 
-            val sdf = SimpleDateFormat("h:mm a", Locale.US)
             val nowCal = java.util.Calendar.getInstance()
             val nowMins = nowCal.get(java.util.Calendar.HOUR_OF_DAY) * 60 +
                           nowCal.get(java.util.Calendar.MINUTE)
 
-            // Convert a "h:mm a" string to minutes-since-midnight
+            // Parse "HH:mm" string to minutes-since-midnight
             fun toMins(timeStr: String): Int? {
                 return try {
-                    val date = sdf.parse(timeStr) ?: return null
-                    val cal = java.util.Calendar.getInstance().apply { time = date }
-                    cal.get(java.util.Calendar.HOUR_OF_DAY) * 60 +
-                        cal.get(java.util.Calendar.MINUTE)
+                    val parts = timeStr.trim().split(":")
+                    if (parts.size < 2) return null
+                    val h = parts[0].trim().toIntOrNull() ?: return null
+                    val m = parts[1].trim().take(2).toIntOrNull() ?: return null
+                    h * 60 + m
                 } catch (e: Exception) {
                     Log.e("AppLockerService", "toMins parse error for '$timeStr': ${e.message}")
                     null
@@ -443,7 +441,7 @@ class AppLockerBackgroundService : Service() {
                     val endMins   = toMins(endStr)   ?: continue
 
                     val active = if (endMins <= startMins) {
-                        // Overnight schedule e.g. 10:00 PM → 6:00 AM
+                        // Overnight schedule e.g. 22:00 → 06:00
                         nowMins >= startMins || nowMins < endMins
                     } else {
                         nowMins >= startMins && nowMins < endMins
@@ -593,14 +591,12 @@ class AppLockerBackgroundService : Service() {
                 return
             }
 
-            if (blockedApps.contains(detectedPackage)) {
-                // Check if currently IN an ALLOWED access window
-                if (isAppInAllowedWindow(detectedPackage)) {
-                    hideAppRestrictionOverlayIfNeeded()
-                    return
-                }
+            // Block if explicitly blocked OR currently inside a scheduled blocking window
+            val explicitlyBlocked = blockedApps.contains(detectedPackage)
+            val scheduleBlocking  = isScheduledToBlockNow(detectedPackage)
 
-                // Check for Timed Access (SaaS)
+            if (explicitlyBlocked || scheduleBlocking) {
+                // Check for Timed Access — grants temporary bypass regardless of block source
                 val expiry = tempAccess[detectedPackage]
                 if (expiry != null && expiry > time) {
                     hideAppRestrictionOverlayIfNeeded()
@@ -620,50 +616,54 @@ class AppLockerBackgroundService : Service() {
         }
     }
 
-    private fun isAppInAllowedWindow(packageName: String): Boolean {
+    /**
+     * Returns true when [packageName] is currently inside its scheduled BLOCKING window.
+     *
+     * Flutter dashboard saves schedule times in "HH:mm" 24-hour format via
+     * `_fmtTimeStore` (e.g. "09:00", "21:30").  The window defined by
+     * {start, end} is the period during which the app is BLOCKED ("Block From …
+     * Block Until …"), not an allowed window.
+     *
+     * `alwaysBlocked = true` means block 24/7 regardless of the time window.
+     */
+    private fun isScheduledToBlockNow(packageName: String): Boolean {
         val schedule = appSchedules[packageName] ?: return false
-        val alwaysBlocked = schedule["alwaysBlocked"] as? Boolean ?: true
-        if (alwaysBlocked) return false
+        val alwaysBlocked = schedule["alwaysBlocked"] as? Boolean ?: false
+        if (alwaysBlocked) return true
 
         val startStr = schedule["start"] as? String ?: return false
-        val endStr = schedule["end"] as? String ?: return false
+        val endStr   = schedule["end"]   as? String ?: return false
 
-        try {
-            // App schedule times are stored in "h:mm a" format by the Flutter dashboard
-            val sdf = SimpleDateFormat("h:mm a", Locale.US)
-
-            fun toMins(timeStr: String): Int? {
-                return try {
-                    val date = sdf.parse(timeStr) ?: return null
-                    val cal = java.util.Calendar.getInstance().apply { time = date }
-                    cal.get(java.util.Calendar.HOUR_OF_DAY) * 60 +
-                        cal.get(java.util.Calendar.MINUTE)
-                } catch (e: Exception) {
-                    Log.e("AppLockerService", "App schedule toMins error for '$timeStr': ${e.message}")
-                    null
-                }
+        // Parse "HH:mm" to minutes-since-midnight
+        fun toMins(timeStr: String): Int? {
+            return try {
+                val parts = timeStr.trim().split(":")
+                if (parts.size < 2) return null
+                val h = parts[0].trim().toIntOrNull() ?: return null
+                val m = parts[1].trim().take(2).toIntOrNull() ?: return null
+                h * 60 + m
+            } catch (e: Exception) {
+                Log.e("AppLockerService", "isScheduledToBlockNow toMins error for '$timeStr': ${e.message}")
+                null
             }
-
-            val nowCal = java.util.Calendar.getInstance()
-            val nowMins = nowCal.get(java.util.Calendar.HOUR_OF_DAY) * 60 +
-                          nowCal.get(java.util.Calendar.MINUTE)
-
-            val startMins = toMins(startStr) ?: return false
-            val endMins   = toMins(endStr)   ?: return false
-
-            val inWindow = if (endMins <= startMins) {
-                // Overnight window e.g. 10:00 PM → 8:00 AM
-                nowMins >= startMins || nowMins < endMins
-            } else {
-                nowMins >= startMins && nowMins < endMins
-            }
-
-            Log.d("AppLockerService", "AppSchedule $packageName $startStr-$endStr: nowMins=$nowMins startMins=$startMins endMins=$endMins inWindow=$inWindow")
-            return inWindow
-        } catch (e: Exception) {
-            Log.e("AppLockerService", "Error evaluating app schedule for $packageName: ${e.message}")
         }
-        return false
+
+        val nowCal  = java.util.Calendar.getInstance()
+        val nowMins = nowCal.get(java.util.Calendar.HOUR_OF_DAY) * 60 +
+                      nowCal.get(java.util.Calendar.MINUTE)
+
+        val startMins = toMins(startStr) ?: return false
+        val endMins   = toMins(endStr)   ?: return false
+
+        val blocking = if (endMins <= startMins) {
+            // Overnight window e.g. 21:00 → 07:00
+            nowMins >= startMins || nowMins < endMins
+        } else {
+            nowMins >= startMins && nowMins < endMins
+        }
+
+        Log.d("AppLockerService", "AppSchedule $packageName $startStr-$endStr: nowMins=$nowMins start=$startMins end=$endMins blocking=$blocking")
+        return blocking
     }
 
     private fun showAppRestrictionOverlay(packageName: String) {

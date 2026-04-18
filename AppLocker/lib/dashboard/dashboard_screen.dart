@@ -372,7 +372,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildContent(Color textColor, Color cardColor, Color borderColor, bool isMobile, String userRole) {
     if (isMobile) {
       switch (_selectedMenu) {
-        case _DashboardMenu.dashboard: return _MobileDashboardHome(isDark: _isDark, userRole: userRole);
+        case _DashboardMenu.dashboard: return _MobileDashboardHome(isDark: _isDark, userRole: userRole, onNavigate: _setSelectedMenu);
         case _DashboardMenu.devices: return _MobileDevicesView(isDark: _isDark, userRole: userRole, onNavigate: _setSelectedMenu);
         case _DashboardMenu.apps: return _MobileAppControlsView(isDark: _isDark, onNavigate: _setSelectedMenu);
         case _DashboardMenu.schedules: return _MobileSchedulesView(isDark: _isDark);
@@ -856,7 +856,8 @@ class _MobileTopBar extends StatelessWidget {
 class _MobileDashboardHome extends StatefulWidget {
   final bool isDark;
   final String userRole;
-  const _MobileDashboardHome({required this.isDark, required this.userRole});
+  final Function(_DashboardMenu)? onNavigate;
+  const _MobileDashboardHome({required this.isDark, required this.userRole, this.onNavigate});
   @override
   State<_MobileDashboardHome> createState() => _MobileDashboardHomeState();
 }
@@ -1086,15 +1087,24 @@ class _MobileDashboardHomeState extends State<_MobileDashboardHome> with TickerP
                       timeLabel = 'Last Sync: Unknown';
                     }
 
+                    final lockSchedules = (data['lockSchedules'] as List?)
+                        ?.whereType<Map>()
+                        .toList() ?? [];
+                    final hasScheduledLock = lockSchedules.any(
+                      (s) => s['enabled'] != false,
+                    );
                     return Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
                       child: _MobileDeviceCard(
                         name: name,
+                        deviceId: doc.id,
                         status: status,
                         battery: battery is int ? battery : (battery as num).toInt(),
                         timeLabel: timeLabel,
                         isOnline: isOnline,
                         isDark: widget.isDark,
+                        hasScheduledLock: hasScheduledLock,
+                        onTap: () => widget.onNavigate?.call(_DashboardMenu.devices),
                       ),
                     );
                   }),
@@ -1331,26 +1341,52 @@ class _MobileQuickStat extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // MOBILE DEVICE CARD — gradient background matching the design
 // ─────────────────────────────────────────────────────────────────────────────
-class _MobileDeviceCard extends StatelessWidget {
+class _MobileDeviceCard extends StatefulWidget {
   final String name;
+  final String deviceId;
   final String status;
   final int battery;
   final String timeLabel;
   final bool isOnline;
   final bool isDark;
+  final bool hasScheduledLock;
+  final VoidCallback? onTap;
 
   const _MobileDeviceCard({
     required this.name,
+    required this.deviceId,
     required this.status,
     required this.battery,
     required this.timeLabel,
     required this.isOnline,
     required this.isDark,
+    this.hasScheduledLock = false,
+    this.onTap,
   });
 
   @override
+  State<_MobileDeviceCard> createState() => _MobileDeviceCardState();
+}
+
+class _MobileDeviceCardState extends State<_MobileDeviceCard> {
+  int _unreadCount = 0;
+  late final Stream<QuerySnapshot> _msgStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _msgStream = FirebaseFirestore.instance
+        .collection('devices')
+        .doc(widget.deviceId)
+        .collection('messages')
+        .where('sender', isEqualTo: 'child')
+        .where('read', isEqualTo: false)
+        .snapshots();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final gradient = isOnline
+    final gradient = widget.isOnline
         ? const LinearGradient(
             colors: [Color(0xFF6D28D9), Color(0xFF4338CA)],
             begin: Alignment.centerLeft,
@@ -1362,82 +1398,111 @@ class _MobileDeviceCard extends StatelessWidget {
             end: Alignment.centerRight,
           );
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-      decoration: BoxDecoration(
-        gradient: gradient,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: (isOnline ? const Color(0xFF6D28D9) : const Color(0xFFEA580C))
-                .withOpacity(0.35),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: GoogleFonts.outfit(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+    return StreamBuilder<QuerySnapshot>(
+      stream: _msgStream,
+      builder: (context, snap) {
+        final unread = snap.data?.docs.length ?? _unreadCount;
+        return GestureDetector(
+          onTap: widget.onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+            decoration: BoxDecoration(
+              gradient: gradient,
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(
+                  color: (widget.isOnline ? const Color(0xFF6D28D9) : const Color(0xFFEA580C))
+                      .withOpacity(0.35),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
                 ),
-                const SizedBox(height: 4),
-                Row(children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: isOnline ? const Color(0xFF4ADE80) : const Color(0xFFF87171),
-                      shape: BoxShape.circle,
-                    ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.name,
+                        style: GoogleFonts.outfit(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Row(children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: widget.isOnline ? const Color(0xFF4ADE80) : const Color(0xFFF87171),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          widget.isOnline ? 'Online' : 'Offline',
+                          style: GoogleFonts.outfit(
+                            fontSize: 13,
+                            color: Colors.white70,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        if (widget.hasScheduledLock) ...[
+                          const SizedBox(width: 8),
+                          const Icon(Icons.schedule_rounded, size: 11, color: Colors.white60),
+                          const SizedBox(width: 3),
+                          Text('Scheduled', style: GoogleFonts.outfit(fontSize: 10, color: Colors.white60)),
+                        ],
+                      ]),
+                    ],
                   ),
-                  const SizedBox(width: 6),
-                  Text(
-                    isOnline ? 'Online' : 'Offline',
-                    style: GoogleFonts.outfit(
-                      fontSize: 13,
-                      color: Colors.white70,
-                      fontWeight: FontWeight.w500,
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Row(mainAxisSize: MainAxisSize.min, children: [
+                      if (unread > 0) ...[
+                        Stack(children: [
+                          const Icon(Icons.chat_bubble_rounded, color: Colors.white70, size: 18),
+                          Positioned(top: 0, right: 0, child: Container(
+                            width: 10, height: 10,
+                            decoration: const BoxDecoration(color: Color(0xFFFBBF24), shape: BoxShape.circle),
+                            child: Center(child: Text(unread > 9 ? '9+' : '$unread',
+                              style: const TextStyle(color: Colors.black, fontSize: 6, fontWeight: FontWeight.bold))),
+                          )),
+                        ]),
+                        const SizedBox(width: 8),
+                      ],
+                      Text(
+                        '${widget.battery}%',
+                        style: GoogleFonts.outfit(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ]),
+                    const SizedBox(height: 4),
+                    Text(
+                      widget.timeLabel,
+                      style: GoogleFonts.outfit(
+                        fontSize: 11,
+                        color: Colors.white70,
+                      ),
                     ),
-                  ),
-                ]),
+                  ],
+                ),
               ],
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '$battery%',
-                style: GoogleFonts.outfit(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                timeLabel,
-                style: GoogleFonts.outfit(
-                  fontSize: 11,
-                  color: Colors.white70,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -1826,9 +1891,14 @@ class _MobileDevicesViewState extends State<_MobileDevicesView> {
                 final battery = ((data['battery'] ?? 0) as num).toInt();
                 final isLocked = data['locked'] == true;
                 final deviceName = (data['model'] ?? data['name'] ?? doc.id).toString();
+                final latRaw = data['lat'] ?? data['latitude'];
+                final lngRaw = data['lng'] ?? data['longitude'] ?? data['lon'];
+                final lat = latRaw != null ? (latRaw as num).toDouble() : null;
+                final lng = lngRaw != null ? (lngRaw as num).toDouble() : null;
                 return _MobileDeviceListCard(
                   name: deviceName, deviceId: doc.id, isOnline: isOnline, battery: battery,
                   isDark: widget.isDark, isLocked: isLocked,
+                  lat: lat, lng: lng,
                   onChat: () => _openChat(context, doc.id),
                   onLock: () => _toggleLock(doc.id, isLocked),
                   onLocation: () => widget.onNavigate?.call(_DashboardMenu.location),
@@ -1853,88 +1923,158 @@ class _MobileDevicesViewState extends State<_MobileDevicesView> {
   }
 }
 
-class _MobileDeviceListCard extends StatelessWidget {
+class _MobileDeviceListCard extends StatefulWidget {
   final String name; final String deviceId; final bool isOnline; final int battery; final bool isDark; final bool isLocked;
+  final double? lat; final double? lng;
   final VoidCallback onChat; final VoidCallback onLock;
   final VoidCallback? onLocation; final VoidCallback? onSchedule; final VoidCallback? onRemove;
-  const _MobileDeviceListCard({required this.name, required this.deviceId, required this.isOnline, required this.battery, required this.isDark, required this.isLocked, required this.onChat, required this.onLock, this.onLocation, this.onSchedule, this.onRemove});
+  const _MobileDeviceListCard({required this.name, required this.deviceId, required this.isOnline, required this.battery, required this.isDark, required this.isLocked, required this.onChat, required this.onLock, this.lat, this.lng, this.onLocation, this.onSchedule, this.onRemove});
+
+  @override
+  State<_MobileDeviceListCard> createState() => _MobileDeviceListCardState();
+}
+
+class _MobileDeviceListCardState extends State<_MobileDeviceListCard> {
+  String? _locationName;
+  bool _geocoding = false;
+  late final Stream<QuerySnapshot> _msgStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _msgStream = FirebaseFirestore.instance
+        .collection('devices')
+        .doc(widget.deviceId)
+        .collection('messages')
+        .where('sender', isEqualTo: 'child')
+        .where('read', isEqualTo: false)
+        .snapshots();
+    _fetchLocationName();
+  }
+
+  @override
+  void didUpdateWidget(_MobileDeviceListCard old) {
+    super.didUpdateWidget(old);
+    if (old.lat != widget.lat || old.lng != widget.lng) {
+      _fetchLocationName();
+    }
+  }
+
+  Future<void> _fetchLocationName() async {
+    final lat = widget.lat;
+    final lng = widget.lng;
+    if (lat == null || lng == null) return;
+    if (_geocoding) return;
+    setState(() => _geocoding = true);
+    try {
+      final uri = Uri.parse(
+        'https://nominatim.openstreetmap.org/reverse?lat=$lat&lon=$lng&format=json',
+      );
+      final resp = await http.get(uri, headers: {'User-Agent': 'AppLockerDashboard/1.0'});
+      if (resp.statusCode == 200) {
+        final json = jsonDecode(resp.body) as Map<String, dynamic>;
+        final addr = json['address'] as Map<String, dynamic>? ?? {};
+        final city = addr['city'] ?? addr['town'] ?? addr['municipality'] ?? addr['county'] ?? '';
+        final suburb = addr['suburb'] ?? addr['village'] ?? addr['quarter'] ?? addr['neighbourhood'] ?? '';
+        final parts = [suburb, city].where((s) => s.toString().isNotEmpty).toList();
+        if (mounted) setState(() => _locationName = parts.isNotEmpty ? parts.join(', ') : null);
+      }
+    } catch (_) {}
+    if (mounted) setState(() => _geocoding = false);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final bg = isDark ? const Color(0xFF0F1A35) : Colors.white;
-    final textColor = isDark ? Colors.white : const Color(0xFF1E293B);
-    final subColor = isDark ? Colors.white54 : const Color(0xFF64748B);
-    final circleColor = isOnline ? const Color(0xFF22C55E) : const Color(0xFF94A3B8);
-    final borderColor = isOnline ? const Color(0xFF22C55E).withOpacity(0.4) : const Color(0xFF94A3B8).withOpacity(0.3);
-    final batColor = battery > 50 ? const Color(0xFF22C55E) : battery > 20 ? const Color(0xFFFBBF24) : const Color(0xFFEF4444);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(18), border: Border.all(color: borderColor, width: 1.5)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Container(width: 52, height: 52, decoration: BoxDecoration(color: circleColor, shape: BoxShape.circle),
-            child: const Icon(Icons.smartphone_rounded, color: Colors.white, size: 24)),
-          const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [Icon(Icons.battery_charging_full_rounded, size: 12, color: batColor), const SizedBox(width: 3), Text('$battery%', style: GoogleFonts.outfit(fontSize: 11, color: batColor, fontWeight: FontWeight.w700))]),
-            const SizedBox(height: 2),
-            Text(name, style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: textColor), maxLines: 1, overflow: TextOverflow.ellipsis),
-            Text(deviceId.length > 18 ? deviceId.substring(0, 18) + '…' : deviceId, style: GoogleFonts.outfit(fontSize: 10, color: subColor), maxLines: 1, overflow: TextOverflow.ellipsis),
-            const SizedBox(height: 2),
+    final bg = widget.isDark ? const Color(0xFF0F1A35) : Colors.white;
+    final textColor = widget.isDark ? Colors.white : const Color(0xFF1E293B);
+    final subColor = widget.isDark ? Colors.white54 : const Color(0xFF64748B);
+    final circleColor = widget.isOnline ? const Color(0xFF22C55E) : const Color(0xFF94A3B8);
+    final borderColor = widget.isOnline ? const Color(0xFF22C55E).withOpacity(0.4) : const Color(0xFF94A3B8).withOpacity(0.3);
+    final batColor = widget.battery > 50 ? const Color(0xFF22C55E) : widget.battery > 20 ? const Color(0xFFFBBF24) : const Color(0xFFEF4444);
+    return StreamBuilder<QuerySnapshot>(
+      stream: _msgStream,
+      builder: (context, msgSnap) {
+        final unread = msgSnap.data?.docs.length ?? 0;
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(18), border: Border.all(color: borderColor, width: 1.5)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              Container(width: 7, height: 7, decoration: BoxDecoration(color: isOnline ? const Color(0xFF22C55E) : const Color(0xFF94A3B8), shape: BoxShape.circle)),
-              const SizedBox(width: 5),
-              Text(isOnline ? 'Online' : 'Offline', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w700, color: isOnline ? const Color(0xFF22C55E) : const Color(0xFF94A3B8))),
-            ]),
-          ])),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: onLock,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              decoration: BoxDecoration(
-                color: isLocked ? const Color(0xFFEF4444).withOpacity(0.1) : const Color(0xFF22C55E).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: isLocked ? const Color(0xFFEF4444).withOpacity(0.4) : const Color(0xFF22C55E).withOpacity(0.4)),
+              Container(width: 52, height: 52, decoration: BoxDecoration(color: circleColor, shape: BoxShape.circle),
+                child: const Icon(Icons.smartphone_rounded, color: Colors.white, size: 24)),
+              const SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [Icon(Icons.battery_charging_full_rounded, size: 12, color: batColor), const SizedBox(width: 3), Text('${widget.battery}%', style: GoogleFonts.outfit(fontSize: 11, color: batColor, fontWeight: FontWeight.w700))]),
+                const SizedBox(height: 2),
+                Text(widget.name, style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: textColor), maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text(widget.deviceId.length > 18 ? widget.deviceId.substring(0, 18) + '…' : widget.deviceId, style: GoogleFonts.outfit(fontSize: 10, color: subColor), maxLines: 1, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 2),
+                Row(children: [
+                  Container(width: 7, height: 7, decoration: BoxDecoration(color: widget.isOnline ? const Color(0xFF22C55E) : const Color(0xFF94A3B8), shape: BoxShape.circle)),
+                  const SizedBox(width: 5),
+                  Text(widget.isOnline ? 'Online' : 'Offline', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w700, color: widget.isOnline ? const Color(0xFF22C55E) : const Color(0xFF94A3B8))),
+                  if (_locationName != null) ...[
+                    const SizedBox(width: 8),
+                    const Icon(Icons.location_on_rounded, size: 10, color: Color(0xFFEF4444)),
+                    const SizedBox(width: 2),
+                    Flexible(child: Text(_locationName!, style: GoogleFonts.outfit(fontSize: 10, color: subColor), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                  ],
+                ]),
+              ])),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: widget.onLock,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: widget.isLocked ? const Color(0xFFEF4444).withOpacity(0.1) : const Color(0xFF22C55E).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: widget.isLocked ? const Color(0xFFEF4444).withOpacity(0.4) : const Color(0xFF22C55E).withOpacity(0.4)),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(widget.isLocked ? Icons.lock_rounded : Icons.lock_open_rounded, size: 14, color: widget.isLocked ? const Color(0xFFEF4444) : const Color(0xFF22C55E)),
+                    const SizedBox(width: 4),
+                    Text(widget.isLocked ? 'Locked' : 'Unlock', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w700, color: widget.isLocked ? const Color(0xFFEF4444) : const Color(0xFF22C55E))),
+                  ]),
+                ),
               ),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(isLocked ? Icons.lock_rounded : Icons.lock_open_rounded, size: 14, color: isLocked ? const Color(0xFFEF4444) : const Color(0xFF22C55E)),
-                const SizedBox(width: 4),
-                Text(isLocked ? 'Locked' : 'Unlock', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w700, color: isLocked ? const Color(0xFFEF4444) : const Color(0xFF22C55E))),
+            ]),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(color: widget.isDark ? Colors.white.withOpacity(0.04) : const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12)),
+              child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+                _DevActCircle(icon: Icons.location_on_rounded, color: const Color(0xFFEF4444), label: 'Location', onTap: widget.onLocation ?? () {}),
+                Container(width: 1, height: 36, color: widget.isDark ? Colors.white10 : const Color(0xFFE2E8F0)),
+                _DevActCircle(icon: Icons.chat_bubble_rounded, color: const Color(0xFFFBBF24), label: 'Chat', onTap: widget.onChat, badgeCount: unread),
+                Container(width: 1, height: 36, color: widget.isDark ? Colors.white10 : const Color(0xFFE2E8F0)),
+                _DevActCircle(icon: Icons.calendar_month_rounded, color: const Color(0xFF6366F1), label: 'Schedule', onTap: widget.onSchedule ?? () {}),
+                Container(width: 1, height: 36, color: widget.isDark ? Colors.white10 : const Color(0xFFE2E8F0)),
+                _DevActCircle(icon: Icons.delete_outline_rounded, color: const Color(0xFFEF4444), label: 'Remove', onTap: widget.onRemove ?? () {}),
               ]),
             ),
-          ),
-        ]),
-        const SizedBox(height: 14),
-        Container(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(color: isDark ? Colors.white.withOpacity(0.04) : const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12)),
-          child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-            _DevActCircle(icon: Icons.location_on_rounded, color: const Color(0xFFEF4444), label: 'Location', onTap: onLocation ?? () {}),
-            Container(width: 1, height: 36, color: isDark ? Colors.white10 : const Color(0xFFE2E8F0)),
-            _DevActCircle(icon: Icons.chat_bubble_rounded, color: const Color(0xFFFBBF24), label: 'Chat', onTap: onChat, badge: true),
-            Container(width: 1, height: 36, color: isDark ? Colors.white10 : const Color(0xFFE2E8F0)),
-            _DevActCircle(icon: Icons.calendar_month_rounded, color: const Color(0xFF6366F1), label: 'Schedule', onTap: onSchedule ?? () {}),
-            Container(width: 1, height: 36, color: isDark ? Colors.white10 : const Color(0xFFE2E8F0)),
-            _DevActCircle(icon: Icons.delete_outline_rounded, color: const Color(0xFFEF4444), label: 'Remove', onTap: onRemove ?? () {}),
           ]),
-        ),
-      ]),
+        );
+      },
     );
   }
 }
 
 class _DevActCircle extends StatelessWidget {
-  final IconData icon; final Color color; final VoidCallback onTap; final bool badge; final String? label;
-  const _DevActCircle({required this.icon, required this.color, required this.onTap, this.badge = false, this.label});
+  final IconData icon; final Color color; final VoidCallback onTap; final int badgeCount; final String? label;
+  const _DevActCircle({required this.icon, required this.color, required this.onTap, this.badgeCount = 0, this.label});
   @override
   Widget build(BuildContext context) => GestureDetector(
     onTap: onTap,
     child: Column(mainAxisSize: MainAxisSize.min, children: [
       Stack(children: [
         Container(width: 40, height: 40, decoration: BoxDecoration(color: color.withOpacity(0.15), shape: BoxShape.circle), child: Icon(icon, color: color, size: 18)),
-        if (badge) Positioned(top: 0, right: 0, child: Container(width: 13, height: 13, decoration: const BoxDecoration(color: Color(0xFFEF4444), shape: BoxShape.circle), child: const Center(child: Text('1', style: TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.bold))))),
+        if (badgeCount > 0) Positioned(top: 0, right: 0, child: Container(
+          constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          decoration: const BoxDecoration(color: Color(0xFFEF4444), shape: BoxShape.circle),
+          child: Center(child: Text(badgeCount > 9 ? '9+' : '$badgeCount', style: const TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.bold))))),
       ]),
       if (label != null) ...[const SizedBox(height: 3), Text(label!, style: GoogleFonts.outfit(fontSize: 9, color: color, fontWeight: FontWeight.w700))],
     ]),
@@ -1950,6 +2090,11 @@ class _MobileChatSheet extends StatefulWidget {
 class _MobileChatSheetState extends State<_MobileChatSheet> {
   final _ctrl = TextEditingController();
   final _scrollCtrl = ScrollController();
+  @override
+  void initState() {
+    super.initState();
+    FirebaseService.instance.markMessagesRead(widget.deviceId, 'child');
+  }
   @override void dispose() { _ctrl.dispose(); _scrollCtrl.dispose(); super.dispose(); }
   Future<void> _send() async {
     final t = _ctrl.text.trim(); if (t.isEmpty) return; _ctrl.clear();

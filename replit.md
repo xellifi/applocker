@@ -85,6 +85,20 @@ Configured as a static deployment:
 - Lock screen: PIN removed from lock icon tap; 10-tap hidden emergency unlock
 - Restricted mode: red/pink background, GOT IT button with matching rounded corners
 
+## Bug Fixes & Enhancements — April 2026 (Latest)
+
+### Kotlin Scheduling Bug Fix
+- **Root cause**: Flutter dashboard saves lock/app schedule times as `"HH:mm"` (24-hour), but `AppLockerBackgroundService.kt` was trying to parse them with `SimpleDateFormat("h:mm a", Locale.US)` (12-hour AM/PM) — causing silent parse failures so no schedule ever triggered.
+- **Fix in `isScheduleActive()`**: Replaced `SimpleDateFormat` with direct `String.split(":")` parsing of `"HH:mm"` format.
+- **App schedule logic fix in `isScheduledToBlockNow()`** (renamed from `isAppInAllowedWindow`): Fixed inverted logic — the old code treated the window as "allowed" but Flutter UI labels it "Block From / Block Until" (blocking window). Now correctly returns `true` when inside the blocking window.
+- **`checkForegroundApp()` update**: Now checks both `blockedApps` (explicit block) AND `isScheduledToBlockNow()` (schedule window) — an app is blocked if either condition is true.
+
+### Dashboard Chat & UI Improvements
+- **`_MobileDeviceCard`** (Dashboard home): Converted to `StatefulWidget`. Streams real-time unread child-message count. Shows chat badge with count in top-right of card. Shows "Scheduled" indicator if any enabled lock schedule exists. Tapping the card navigates to My Devices page.
+- **`_MobileDeviceListCard`** (My Devices page): Converted to `StatefulWidget`. Streams unread child message count; Chat button shows real badge count. Added reverse geocoding via Nominatim (OpenStreetMap) — shows suburb/city location label next to Online/Offline status.
+- **`_DevActCircle`**: Updated `badge: true` → `badgeCount: int` so the badge shows the actual unread count number.
+- **Chat read state**: `_MobileChatSheetState.initState` now calls `markMessagesRead(deviceId, 'child')` so badges clear when parent opens chat.
+
 ## Recent Dashboard Bug Fixes & Enhancements (April 2026)
 1. **My Devices**: Added remove device button to mobile device list cards
 2. **App Controls (Mobile)**: Back button at top-right; empty state shows filter-specific message (e.g., "No blocked apps found")
