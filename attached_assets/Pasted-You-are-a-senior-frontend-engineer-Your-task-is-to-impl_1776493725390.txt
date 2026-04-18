@@ -1,0 +1,190 @@
+You are a senior frontend engineer. Your task is to implement EXACTLY the UI shown in the attached design images for the Admin Settings → Child Control section.
+
+🚫 DO NOT redesign, simplify, or improve anything
+🚫 DO NOT change layout, spacing, font sizes, colors, or structure
+🚫 DO NOT add or remove features
+🚫 DO NOT modify ANY logic or behavior
+✅ Follow the design 100% pixel-accurately
+
+---
+
+## 📱💻 TARGET PLATFORMS
+
+You MUST implement BOTH:
+
+1. MOBILE VIEW (PRIMARY)
+
+* Based exactly on the provided design
+* Screen width: 360–412px
+* Pixel-accurate implementation
+
+2. DESKTOP / PC VIEW (REQUIRED)
+
+* Create a responsive desktop version
+* Adapt layout ONLY for screen size (e.g., spacing, columns)
+* Maintain EXACT same:
+
+  * Components
+  * Visual style
+  * Hierarchy
+  * Interactions
+
+🚫 Desktop view must NOT:
+
+* Change logic
+* Add new features
+* Remove features
+* Combine or split components differently
+* Change workflows
+
+---
+
+## 🔒 LOGIC & FUNCTION (STRICTLY LOCKED)
+
+All logic must remain IDENTICAL across mobile and desktop.
+
+* Same state management
+* Same toggle behavior
+* Same restrictions logic
+* Same unlock/lock flows
+* Same triggers and conditions
+
+🚫 DO NOT:
+
+* Optimize logic
+* Simplify flows
+* Rename or reinterpret behavior
+* Replace with alternative implementations
+
+UI may adapt responsively
+LOGIC must remain EXACTLY THE SAME
+
+---
+
+## 🎯 FEATURES TO IMPLEMENT
+
+3 sections (must match design exactly):
+
+1. CHILD UNLOCK
+
+* Match UI exactly
+* Functional:
+
+  * Enables temporary access to locked apps
+  * Has clear ON/OFF state
+  * Includes any dialogs shown in design
+
+2. CHILD LOCK
+
+* Match UI exactly
+* Functional:
+
+  * Locks apps immediately
+  * Prevents usage unless unlocked
+  * Must reflect status visually
+
+3. APP RESTRICTIONS
+
+* Match layout exactly (list/grid)
+* Each item must include:
+
+  * App icon
+  * App name
+  * Toggle/state indicator
+* Functional:
+
+  * Toggle restricts/unrestricts app
+  * State persists
+
+---
+
+## 👁️ PREVIEW FUNCTION (CRITICAL)
+
+If the design includes:
+
+* Image preview
+* Preview button
+* Clickable mockup/screens
+
+Then you MUST implement REAL preview behavior:
+
+✅ When user clicks preview:
+
+* Show the ACTUAL page/view being referenced
+* Must render the real UI (not a static image)
+* Must reflect current states (locked/unlocked/restricted)
+* Must behave exactly as the real screen would
+
+🚫 DO NOT:
+
+* Show placeholder images
+* Show static screenshots
+* Fake the preview
+* Create a simplified mock version
+
+The preview must be a TRUE representation of the actual working page.
+
+---
+
+## 🎨 UI REQUIREMENTS (STRICT)
+
+Match EXACTLY:
+
+* Padding & margins
+* Spacing between elements
+* Font sizes & weights
+* Colors (no approximations)
+* Border radius
+* Shadows
+* Alignment
+
+🚫 DO NOT:
+
+* Reorder elements
+* Stack differently unless required by screen size
+* Replace components with alternatives
+
+---
+
+## ⚙️ INTERACTION RULES
+
+* All toggles must show clear ON/OFF states
+* Buttons must match design exactly
+* Any modal/pop-up must match design layout
+* No hidden features unless shown
+
+---
+
+## 📦 CODE REQUIREMENTS
+
+* Clean, modular structure
+
+* Separate UI and logic
+
+* Reusable components:
+
+  * Toggle switch
+  * App item
+  * Section container
+
+* Must support responsive layout:
+
+  * Mobile-first approach
+  * Desktop adaptation using CSS/media queries or layout system
+
+---
+
+## ❗ UNCERTAINTY RULE
+
+If ANY part of the design is unclear:
+→ ASK for clarification BEFORE implementing
+→ DO NOT guess or invent anything
+
+---
+
+## 📤 OUTPUT FORMAT
+
+* Full working UI (mobile + desktop)
+* Component structure
+* Interaction logic
+* Responsive implementation included

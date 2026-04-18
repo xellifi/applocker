@@ -3992,7 +3992,9 @@ class _MobileSettingsViewState extends State<_MobileSettingsView> {
 
   @override void initState() {
     super.initState();
-    _imageUrlCtrl.addListener(() => setState(() {}));
+    for (var c in [_imageUrlCtrl, _headingCtrl, _titleCtrl, _tasksCtrl, _rHeadCtrl, _rMsgCtrl, _rTasksCtrl]) {
+      c.addListener(() => setState(() {}));
+    }
     _load();
   }
   @override void dispose() {
@@ -4054,6 +4056,219 @@ class _MobileSettingsViewState extends State<_MobileSettingsView> {
     await ref.putData(Uint8List.fromList(bytes), SettableMetadata(contentType: file.type));
     final url = await ref.getDownloadURL();
     setState(() => _imageUrlCtrl.text = url);
+  }
+
+  Widget _buildLockPhoneMockup({required String heading, required String title, required List<String> tasks}) {
+    return Container(
+      width: 110,
+      height: 210,
+      decoration: BoxDecoration(
+        color: const Color(0xFFFBBF24),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFF1E293B), width: 3),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 8, offset: const Offset(0, 4))],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(15),
+        child: Column(children: [
+          Container(height: 10, color: const Color(0xFF1E293B), child: Center(child: Container(width: 28, height: 4, decoration: BoxDecoration(color: const Color(0xFF374151), borderRadius: BorderRadius.circular(2))))),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Column(children: [
+                Container(width: 24, height: 24, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: const Color(0xFF1E293B), width: 1.5)), child: const Icon(Icons.add, size: 12, color: Color(0xFF1E293B))),
+                const SizedBox(height: 4),
+                Text(heading, style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF1E293B), letterSpacing: 1)),
+                const SizedBox(height: 6),
+                Container(
+                  width: double.infinity, padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.6), borderRadius: BorderRadius.circular(6)),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(title, style: GoogleFonts.outfit(fontSize: 6, fontWeight: FontWeight.w800, color: const Color(0xFF1E293B))),
+                    const SizedBox(height: 2),
+                    ...tasks.take(3).map((t) => Text(t, style: GoogleFonts.outfit(fontSize: 5, color: const Color(0xFF374151)), overflow: TextOverflow.ellipsis)),
+                  ]),
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 4),
+                  decoration: BoxDecoration(color: const Color(0xFF10B981), borderRadius: BorderRadius.circular(6)),
+                  child: Text('SEND MESSAGE HERE', style: GoogleFonts.outfit(fontSize: 5, fontWeight: FontWeight.w700, color: Colors.white), textAlign: TextAlign.center),
+                ),
+                const SizedBox(height: 4),
+                Text('This device is managed by\nyour parent', style: GoogleFonts.outfit(fontSize: 4.5, color: const Color(0xFF374151)), textAlign: TextAlign.center),
+              ]),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _buildRestrictedPhoneMockup({required String headline, required List<String> tasks}) {
+    return Container(
+      width: 110,
+      height: 210,
+      decoration: BoxDecoration(
+        color: const Color(0xFFEF4444),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFF1E293B), width: 3),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 8, offset: const Offset(0, 4))],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(15),
+        child: Column(children: [
+          Container(height: 10, color: const Color(0xFF1E293B), child: Center(child: Container(width: 28, height: 4, decoration: BoxDecoration(color: const Color(0xFF374151), borderRadius: BorderRadius.circular(2))))),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Column(children: [
+                const Icon(Icons.warning_amber_rounded, size: 22, color: Colors.white),
+                const SizedBox(height: 2),
+                Text(headline, style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 0.5), textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 6),
+                Container(
+                  width: double.infinity, padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.25), borderRadius: BorderRadius.circular(6)),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('YOUR TASKS', style: GoogleFonts.outfit(fontSize: 5.5, fontWeight: FontWeight.w800, color: Colors.white)),
+                    const SizedBox(height: 2),
+                    ...tasks.take(2).map((t) => Text(t, style: GoogleFonts.outfit(fontSize: 5, color: Colors.white70), overflow: TextOverflow.ellipsis)),
+                  ]),
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 4),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(6)),
+                  child: Text('GOT IT', style: GoogleFonts.outfit(fontSize: 6, fontWeight: FontWeight.w800, color: const Color(0xFFEF4444)), textAlign: TextAlign.center),
+                ),
+              ]),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  void _showLockPreviewDialog() {
+    final tasks = _tasksCtrl.text.trim().split('\n').where((l) => l.trim().isNotEmpty).toList();
+    final heading = _headingCtrl.text.isEmpty ? 'LOCKED' : _headingCtrl.text;
+    final title = _titleCtrl.text.isEmpty ? 'Parent Tasks' : _titleCtrl.text;
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          width: 320, padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(color: widget.isDark ? const Color(0xFF0F1A35) : Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: const Color(0xFF22C55E).withOpacity(0.5))),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text('Lock Screen Preview', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: widget.isDark ? Colors.white : const Color(0xFF1E293B))),
+            const SizedBox(height: 16),
+            Container(
+              width: 200, height: 360,
+              decoration: BoxDecoration(color: const Color(0xFFFBBF24), borderRadius: BorderRadius.circular(28), border: Border.all(color: const Color(0xFF1E293B), width: 4)),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: Column(children: [
+                  Container(height: 16, color: const Color(0xFF1E293B), child: Center(child: Container(width: 40, height: 6, decoration: BoxDecoration(color: const Color(0xFF374151), borderRadius: BorderRadius.circular(3))))),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(children: [
+                        Container(width: 44, height: 44, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: const Color(0xFF1E293B), width: 2)), child: const Icon(Icons.add, color: Color(0xFF1E293B))),
+                        const SizedBox(height: 10),
+                        Text(heading, style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: const Color(0xFF1E293B), letterSpacing: 2)),
+                        const SizedBox(height: 12),
+                        Container(
+                          width: double.infinity, padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(color: Colors.white.withOpacity(0.7), borderRadius: BorderRadius.circular(10)),
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text('YOUR TASKS', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF1E293B))),
+                            Text(title, style: GoogleFonts.outfit(fontSize: 8, color: const Color(0xFF374151))),
+                            const SizedBox(height: 6),
+                            ...tasks.take(4).map((t) => Padding(padding: const EdgeInsets.only(bottom: 2), child: Text('• $t', style: GoogleFonts.outfit(fontSize: 9, color: const Color(0xFF374151))))),
+                          ]),
+                        ),
+                        const SizedBox(height: 10),
+                        Container(
+                          width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(color: const Color(0xFF10B981), borderRadius: BorderRadius.circular(10)),
+                          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.send_rounded, color: Colors.white, size: 14), const SizedBox(width: 6), Text('SEND MESSAGE HERE', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white))]),
+                        ),
+                        const SizedBox(height: 8),
+                        Text('This device is managed by your parent.\nComplete tasks to unlock.', style: GoogleFonts.outfit(fontSize: 9, color: const Color(0xFF374151)), textAlign: TextAlign.center),
+                      ]),
+                    ),
+                  ),
+                ]),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Close', style: GoogleFonts.outfit(color: const Color(0xFF22C55E), fontWeight: FontWeight.w700))),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  void _showRestrictedPreviewDialog() {
+    final tasks = _rTasksCtrl.text.trim().split('\n').where((l) => l.trim().isNotEmpty).toList();
+    final headline = _rHeadCtrl.text.isEmpty ? 'APP RESTRICTED' : _rHeadCtrl.text;
+    final msg = _rMsgCtrl.text.isEmpty ? 'Access to this application is restricted by parent settings.' : _rMsgCtrl.text;
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          width: 320, padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(color: widget.isDark ? const Color(0xFF0F1A35) : Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: const Color(0xFFEF4444).withOpacity(0.5))),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text('App Restricted Preview', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: widget.isDark ? Colors.white : const Color(0xFF1E293B))),
+            const SizedBox(height: 16),
+            Container(
+              width: 200, height: 360,
+              decoration: BoxDecoration(color: const Color(0xFFEF4444), borderRadius: BorderRadius.circular(28), border: Border.all(color: const Color(0xFF1E293B), width: 4)),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: Column(children: [
+                  Container(height: 16, color: const Color(0xFF1E293B), child: Center(child: Container(width: 40, height: 6, decoration: BoxDecoration(color: const Color(0xFF374151), borderRadius: BorderRadius.circular(3))))),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                        Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle), child: const Icon(Icons.warning_amber_rounded, size: 36, color: Colors.white)),
+                        const SizedBox(height: 12),
+                        Text(headline, style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1), textAlign: TextAlign.center),
+                        const SizedBox(height: 8),
+                        Text(msg, style: GoogleFonts.outfit(fontSize: 9, color: Colors.white70), textAlign: TextAlign.center),
+                        const SizedBox(height: 12),
+                        if (tasks.isNotEmpty) Container(
+                          width: double.infinity, padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(10)),
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text('YOUR TASKS', style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.w900, color: Colors.white)),
+                            const SizedBox(height: 4),
+                            ...tasks.take(4).map((t) => Padding(padding: const EdgeInsets.only(bottom: 2), child: Text('• $t', style: GoogleFonts.outfit(fontSize: 9, color: Colors.white70)))),
+                          ]),
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 10),
+                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
+                          child: Text('GOT IT', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: const Color(0xFFEF4444)), textAlign: TextAlign.center),
+                        ),
+                      ]),
+                    ),
+                  ),
+                ]),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Close', style: GoogleFonts.outfit(color: const Color(0xFFEF4444), fontWeight: FontWeight.w700))),
+          ]),
+        ),
+      ),
+    );
   }
 
   Widget _sectionWrap(String title, String sectionId, Widget body, {bool showSave = true}) {
@@ -4179,33 +4394,138 @@ class _MobileSettingsViewState extends State<_MobileSettingsView> {
             builder: (context, snap) {
               final devices = snap.data?.docs ?? [];
               _selDevice ??= devices.isNotEmpty ? devices.first.id : null;
-              return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Target Device', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w600)),
-                const SizedBox(height: 4),
-                if (devices.isNotEmpty) Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(color: widget.isDark ? const Color(0xFF0F1A35) : Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFF22C55E).withOpacity(0.8))),
-                  child: DropdownButton<String>(
-                    value: devices.any((d) => d.id == _selDevice) ? _selDevice : devices.first.id, isExpanded: true, underline: const SizedBox(),
-                    dropdownColor: widget.isDark ? const Color(0xFF0F1A35) : Colors.white,
-                    style: GoogleFonts.outfit(fontSize: 13, color: widget.isDark ? Colors.white : const Color(0xFF1E293B)),
-                    items: devices.map((d) => DropdownMenuItem(value: d.id, child: Text(d.id))).toList(),
-                    onChanged: (v) => setState(() => _selDevice = v),
-                  ),
+              final textColor = widget.isDark ? Colors.white : const Color(0xFF1E293B);
+              final tasks = _tasksCtrl.text.trim().split('\n').where((l) => l.trim().isNotEmpty).toList();
+              return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('Target Device', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 4),
+                    if (devices.isNotEmpty) Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(color: widget.isDark ? const Color(0xFF0F1A35) : Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFF22C55E).withOpacity(0.8))),
+                      child: DropdownButton<String>(
+                        value: devices.any((d) => d.id == _selDevice) ? _selDevice : devices.first.id, isExpanded: true, underline: const SizedBox(),
+                        dropdownColor: widget.isDark ? const Color(0xFF0F1A35) : Colors.white,
+                        style: GoogleFonts.outfit(fontSize: 13, color: widget.isDark ? Colors.white : const Color(0xFF1E293B)),
+                        items: devices.map((d) => DropdownMenuItem(value: d.id, child: Text(d.id))).toList(),
+                        onChanged: (v) => setState(() => _selDevice = v),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(children: [
+                      Text('Lock Screen Heading', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w600)),
+                      const Spacer(),
+                      Text('Core Messaging', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w800, color: textColor)),
+                    ]),
+                    const SizedBox(height: 4),
+                    TextField(
+                      controller: _headingCtrl,
+                      style: GoogleFonts.outfit(fontSize: 13, color: textColor),
+                      decoration: InputDecoration(
+                        hintText: 'LOCKED',
+                        hintStyle: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF94A3B8)),
+                        filled: true, fillColor: widget.isDark ? const Color(0xFF0F1A35) : Colors.white,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF22C55E), width: 0.8)),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF22C55E), width: 0.8)),
+                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF22C55E), width: 1.5)),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    _tf('Lock Screen Title', _titleCtrl, hint: 'Parent Tasks'),
+                    _tf('Lock Screen Task  (One per line )', _tasksCtrl, maxLines: 5, hint: 'Cook Food\nBreakfast\nWash Dishes\nClean House'),
+                  ]),
                 ),
-                const SizedBox(height: 10),
-                _tf('Lock Screen Heading', _headingCtrl, hint: 'LOCKED'),
-                _tf('Lock Screen Title', _titleCtrl, hint: 'Your Tasks'),
-                _tf('Lock Screen Tasks (one per line)', _tasksCtrl, maxLines: 5, hint: 'Cook Food\nBreakfast\nWash Dishes'),
+                const SizedBox(width: 12),
+                Column(children: [
+                  _buildLockPhoneMockup(
+                    heading: _headingCtrl.text.isEmpty ? 'LOCKED' : _headingCtrl.text,
+                    title: _titleCtrl.text.isEmpty ? 'YOUR TASKS' : _titleCtrl.text.toUpperCase(),
+                    tasks: tasks.isEmpty ? ['Cook Food 11:00AM', 'Lunch 12:00 AM', 'Wash Dishes 12:30 PM'] : tasks,
+                  ),
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: () => _showLockPreviewDialog(),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                      decoration: BoxDecoration(color: const Color(0xFF22C55E), borderRadius: BorderRadius.circular(10)),
+                      child: Text('Preview', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
+                    ),
+                  ),
+                ]),
               ]);
             },
           )),
 
-          _sectionWrap('App Restricted Settings', 'restrict', Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _tf('App Restricted Headline', _rHeadCtrl, hint: 'APP RESTRICTED'),
-            _tf('App Restricted Fallback Message', _rMsgCtrl, maxLines: 2, hint: 'Access to this application is restricted.'),
-            _tf('List of Tasks to Show (one per line)', _rTasksCtrl, maxLines: 5, hint: 'Cook Food\nBreakfast'),
-          ])),
+          _sectionWrap('App Restricted Settings', 'restrict', Builder(builder: (context) {
+            final textColor = widget.isDark ? Colors.white : const Color(0xFF1E293B);
+            final rTasks = _rTasksCtrl.text.trim().split('\n').where((l) => l.trim().isNotEmpty).toList();
+            return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    Text('App Restricted Headline', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w600)),
+                    const Spacer(),
+                    Text('Core Messaging', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w800, color: textColor)),
+                  ]),
+                  const SizedBox(height: 4),
+                  TextField(
+                    controller: _rHeadCtrl,
+                    style: GoogleFonts.outfit(fontSize: 13, color: textColor),
+                    decoration: InputDecoration(
+                      hintText: 'APP RESTRICTED',
+                      hintStyle: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF94A3B8)),
+                      filled: true, fillColor: widget.isDark ? const Color(0xFF0F1A35) : Colors.white,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF22C55E), width: 0.8)),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF22C55E), width: 0.8)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF22C55E), width: 1.5)),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  _tf('App Restricted Fallback Message', _rMsgCtrl, maxLines: 2, hint: 'Access to this application is restricted by parent settings.'),
+                  Row(children: [
+                    Expanded(child: Text('List of Task to Show  (one per line)', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w600))),
+                    const SizedBox(width: 4),
+                    Text('Restricted Task List', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w800, color: textColor)),
+                  ]),
+                  const SizedBox(height: 4),
+                  TextField(
+                    controller: _rTasksCtrl,
+                    maxLines: 5,
+                    style: GoogleFonts.outfit(fontSize: 13, color: textColor),
+                    decoration: InputDecoration(
+                      hintText: 'Cook Food\nBreakfast\nWash Dishes\nClean House',
+                      hintStyle: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF94A3B8)),
+                      filled: true, fillColor: widget.isDark ? const Color(0xFF0F1A35) : Colors.white,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF22C55E), width: 0.8)),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF22C55E), width: 0.8)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF22C55E), width: 1.5)),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ]),
+              ),
+              const SizedBox(width: 12),
+              Column(children: [
+                _buildRestrictedPhoneMockup(
+                  headline: _rHeadCtrl.text.isEmpty ? 'RESTRICTED' : _rHeadCtrl.text,
+                  tasks: rTasks.isEmpty ? ['Cook Food 11:00AM', 'Lunch 12:00 AM'] : rTasks,
+                ),
+                const SizedBox(height: 8),
+                GestureDetector(
+                  onTap: () => _showRestrictedPreviewDialog(),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                    decoration: BoxDecoration(color: const Color(0xFF22C55E), borderRadius: BorderRadius.circular(10)),
+                    child: Text('Preview', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
+                  ),
+                ),
+              ]),
+            ]);
+          })),
 
           _sectionWrap('Default Master PIN', 'pin', Row(children: [
             Expanded(child: TextField(
@@ -6148,7 +6468,9 @@ class _SettingsViewState extends State<_SettingsView> {
   @override
   void initState() {
     super.initState();
-    _profileImageUrlCtrl.addListener(() => setState(() {}));
+    for (var c in [_profileImageUrlCtrl, _lockHeadlineCtrl, _taskTitleCtrl, _taskListCtrl, _restHeadlineCtrl, _restMsgCtrl, _warningListCtrl]) {
+      c.addListener(() => setState(() {}));
+    }
   }
 
   Future<void> _pickAndUploadImage() async {
@@ -6296,6 +6618,11 @@ class _SettingsViewState extends State<_SettingsView> {
           });
         }
 
+        final sectionBg = widget.isDark ? const Color(0xFF091526) : const Color(0xFFECFDF5);
+        final textColor = widget.isDark ? Colors.white : const Color(0xFF1E293B);
+        final lockTasks = _taskListCtrl.text.trim().split('\n').where((l) => l.trim().isNotEmpty).toList();
+        final rTasks = _warningListCtrl.text.trim().split('\n').where((l) => l.trim().isNotEmpty).toList();
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -6303,205 +6630,226 @@ class _SettingsViewState extends State<_SettingsView> {
             const SizedBox(height: 8),
             Text('Manage your account, preferences, and system security.', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 14)),
             const SizedBox(height: 32),
-            
-            _buildSettingsSection('UNLOCK PAGE CUSTOMISATION', [
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('CHILD HOME SCREEN', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF6366F1), letterSpacing: 1.5)),
-                    const SizedBox(height: 16),
 
-                    // Profile image upload
-                    Text('PARENT PROFILE IMAGE', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF94A3B8), letterSpacing: 1.2)),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        // Portrait image preview
-                        Container(
-                          width: 72,
-                          height: 96,
-                          decoration: BoxDecoration(
-                            color: widget.isDark ? Colors.white10 : const Color(0xFFF1F5F9),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFF64748B), width: 0.8),
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(11),
-                            child: _profileImageUrlCtrl.text.isNotEmpty
-                                ? Image.network(
-                                    _profileImageUrlCtrl.text,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => const Icon(
-                                        Icons.person_rounded,
-                                        color: Color(0xFF94A3B8),
-                                        size: 36),
-                                  )
-                                : const Icon(Icons.person_rounded,
-                                    color: Color(0xFF94A3B8), size: 36),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Upload a portrait photo to show on the child\'s home screen.',
-                                style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF94A3B8), height: 1.4),
-                              ),
-                              const SizedBox(height: 10),
-                              OutlinedButton.icon(
-                                onPressed: _uploadingImage ? null : _pickAndUploadImage,
-                                icon: _uploadingImage
-                                    ? const SizedBox(width: 14, height: 14,
-                                        child: CircularProgressIndicator(strokeWidth: 2))
-                                    : const Icon(Icons.upload_rounded, size: 16),
-                                label: Text(
-                                  _uploadingImage ? 'Uploading...' : 'Choose Image',
-                                  style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 13),
-                                ),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: const Color(0xFF6366F1),
-                                  side: const BorderSide(color: Color(0xFF6366F1)),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              Text(
-                                'Or paste an image URL:',
-                                style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF94A3B8)),
-                              ),
-                              const SizedBox(height: 6),
-                              TextField(
-                                controller: _profileImageUrlCtrl,
-                                onChanged: (_) => setState(() {}),
-                                style: GoogleFonts.outfit(fontSize: 12, color: widget.isDark ? Colors.white : const Color(0xFF1E293B)),
-                                decoration: InputDecoration(
-                                  hintText: 'https://example.com/photo.jpg',
-                                  hintStyle: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF94A3B8)),
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                  filled: true,
-                                  fillColor: widget.isDark ? Colors.white10 : const Color(0xFFF1F5F9),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                    borderSide: const BorderSide(color: Color(0xFF64748B), width: 0.8),
-                                  ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                    borderSide: const BorderSide(color: Color(0xFF64748B), width: 0.8),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                    borderSide: const BorderSide(color: Color(0xFF6366F1), width: 1.2),
-                                  ),
-                                  suffixIcon: _profileImageUrlCtrl.text.isNotEmpty
-                                      ? IconButton(
-                                          icon: const Icon(Icons.clear_rounded, size: 16, color: Color(0xFF94A3B8)),
-                                          onPressed: () => setState(() => _profileImageUrlCtrl.text = ''),
-                                          tooltip: 'Clear',
-                                        )
-                                      : null,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 20),
-                    _buildInputField('PARENT QUOTE (shown on child screen)', 'e.g. Be kind and work hard today!', _parentQuoteCtrl),
-                    const SizedBox(height: 16),
-                    _buildInputField('UNLOCK GREETING', 'e.g. Enjoy Your Day', _unlockGreetingCtrl),
-                  ],
+            // ── Child App View Data ──
+            Row(children: [
+              Text('Child App View Data', style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w800, color: textColor)),
+              const Spacer(),
+              GestureDetector(
+                onTap: _isLoading ? null : _saveSettings,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 9),
+                  decoration: BoxDecoration(color: const Color(0xFF22C55E), borderRadius: BorderRadius.circular(20)),
+                  child: Text(_isLoading ? '...' : 'save', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
                 ),
               ),
             ]),
-
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity, padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(color: sectionBg, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFF22C55E).withOpacity(0.3))),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  _desktopTf('Paste your URL here', _profileImageUrlCtrl, hint: 'https://example.com/photo.jpg'),
+                  _desktopTf('Parent Quote', _parentQuoteCtrl, maxLines: 3, hint: '"I love you more than words can ever say.\nMama missed you so much"'),
+                  _desktopTf('Unlock Greetings', _unlockGreetingCtrl, hint: '" Enjoy Your Day My Child. "'),
+                ])),
+                const SizedBox(width: 16),
+                Column(children: [
+                  Container(
+                    width: 100, height: 130,
+                    decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), color: widget.isDark ? Colors.white10 : const Color(0xFFE2E8F0)), clipBehavior: Clip.hardEdge,
+                    child: _profileImageUrlCtrl.text.isNotEmpty
+                        ? Image.network(_profileImageUrlCtrl.text, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.person_rounded, size: 40, color: Color(0xFF94A3B8)))
+                        : const Icon(Icons.person_rounded, size: 40, color: Color(0xFF94A3B8)),
+                  ),
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: _uploadingImage ? null : _pickAndUploadImage,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                      decoration: BoxDecoration(color: const Color(0xFFFBBF24), borderRadius: BorderRadius.circular(8)),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        _uploadingImage ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.upload_rounded, color: Colors.white, size: 14),
+                        const SizedBox(width: 4),
+                        Text(_uploadingImage ? '...' : 'Choose Img', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
+                      ]),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  GestureDetector(
+                    onTap: () {
+                      final imgUrl = _profileImageUrlCtrl.text;
+                      final quote = _parentQuoteCtrl.text;
+                      final greeting = _unlockGreetingCtrl.text;
+                      showDialog(context: context, builder: (ctx) => Dialog(
+                        backgroundColor: Colors.transparent,
+                        child: Container(
+                          width: 320, padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(color: widget.isDark ? const Color(0xFF0F1A35) : Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: const Color(0xFF22C55E).withOpacity(0.5))),
+                          child: Column(mainAxisSize: MainAxisSize.min, children: [
+                            Text('Child Screen Preview', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: textColor)),
+                            const SizedBox(height: 16),
+                            Container(
+                              width: 200, height: 360,
+                              decoration: BoxDecoration(color: const Color(0xFF060D1F), borderRadius: BorderRadius.circular(28), border: Border.all(color: const Color(0xFF22C55E), width: 2)),
+                              child: ClipRRect(borderRadius: BorderRadius.circular(26), child: Column(children: [
+                                Container(height: 16, color: Colors.black, child: Center(child: Container(width: 40, height: 6, decoration: BoxDecoration(color: const Color(0xFF1F2937), borderRadius: BorderRadius.circular(3))))),
+                                Expanded(child: Padding(padding: const EdgeInsets.all(16), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                                  Container(width: 80, height: 80, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: const Color(0xFF22C55E), width: 2)), clipBehavior: Clip.hardEdge,
+                                    child: imgUrl.isNotEmpty ? Image.network(imgUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.person_rounded, size: 40, color: Colors.white30)) : const Icon(Icons.person_rounded, size: 40, color: Colors.white30)),
+                                  const SizedBox(height: 12),
+                                  if (greeting.isNotEmpty) Text(greeting, style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white), textAlign: TextAlign.center),
+                                  const SizedBox(height: 8),
+                                  if (quote.isNotEmpty) Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: Text('"$quote"', style: GoogleFonts.outfit(fontSize: 10, color: Colors.white60, fontStyle: FontStyle.italic), textAlign: TextAlign.center)),
+                                  const Spacer(),
+                                  Padding(padding: const EdgeInsets.only(bottom: 20), child: Container(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10), decoration: BoxDecoration(color: const Color(0xFF22C55E), borderRadius: BorderRadius.circular(14)), child: Text('UNLOCK', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 3)))),
+                                ]))),
+                              ])),
+                            ),
+                            const SizedBox(height: 16),
+                            TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Close', style: GoogleFonts.outfit(color: const Color(0xFF22C55E), fontWeight: FontWeight.w700))),
+                          ]),
+                        ),
+                      ));
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                      decoration: BoxDecoration(color: const Color(0xFF22C55E), borderRadius: BorderRadius.circular(8)),
+                      child: Text('Preview', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
+                    ),
+                  ),
+                ]),
+              ]),
+            ),
             const SizedBox(height: 24),
 
-            _buildSettingsSection('DEVICE LOCK SCREEN SETTINGS', [
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('TARGET DEVICE', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF94A3B8), letterSpacing: 1.5)),
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(color: widget.isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05), borderRadius: BorderRadius.circular(12)),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: _selectedDeviceId,
-                          isExpanded: true,
-                          dropdownColor: widget.cardColor,
-                          items: devices.map((d) => DropdownMenuItem(value: d.id, child: Text(d.id, style: GoogleFonts.outfit(color: widget.textColor)))).toList(),
-                          onChanged: (val) {
-                            if (val == null) return;
-                            setState(() => _selectedDeviceId = val);
-                            _loadDeviceSettings(val, devices);
-                          },
-                        ),
+            // ── Device Lock Screen Settings ──
+            Text('Device Lock Screen Settings', style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w800, color: textColor)),
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity, padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(color: sectionBg, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFF22C55E).withOpacity(0.3))),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Target Device', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(color: widget.isDark ? const Color(0xFF0F1A35) : Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFF22C55E).withOpacity(0.8))),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _selectedDeviceId,
+                        isExpanded: true,
+                        dropdownColor: widget.isDark ? const Color(0xFF0F1A35) : Colors.white,
+                        style: GoogleFonts.outfit(fontSize: 13, color: textColor),
+                        items: devices.map((d) => DropdownMenuItem(value: d.id, child: Text(d.id))).toList(),
+                        onChanged: (val) {
+                          if (val == null) return;
+                          setState(() => _selectedDeviceId = val);
+                          _loadDeviceSettings(val, devices);
+                        },
                       ),
                     ),
-                    const SizedBox(height: 32),
-                    
-                    Text('CORE MESSAGING', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF6366F1), letterSpacing: 1.5)),
-                    const SizedBox(height: 16),
-                    _buildInputField('LOCK SCREEN HEADLINE', 'e.g. Parental Control Active', _lockHeadlineCtrl),
-                    const SizedBox(height: 16),
-                    _buildInputField('LOCK SCREEN TITLE', 'e.g. Mother\'s To-Do List', _taskTitleCtrl),
-                    const SizedBox(height: 16),
-                    _buildInputField('LOCK SCREEN TASKS (One per line)', 'e.g. Brush teeth\nStudy for 1 hour', _taskListCtrl, maxLines: 4),
-                    const SizedBox(height: 16),
-                    _buildInputField('LOCK SCREEN FALLBACK MESSAGE', 'Shown when task list is empty', _lockMsgCtrl, maxLines: 2),
-                  ],
-                ),
-              ),
-            ]),
-
+                  ),
+                  const SizedBox(height: 12),
+                  Row(children: [
+                    Text('Lock Screen Heading', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w600)),
+                    const Spacer(),
+                    Text('Core Messaging', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: textColor)),
+                  ]),
+                  const SizedBox(height: 4),
+                  _desktopTfRaw(_lockHeadlineCtrl, hint: 'LOCKED'),
+                  _desktopTf('Lock Screen Title', _taskTitleCtrl, hint: 'Parent Tasks'),
+                  _desktopTf('Lock Screen Task  (One per line )', _taskListCtrl, maxLines: 4, hint: 'Cook Food\nBreakfast\nWash Dishes\nClean House'),
+                ])),
+                const SizedBox(width: 16),
+                Column(children: [
+                  _desktopLockPhoneMockup(
+                    heading: _lockHeadlineCtrl.text.isEmpty ? 'LOCKED' : _lockHeadlineCtrl.text,
+                    title: _taskTitleCtrl.text.isEmpty ? 'YOUR TASKS' : _taskTitleCtrl.text.toUpperCase(),
+                    tasks: lockTasks.isEmpty ? ['Cook Food 11:00AM', 'Lunch 12:00 AM', 'Wash Dishes 12:30 PM'] : lockTasks,
+                  ),
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: () => _desktopShowLockPreview(textColor),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 9),
+                      decoration: BoxDecoration(color: const Color(0xFF22C55E), borderRadius: BorderRadius.circular(10)),
+                      child: Text('Preview', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
+                    ),
+                  ),
+                ]),
+              ]),
+            ),
             const SizedBox(height: 24),
 
-            _buildSettingsSection('APP RESTRICTION SETTINGS', [
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('CORE MESSAGING', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF6366F1), letterSpacing: 1.5)),
-                    const SizedBox(height: 16),
-                    _buildInputField('APP RESTRICTED HEADLINE', 'e.g. App Restricted', _restHeadlineCtrl),
-                    const SizedBox(height: 16),
-                    _buildInputField('APP RESTRICTED FALLBACK MESSAGE', 'Shown when task list is empty', _restMsgCtrl, maxLines: 2),
-                    const SizedBox(height: 24),
-                    
-                    Text('RESTRICTED TASK LIST', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF6366F1), letterSpacing: 1.5)),
-                    const SizedBox(height: 16),
-                    _buildInputField('LIST OF TASKS TO SHOW (One per line)', 'e.g. Just for today, sorry\nAsk your parent first', _warningListCtrl, maxLines: 4),
-                  ],
+            // ── App Restricted Settings ──
+            Row(children: [
+              Text('App Restricted Settings', style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w800, color: textColor)),
+              const Spacer(),
+              GestureDetector(
+                onTap: _isLoading ? null : _saveSettings,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 9),
+                  decoration: BoxDecoration(color: const Color(0xFF22C55E), borderRadius: BorderRadius.circular(20)),
+                  child: Text(_isLoading ? '...' : 'save', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
                 ),
               ),
             ]),
-
-            const SizedBox(height: 32),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _isLoading ? null : _saveSettings,
-                icon: _isLoading ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.save_rounded, size: 18),
-                label: Text(_isLoading ? 'SAVING CHANGES...' : 'SAVE ALL SETTINGS', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, letterSpacing: 0.5)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6366F1),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 24),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                  elevation: 8,
-                  shadowColor: const Color(0xFF6366F1).withOpacity(0.5),
-                ),
-              ),
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity, padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(color: sectionBg, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFF22C55E).withOpacity(0.3))),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    Text('App Restricted Headline', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w600)),
+                    const Spacer(),
+                    Text('Core Messaging', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: textColor)),
+                  ]),
+                  const SizedBox(height: 4),
+                  _desktopTfRaw(_restHeadlineCtrl, hint: 'APP RESTRICTED'),
+                  _desktopTf('App Restricted Fallback Message', _restMsgCtrl, maxLines: 2, hint: 'Access to this application is restricted by parent settings.'),
+                  Row(children: [
+                    Expanded(child: Text('List of Task to Show  (one per line)', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w600))),
+                    const SizedBox(width: 4),
+                    Text('Restricted Task List', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: textColor)),
+                  ]),
+                  const SizedBox(height: 4),
+                  TextField(
+                    controller: _warningListCtrl,
+                    maxLines: 5,
+                    style: GoogleFonts.outfit(fontSize: 13, color: textColor),
+                    decoration: InputDecoration(
+                      hintText: 'Cook Food\nBreakfast\nWash Dishes\nClean House',
+                      hintStyle: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF94A3B8)),
+                      filled: true, fillColor: widget.isDark ? const Color(0xFF0F1A35) : Colors.white,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF22C55E), width: 0.8)),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF22C55E), width: 0.8)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF22C55E), width: 1.5)),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ])),
+                const SizedBox(width: 16),
+                Column(children: [
+                  _desktopRestrictedPhoneMockup(
+                    headline: _restHeadlineCtrl.text.isEmpty ? 'RESTRICTED' : _restHeadlineCtrl.text,
+                    tasks: rTasks.isEmpty ? ['Cook Food 11:00AM', 'Lunch 12:00 AM'] : rTasks,
+                  ),
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: () => _desktopShowRestrictedPreview(textColor),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 9),
+                      decoration: BoxDecoration(color: const Color(0xFF22C55E), borderRadius: BorderRadius.circular(10)),
+                      child: Text('Preview', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
+                    ),
+                  ),
+                ]),
+              ]),
             ),
 
             const SizedBox(height: 32),
@@ -6539,6 +6887,171 @@ class _SettingsViewState extends State<_SettingsView> {
         );
       }
     );
+  }
+
+  Widget _desktopTf(String label, TextEditingController ctrl, {int maxLines = 1, String? hint}) {
+    final textColor = widget.isDark ? Colors.white : const Color(0xFF1E293B);
+    final bg = widget.isDark ? const Color(0xFF0F1A35) : Colors.white;
+    final border = OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF22C55E), width: 0.8));
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w600)),
+      const SizedBox(height: 4),
+      TextField(controller: ctrl, maxLines: maxLines, style: GoogleFonts.outfit(fontSize: 13, color: textColor),
+        decoration: InputDecoration(hintText: hint, hintStyle: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF94A3B8)), filled: true, fillColor: bg, contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), border: border, enabledBorder: border, focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF22C55E), width: 1.5)))),
+      const SizedBox(height: 10),
+    ]);
+  }
+
+  Widget _desktopTfRaw(TextEditingController ctrl, {String? hint}) {
+    final textColor = widget.isDark ? Colors.white : const Color(0xFF1E293B);
+    final bg = widget.isDark ? const Color(0xFF0F1A35) : Colors.white;
+    final border = OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF22C55E), width: 0.8));
+    return Column(children: [
+      TextField(controller: ctrl, style: GoogleFonts.outfit(fontSize: 13, color: textColor),
+        decoration: InputDecoration(hintText: hint, hintStyle: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF94A3B8)), filled: true, fillColor: bg, contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), border: border, enabledBorder: border, focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF22C55E), width: 1.5)))),
+      const SizedBox(height: 10),
+    ]);
+  }
+
+  Widget _desktopLockPhoneMockup({required String heading, required String title, required List<String> tasks}) {
+    return Container(
+      width: 130, height: 250,
+      decoration: BoxDecoration(color: const Color(0xFFFBBF24), borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFF1E293B), width: 3.5),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 10, offset: const Offset(0, 4))]),
+      child: ClipRRect(borderRadius: BorderRadius.circular(17), child: Column(children: [
+        Container(height: 12, color: const Color(0xFF1E293B), child: Center(child: Container(width: 34, height: 5, decoration: BoxDecoration(color: const Color(0xFF374151), borderRadius: BorderRadius.circular(3))))),
+        Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8), child: Column(children: [
+          Container(width: 28, height: 28, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: const Color(0xFF1E293B), width: 2)), child: const Icon(Icons.add, size: 14, color: Color(0xFF1E293B))),
+          const SizedBox(height: 4),
+          Text(heading, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: const Color(0xFF1E293B), letterSpacing: 1), maxLines: 1, overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 8),
+          Container(width: double.infinity, padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: Colors.white.withOpacity(0.65), borderRadius: BorderRadius.circular(8)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title, style: GoogleFonts.outfit(fontSize: 7, fontWeight: FontWeight.w800, color: const Color(0xFF1E293B))),
+              const SizedBox(height: 3),
+              ...tasks.take(3).map((t) => Text(t, style: GoogleFonts.outfit(fontSize: 6, color: const Color(0xFF374151)), overflow: TextOverflow.ellipsis)),
+            ])),
+          const SizedBox(height: 8),
+          Container(width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 5), decoration: BoxDecoration(color: const Color(0xFF10B981), borderRadius: BorderRadius.circular(8)),
+            child: Text('SEND MESSAGE HERE', style: GoogleFonts.outfit(fontSize: 6, fontWeight: FontWeight.w700, color: Colors.white), textAlign: TextAlign.center)),
+          const SizedBox(height: 5),
+          Text('This device is managed by your parent.', style: GoogleFonts.outfit(fontSize: 5.5, color: const Color(0xFF374151)), textAlign: TextAlign.center),
+        ]))),
+      ])),
+    );
+  }
+
+  Widget _desktopRestrictedPhoneMockup({required String headline, required List<String> tasks}) {
+    return Container(
+      width: 130, height: 250,
+      decoration: BoxDecoration(color: const Color(0xFFEF4444), borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFF1E293B), width: 3.5),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 10, offset: const Offset(0, 4))]),
+      child: ClipRRect(borderRadius: BorderRadius.circular(17), child: Column(children: [
+        Container(height: 12, color: const Color(0xFF1E293B), child: Center(child: Container(width: 34, height: 5, decoration: BoxDecoration(color: const Color(0xFF374151), borderRadius: BorderRadius.circular(3))))),
+        Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8), child: Column(children: [
+          const Icon(Icons.warning_amber_rounded, size: 28, color: Colors.white),
+          const SizedBox(height: 4),
+          Text(headline, style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 0.5), textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 8),
+          Container(width: double.infinity, padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: Colors.white.withOpacity(0.25), borderRadius: BorderRadius.circular(8)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('YOUR TASKS', style: GoogleFonts.outfit(fontSize: 6.5, fontWeight: FontWeight.w800, color: Colors.white)),
+              const SizedBox(height: 3),
+              ...tasks.take(2).map((t) => Text(t, style: GoogleFonts.outfit(fontSize: 6, color: Colors.white70), overflow: TextOverflow.ellipsis)),
+            ])),
+          const SizedBox(height: 8),
+          Container(width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 5), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
+            child: Text('GOT IT', style: GoogleFonts.outfit(fontSize: 7, fontWeight: FontWeight.w900, color: const Color(0xFFEF4444)), textAlign: TextAlign.center)),
+        ]))),
+      ])),
+    );
+  }
+
+  void _desktopShowLockPreview(Color textColor) {
+    final tasks = _taskListCtrl.text.trim().split('\n').where((l) => l.trim().isNotEmpty).toList();
+    final heading = _lockHeadlineCtrl.text.isEmpty ? 'LOCKED' : _lockHeadlineCtrl.text;
+    final title = _taskTitleCtrl.text.isEmpty ? 'Parent Tasks' : _taskTitleCtrl.text;
+    showDialog(context: context, builder: (ctx) => Dialog(
+      backgroundColor: Colors.transparent,
+      child: Container(
+        width: 340, padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(color: widget.isDark ? const Color(0xFF0F1A35) : Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: const Color(0xFF22C55E).withOpacity(0.5))),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('Lock Screen Preview', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, color: textColor)),
+          const SizedBox(height: 20),
+          Container(
+            width: 220, height: 400,
+            decoration: BoxDecoration(color: const Color(0xFFFBBF24), borderRadius: BorderRadius.circular(32), border: Border.all(color: const Color(0xFF1E293B), width: 4.5)),
+            child: ClipRRect(borderRadius: BorderRadius.circular(28), child: Column(children: [
+              Container(height: 18, color: const Color(0xFF1E293B), child: Center(child: Container(width: 44, height: 7, decoration: BoxDecoration(color: const Color(0xFF374151), borderRadius: BorderRadius.circular(3.5))))),
+              Expanded(child: Padding(padding: const EdgeInsets.all(18), child: Column(children: [
+                Container(width: 48, height: 48, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: const Color(0xFF1E293B), width: 2.5)), child: const Icon(Icons.add, color: Color(0xFF1E293B), size: 22)),
+                const SizedBox(height: 10),
+                Text(heading, style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: const Color(0xFF1E293B), letterSpacing: 2)),
+                const SizedBox(height: 14),
+                Container(width: double.infinity, padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.white.withOpacity(0.7), borderRadius: BorderRadius.circular(12)),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('YOUR TASKS', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFF1E293B))),
+                    Text(title, style: GoogleFonts.outfit(fontSize: 9, color: const Color(0xFF374151))),
+                    const SizedBox(height: 6),
+                    ...tasks.take(4).map((t) => Padding(padding: const EdgeInsets.only(bottom: 3), child: Text('• $t', style: GoogleFonts.outfit(fontSize: 10, color: const Color(0xFF374151))))),
+                  ])),
+                const SizedBox(height: 12),
+                Container(width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 10), decoration: BoxDecoration(color: const Color(0xFF10B981), borderRadius: BorderRadius.circular(12)),
+                  child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.send_rounded, color: Colors.white, size: 14), const SizedBox(width: 6), Text('SEND MESSAGE HERE', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white))])),
+                const SizedBox(height: 10),
+                Text('This device is managed by your parent.\nComplete tasks to unlock.', style: GoogleFonts.outfit(fontSize: 9, color: const Color(0xFF374151)), textAlign: TextAlign.center),
+              ]))),
+            ])),
+          ),
+          const SizedBox(height: 20),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Close', style: GoogleFonts.outfit(color: const Color(0xFF22C55E), fontWeight: FontWeight.w700))),
+        ]),
+      ),
+    ));
+  }
+
+  void _desktopShowRestrictedPreview(Color textColor) {
+    final tasks = _warningListCtrl.text.trim().split('\n').where((l) => l.trim().isNotEmpty).toList();
+    final headline = _restHeadlineCtrl.text.isEmpty ? 'APP RESTRICTED' : _restHeadlineCtrl.text;
+    final msg = _restMsgCtrl.text.isEmpty ? 'Access to this application is restricted by parent settings.' : _restMsgCtrl.text;
+    showDialog(context: context, builder: (ctx) => Dialog(
+      backgroundColor: Colors.transparent,
+      child: Container(
+        width: 340, padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(color: widget.isDark ? const Color(0xFF0F1A35) : Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: const Color(0xFFEF4444).withOpacity(0.5))),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('App Restricted Preview', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, color: textColor)),
+          const SizedBox(height: 20),
+          Container(
+            width: 220, height: 400,
+            decoration: BoxDecoration(color: const Color(0xFFEF4444), borderRadius: BorderRadius.circular(32), border: Border.all(color: const Color(0xFF1E293B), width: 4.5)),
+            child: ClipRRect(borderRadius: BorderRadius.circular(28), child: Column(children: [
+              Container(height: 18, color: const Color(0xFF1E293B), child: Center(child: Container(width: 44, height: 7, decoration: BoxDecoration(color: const Color(0xFF374151), borderRadius: BorderRadius.circular(3.5))))),
+              Expanded(child: Padding(padding: const EdgeInsets.all(18), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle), child: const Icon(Icons.warning_amber_rounded, size: 40, color: Colors.white)),
+                const SizedBox(height: 14),
+                Text(headline, style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1), textAlign: TextAlign.center),
+                const SizedBox(height: 10),
+                Text(msg, style: GoogleFonts.outfit(fontSize: 10, color: Colors.white70), textAlign: TextAlign.center),
+                const SizedBox(height: 14),
+                if (tasks.isNotEmpty) Container(width: double.infinity, padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('YOUR TASKS', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white)),
+                    const SizedBox(height: 5),
+                    ...tasks.take(4).map((t) => Padding(padding: const EdgeInsets.only(bottom: 3), child: Text('• $t', style: GoogleFonts.outfit(fontSize: 10, color: Colors.white70)))),
+                  ])),
+                const SizedBox(height: 14),
+                Container(width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 12), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+                  child: Text('GOT IT', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w900, color: const Color(0xFFEF4444)), textAlign: TextAlign.center)),
+              ]))),
+            ])),
+          ),
+          const SizedBox(height: 20),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Close', style: GoogleFonts.outfit(color: const Color(0xFFEF4444), fontWeight: FontWeight.w700))),
+        ]),
+      ),
+    ));
   }
 
   Widget _buildInputField(String label, String hint, TextEditingController controller, {int maxLines = 1}) {
