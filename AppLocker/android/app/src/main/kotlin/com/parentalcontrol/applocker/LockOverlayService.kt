@@ -649,7 +649,7 @@ class LockOverlayService : Service() {
 
         panel.addView(card)
         root.addView(panel)
-        attachKeyboardLift(root, card, dp(15), dp(15), dp(15), dp(15))
+        attachKeyboardLift(root, card, dp(15), dp(15), dp(15), dp(30))
 
         // Request focus on input box + show keyboard after layout settles
         inputBox.postDelayed({
@@ -953,7 +953,7 @@ class LockOverlayService : Service() {
 
         panel.addView(card)
         root.addView(panel)
-        attachKeyboardLift(root, card, dp(15), dp(15), dp(15), dp(15))
+        attachKeyboardLift(root, card, dp(15), dp(15), dp(15), dp(30))
 
         closeSmsBtn.setOnClickListener {
             closeActivePanel(root); makeUnfocusable()

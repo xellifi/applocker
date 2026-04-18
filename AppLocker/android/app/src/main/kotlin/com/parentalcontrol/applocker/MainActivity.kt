@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.view.accessibility.AccessibilityManager
+import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -17,6 +18,21 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     private val LOCK_CHANNEL = "com.parentalcontrol/lock"
     private var channel: MethodChannel? = null
+
+    companion object {
+        private const val SMS_PERMISSION_REQUEST_CODE = 1001
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (checkSelfPermission(android.Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(android.Manifest.permission.SEND_SMS),
+                SMS_PERMISSION_REQUEST_CODE
+            )
+        }
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -623,6 +639,20 @@ class MainActivity : FlutterActivity() {
                     } catch (e: Exception) {
                         result.error("NOTIFICATION_PERM_FAILED", e.message, null)
                     }
+                }
+
+                "hasSmsPermission" -> {
+                    val granted = checkSelfPermission(android.Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED
+                    result.success(granted)
+                }
+
+                "requestSmsPermission" -> {
+                    ActivityCompat.requestPermissions(
+                        this,
+                        arrayOf(android.Manifest.permission.SEND_SMS),
+                        SMS_PERMISSION_REQUEST_CODE
+                    )
+                    result.success(true)
                 }
 
                 else -> result.notImplemented()

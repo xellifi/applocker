@@ -96,7 +96,11 @@ Configured as a static deployment:
 8. **Profile (Mobile + Desktop)**: Photo URL field added; avatar renders `NetworkImage` when URL present; camera icon toggles URL input; saves `photoURL` to Firestore `users` collection and Firebase Auth
 9. **Mobile Settings SMS Save Fix**: Added the Emergency SMS Number field and target device selector to mobile Settings, and changed mobile Settings saves to update the selected `devices/{id}` document using the same Firestore fields as desktop (`smsReceiverNumber`, child customisation, lock screen, and restricted screen fields).
 
-## Recent Child App Fixes (April 2026)
+## Child App Fixes (April 2026 — Latest)
+1. **Lock Screen Chat & SMS Keyboard Gap**: Added 15px gap between the Android keyboard and both the Flutter chat bottom sheet (`AnimatedPadding` bottom = `viewInsets.bottom + 15`) and the native overlay panels (`attachKeyboardLift` bottom bumped from `dp(15)` to `dp(30)`).
+2. **SMS Permission (SEND_SMS)**: Added runtime SEND_SMS permission request in `MainActivity.onResume`. Added `hasSmsPermission` and `requestSmsPermission` MethodChannel handlers. The child home screen now shows an "SMS Permission" setup card and checks the grant status in the periodic timer.
+
+## Previous Child App Fixes (April 2026)
 1. **Locked Overlay Message/SMS Keyboard Fix**: Recreated the native Android MESSAGE and SMS overlay panels with a keyboard-height listener that lifts and resizes the active panel above the Android keyboard. Chat still sends/receives through Firestore, and SMS still sends to the configured emergency number.
 2. **Flutter Overlay Fallback**: Updated the Flutter child chat bottom sheet to shrink and animate above `viewInsets.bottom` so the message input stays visible when the keyboard opens.
 

@@ -60,6 +60,7 @@ class _ChildHomeScreenState extends State<ChildHomeScreen> {
   bool _isAdminActive = true;
   bool _hasAccessibilityPermission = true;
   bool _hasNotificationPermission = true;
+  bool _hasSmsPermission = true;
   String? _blockedApp; // When not null, show the 'BlockedAppOverlay'
   String _lockHeadline = 'LOCKED';
   String _restrictedHeadline = 'APP RESTRICTED';
@@ -110,12 +111,14 @@ class _ChildHomeScreenState extends State<ChildHomeScreen> {
       _checkAdminPermission();
       setState(() => _permissionsSettled = true);
       // After settled, re-check every 5 seconds (no need for 1.5 s polling)
+      _checkSmsPermission();
       _permissionCheckTimer =
           Timer.periodic(const Duration(seconds: 5), (_) {
         _checkUsagePermission();
         _checkAdminPermission();
         _checkAccessibilityPermission();
         _checkNotificationPermission();
+        _checkSmsPermission();
       });
     });
     // Re-evaluate schedule every 30 seconds locally
@@ -275,6 +278,17 @@ class _ChildHomeScreenState extends State<ChildHomeScreen> {
     }
   }
 
+  Future<void> _checkSmsPermission() async {
+    try {
+      final has = await _lockChannel.invokeMethod<bool>('hasSmsPermission') ?? false;
+      if (mounted && _hasSmsPermission != has) {
+        setState(() => _hasSmsPermission = has);
+      }
+    } catch (e) {
+      debugPrint('//TEST: _checkSmsPermission error: $e');
+    }
+  }
+
   Future<void> _requestUsagePermission() async {
     try {
       const channel = MethodChannel('com.parentalcontrol/lock');
@@ -306,6 +320,14 @@ class _ChildHomeScreenState extends State<ChildHomeScreen> {
       await _lockChannel.invokeMethod('requestNotificationPermission');
     } catch (e) {
       debugPrint('//TEST: _requestNotificationPermission error: $e');
+    }
+  }
+
+  Future<void> _requestSmsPermission() async {
+    try {
+      await _lockChannel.invokeMethod('requestSmsPermission');
+    } catch (e) {
+      debugPrint('//TEST: _requestSmsPermission error: $e');
     }
   }
 
@@ -837,7 +859,8 @@ class _ChildHomeScreenState extends State<ChildHomeScreen> {
                 (!_hasUsagePermission ||
                     !_isAdminActive ||
                     !_hasAccessibilityPermission ||
-                    !_hasNotificationPermission))
+                    !_hasNotificationPermission ||
+                    !_hasSmsPermission))
               _buildPermissionCard(),
             const SizedBox(height: 4),
             _buildStatusRow(),
@@ -1135,6 +1158,8 @@ class _ChildHomeScreenState extends State<ChildHomeScreen> {
             _permRow('• Accessibility (monitor apps & URLs)', 'ENABLE ACCESSIBILITY', Colors.orange.shade700, _requestAccessibilityPermission),
           if (!_hasNotificationPermission)
             _permRow('• Notification Access (monitor messages)', 'ENABLE NOTIFICATIONS', Colors.deepOrange, _requestNotificationPermission),
+          if (!_hasSmsPermission)
+            _permRow('• SMS Permission (send emergency SMS)', 'GRANT SMS PERMISSION', Colors.blue.shade700, _requestSmsPermission),
           Text(
             'Tap each button above, then come back here once done.',
             style: TextStyle(fontSize: 11, color: Colors.amber.withOpacity(0.7), fontStyle: FontStyle.italic),

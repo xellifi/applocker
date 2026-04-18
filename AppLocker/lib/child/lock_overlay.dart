@@ -546,7 +546,7 @@ class _ChildChatDialogState extends State<_ChildChatDialog> {
     return AnimatedPadding(
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOut,
-      padding: EdgeInsets.only(bottom: bottomInset),
+      padding: EdgeInsets.only(bottom: bottomInset + (bottomInset > 0 ? 15.0 : 0.0)),
       child: Container(
         height: sheetHeight,
         decoration: const BoxDecoration(
