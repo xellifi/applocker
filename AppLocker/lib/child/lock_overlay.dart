@@ -519,17 +519,16 @@ class _ChildChatDialogState extends State<_ChildChatDialog> {
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 48),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 40),
       child: Container(
-        constraints: const BoxConstraints(maxWidth: 420),
+        constraints: const BoxConstraints(maxWidth: 440),
         decoration: BoxDecoration(
-          color: const Color(0xFF1A1A2E),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: const Color(0xFFFBBC05).withOpacity(0.5), width: 1.5),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.6),
-              blurRadius: 40,
+              color: Colors.black.withOpacity(0.25),
+              blurRadius: 30,
               offset: const Offset(0, 8),
             ),
           ],
@@ -539,55 +538,37 @@ class _ChildChatDialogState extends State<_ChildChatDialog> {
           children: [
             // ── Header ──
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFBBC05),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              decoration: const BoxDecoration(
+                color: Color(0xFFFBBC05),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
               ),
               child: Row(
                 children: [
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Center(
-                      child: Text('💬', style: TextStyle(fontSize: 18)),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text('Message Parent',
-                            style: TextStyle(
-                              color: Colors.black,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.3,
-                            )),
-                        Text('Emergency chat',
-                            style: TextStyle(
-                              color: Colors.black54,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            )),
-                      ],
+                  const Icon(Icons.chat_bubble_outline_rounded,
+                      color: Colors.white, size: 30),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Chat Now',
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                   ),
                   GestureDetector(
                     onTap: () => Navigator.of(context, rootNavigator: true).pop(),
                     child: Container(
-                      width: 30,
-                      height: 30,
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(8),
+                      width: 36,
+                      height: 36,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFEF4444),
+                        shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.close_rounded, color: Colors.black54, size: 16),
+                      child: const Icon(Icons.close_rounded,
+                          color: Colors.white, size: 20),
                     ),
                   ),
                 ],
@@ -595,8 +576,9 @@ class _ChildChatDialogState extends State<_ChildChatDialog> {
             ),
 
             // ── Messages ──
-            SizedBox(
-              height: 320,
+            Container(
+              height: 340,
+              color: Colors.white,
               child: StreamBuilder<QuerySnapshot>(
                 stream: FirebaseService.instance.streamChatMessages(widget.deviceId),
                 builder: (context, snapshot) {
@@ -627,7 +609,7 @@ class _ChildChatDialogState extends State<_ChildChatDialog> {
                   }
                   return ListView.builder(
                     controller: _scrollCtrl,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     itemCount: docs.length,
                     itemBuilder: (context, i) {
                       final data = docs[i].data() as Map<String, dynamic>;
@@ -637,73 +619,100 @@ class _ChildChatDialogState extends State<_ChildChatDialog> {
                       final timeStr = ts != null ? _formatTime(ts.toDate()) : '';
 
                       return Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.only(bottom: 14),
                         child: Row(
                           mainAxisAlignment: isChild
-                              ? MainAxisAlignment.end
-                              : MainAxisAlignment.start,
+                              ? MainAxisAlignment.start
+                              : MainAxisAlignment.end,
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            if (!isChild) ...[
-                              Container(
-                                width: 28,
-                                height: 28,
-                                decoration: const BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: Color(0xFFFBBC05),
-                                ),
-                                child: const Center(
-                                  child: Text('👨‍👩‍👦', style: TextStyle(fontSize: 13)),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                            ],
-                            Flexible(
-                              child: Column(
-                                crossAxisAlignment: isChild
-                                    ? CrossAxisAlignment.end
-                                    : CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 12, vertical: 9),
-                                    decoration: BoxDecoration(
-                                      color: isChild
-                                          ? const Color(0xFFFBBC05)
-                                          : const Color(0xFF2D2D44),
-                                      borderRadius: BorderRadius.only(
-                                        topLeft: const Radius.circular(16),
-                                        topRight: const Radius.circular(16),
-                                        bottomLeft: isChild
-                                            ? const Radius.circular(16)
-                                            : const Radius.circular(4),
-                                        bottomRight: isChild
-                                            ? const Radius.circular(4)
-                                            : const Radius.circular(16),
+                            if (isChild) ...[
+                              Flexible(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 16, vertical: 12),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFFF9E6),
+                                        borderRadius: const BorderRadius.only(
+                                          topLeft: Radius.circular(18),
+                                          topRight: Radius.circular(18),
+                                          bottomRight: Radius.circular(18),
+                                          bottomLeft: Radius.circular(4),
+                                        ),
+                                        border: Border.all(
+                                            color: const Color(0xFFE5D9B6),
+                                            width: 1),
                                       ),
-                                    ),
-                                    child: Text(
-                                      text,
-                                      style: TextStyle(
-                                        color: isChild ? Colors.black : Colors.white,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                  if (timeStr.isNotEmpty)
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 3),
                                       child: Text(
-                                        timeStr,
+                                        text,
                                         style: const TextStyle(
-                                            color: Color(0xFF64748B), fontSize: 10),
+                                          color: Color(0xFF1E293B),
+                                          fontSize: 14,
+                                          height: 1.5,
+                                        ),
                                       ),
                                     ),
-                                ],
+                                    if (timeStr.isNotEmpty)
+                                      Padding(
+                                        padding:
+                                            const EdgeInsets.only(top: 4, left: 4),
+                                        child: Text(
+                                          timeStr,
+                                          style: const TextStyle(
+                                              color: Color(0xFF94A3B8),
+                                              fontSize: 11),
+                                        ),
+                                      ),
+                                  ],
+                                ),
                               ),
-                            ),
-                            if (isChild) const SizedBox(width: 6),
+                            ] else ...[
+                              Flexible(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 16, vertical: 12),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFEEEBF8),
+                                        borderRadius: const BorderRadius.only(
+                                          topLeft: Radius.circular(18),
+                                          topRight: Radius.circular(18),
+                                          bottomLeft: Radius.circular(18),
+                                          bottomRight: Radius.circular(4),
+                                        ),
+                                        border: Border.all(
+                                            color: const Color(0xFFD4CEED),
+                                            width: 1),
+                                      ),
+                                      child: Text(
+                                        text,
+                                        style: const TextStyle(
+                                          color: Color(0xFF1E293B),
+                                          fontSize: 14,
+                                          height: 1.5,
+                                        ),
+                                      ),
+                                    ),
+                                    if (timeStr.isNotEmpty)
+                                      Padding(
+                                        padding:
+                                            const EdgeInsets.only(top: 4, right: 4),
+                                        child: Text(
+                                          timeStr,
+                                          style: const TextStyle(
+                                              color: Color(0xFF94A3B8),
+                                              fontSize: 11),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       );
@@ -715,22 +724,23 @@ class _ChildChatDialogState extends State<_ChildChatDialog> {
 
             // ── Input ──
             Container(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 14),
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 16),
               decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius:
+                    const BorderRadius.vertical(bottom: Radius.circular(20)),
                 border: Border(
-                  top: BorderSide(color: Colors.white.withOpacity(0.08), width: 1),
-                ),
+                    top: BorderSide(color: Colors.grey.shade200, width: 1)),
               ),
               child: Row(
                 children: [
                   Expanded(
                     child: Container(
                       decoration: BoxDecoration(
-                        color: const Color(0xFF2D2D44),
-                        borderRadius: BorderRadius.circular(22),
-                        border: Border.all(
-                            color: const Color(0xFFFBBC05).withOpacity(0.3),
-                            width: 1),
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(28),
+                        border:
+                            Border.all(color: Colors.grey.shade300, width: 1.2),
                       ),
                       child: TextField(
                         controller: _msgCtrl,
@@ -738,38 +748,38 @@ class _ChildChatDialogState extends State<_ChildChatDialog> {
                         maxLines: 3,
                         minLines: 1,
                         style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500),
+                            color: Color(0xFF1E293B),
+                            fontSize: 14),
                         decoration: const InputDecoration(
                           hintText: 'Type a message...',
-                          hintStyle: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                          hintStyle:
+                              TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
                           border: InputBorder.none,
                           contentPadding: EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 10),
+                              horizontal: 18, vertical: 12),
                         ),
                         onSubmitted: (_) => _send(),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 10),
                   GestureDetector(
                     onTap: _send,
                     child: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFBBC05),
+                      width: 50,
+                      height: 50,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF7C3AED),
                         shape: BoxShape.circle,
                       ),
                       child: _sending
                           ? const Padding(
-                              padding: EdgeInsets.all(12),
+                              padding: EdgeInsets.all(13),
                               child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.black),
+                                  strokeWidth: 2, color: Colors.white),
                             )
                           : const Icon(Icons.send_rounded,
-                              color: Colors.black, size: 18),
+                              color: Colors.white, size: 22),
                     ),
                   ),
                 ],
@@ -793,9 +803,17 @@ class _ChildChatDialogState extends State<_ChildChatDialog> {
       final ampm = dt.hour >= 12 ? 'PM' : 'AM';
       return '$h:$m $ampm';
     }
-    return '${dt.day}/${dt.month} ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
+    final months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    final h = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
+    final m = dt.minute.toString().padLeft(2, '0');
+    final ampm = dt.hour >= 12 ? 'PM' : 'AM';
+    return '${months[dt.month - 1]} ${dt.day}, ${dt.year} $h:$m $ampm';
   }
 }
+
 
 // ── Dialer Dialog ─────────────────────────────────────────────────────────────
 class _DialerDialog extends StatefulWidget {
@@ -822,7 +840,11 @@ class _DialerDialogState extends State<_DialerDialog> {
     if (_number.isEmpty) return;
     final uri = Uri.parse('tel:$_number');
     try {
-      await launchUrl(uri);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        await launchUrl(uri, mode: LaunchMode.platformDefault);
+      }
     } catch (_) {}
   }
 

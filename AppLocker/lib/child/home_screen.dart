@@ -747,7 +747,7 @@ class _ChildHomeScreenState extends State<ChildHomeScreen> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF0EDF8),
+      backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0.5,
@@ -868,41 +868,48 @@ class _ChildHomeScreenState extends State<ChildHomeScreen> {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
       decoration: BoxDecoration(
-        color: const Color(0xFFEDE9F8),
+        color: const Color(0xFFEEEFF8),
         borderRadius: BorderRadius.circular(18),
       ),
       child: Row(
         children: [
           Container(
-            width: 16,
-            height: 16,
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: _status.toLowerCase() == 'online'
-                  ? const Color(0xFF10B981)
+                  ? const Color(0xFF22C55E)
                   : Colors.grey,
             ),
+            child: Icon(
+              _status.toLowerCase() == 'online'
+                  ? Icons.check_rounded
+                  : Icons.wifi_off_rounded,
+              color: Colors.white,
+              size: 22,
+            ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           Text(
             _status.toLowerCase() == 'online' ? 'Online' : 'Offline',
             style: const TextStyle(
-              fontWeight: FontWeight.w700,
-              fontSize: 15,
-              color: Colors.black87,
+              fontWeight: FontWeight.w600,
+              fontSize: 16,
+              color: Color(0xFF374151),
             ),
           ),
           const Spacer(),
-          Icon(batteryIcon, color: batteryColor, size: 22),
-          const SizedBox(width: 4),
+          Icon(batteryIcon, color: batteryColor, size: 30),
+          const SizedBox(width: 6),
           Text(
             '$_battery%',
             style: TextStyle(
               color: batteryColor,
               fontWeight: FontWeight.w700,
-              fontSize: 15,
+              fontSize: 16,
             ),
           ),
         ],
@@ -914,27 +921,47 @@ class _ChildHomeScreenState extends State<ChildHomeScreen> {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFFEDE9F8),
+        color: const Color(0xFFEEEFF8),
         borderRadius: BorderRadius.circular(18),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('❤', style: TextStyle(fontSize: 28)),
-                const SizedBox(height: 8),
+                RichText(
+                  text: const TextSpan(
+                    children: [
+                      TextSpan(
+                        text: '♥',
+                        style: TextStyle(
+                          fontSize: 26,
+                          color: Color(0xFFEF4444),
+                        ),
+                      ),
+                      TextSpan(
+                        text: ' ~',
+                        style: TextStyle(
+                          fontSize: 22,
+                          color: Color(0xFFEF4444),
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
                 Text(
                   _parentQuote.isNotEmpty
-                      ? '"$_parentQuote"'
-                      : '"Have a wonderful day!"',
+                      ? '" $_parentQuote"'
+                      : '" Have a wonderful day!"',
                   style: const TextStyle(
-                    color: Colors.black87,
+                    color: Color(0xFF1E293B),
                     fontSize: 14,
-                    fontStyle: FontStyle.italic,
-                    height: 1.5,
+                    fontWeight: FontWeight.w700,
+                    height: 1.6,
                   ),
                 ),
               ],
@@ -942,30 +969,29 @@ class _ChildHomeScreenState extends State<ChildHomeScreen> {
           ),
           const SizedBox(width: 14),
           Container(
-            width: 72,
-            height: 72,
+            width: 110,
+            height: 140,
             decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFF10B981), width: 3),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFF22C55E), width: 2.5),
               color: const Color(0xFFD1FAE5),
             ),
-            child: ClipOval(
-              child: _profileImageUrl.isNotEmpty
-                  ? Image.network(
-                      _profileImageUrl,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const Icon(
-                        Icons.person_rounded,
-                        color: Color(0xFF10B981),
-                        size: 40,
-                      ),
-                    )
-                  : const Icon(
+            clipBehavior: Clip.hardEdge,
+            child: _profileImageUrl.isNotEmpty
+                ? Image.network(
+                    _profileImageUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const Icon(
                       Icons.person_rounded,
-                      color: Color(0xFF10B981),
-                      size: 40,
+                      color: Color(0xFF22C55E),
+                      size: 50,
                     ),
-            ),
+                  )
+                : const Icon(
+                    Icons.person_rounded,
+                    color: Color(0xFF22C55E),
+                    size: 50,
+                  ),
           ),
         ],
       ),
@@ -974,48 +1000,48 @@ class _ChildHomeScreenState extends State<ChildHomeScreen> {
 
   Widget _buildUnlockCard() {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
       decoration: BoxDecoration(
-        color: const Color(0xFFEDE9F8),
+        color: const Color(0xFFEEEFF8),
         borderRadius: BorderRadius.circular(18),
       ),
       child: Row(
         children: [
           Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
+            width: 62,
+            height: 62,
+            decoration: const BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.black26, width: 1.5),
               color: Colors.white,
             ),
             child: const Center(
               child: Icon(Icons.lock_open_rounded,
-                  color: Colors.black54, size: 28),
+                  color: Color(0xFF22C55E), size: 34),
             ),
           ),
-          const SizedBox(width: 16),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Device Unlocked',
-                style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  fontSize: 17,
-                  color: Colors.black87,
+          const SizedBox(width: 18),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Device Unlocked',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 20,
+                    color: Color(0xFF1E293B),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '"$_unlockGreeting"',
-                style: const TextStyle(
-                  fontStyle: FontStyle.italic,
-                  fontSize: 13,
-                  color: Colors.black54,
+                const SizedBox(height: 4),
+                Text(
+                  '"$_unlockGreeting"',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF374151),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
