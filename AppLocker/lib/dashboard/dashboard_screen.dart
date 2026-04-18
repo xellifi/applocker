@@ -4200,6 +4200,9 @@ class _MobileSubscriptionViewState extends State<_MobileSubscriptionView> {
               final isCurrent = currentPlan == planId.toLowerCase() && !isExpired;
               final btnLabel = isCurrent ? 'CURRENT PLAN' : (selectedPrice >= currentPlanPrice ? 'UPGRADE' : 'DOWNGRADE');
 
+              final customFeatures = (p['features'] as List?)?.map((f) => f.toString()).toList() ?? [];
+              final durationSuffix = _planDurationLabel(p);
+
               return Container(
                 color: bg,
                 child: SingleChildScrollView(
@@ -4210,49 +4213,60 @@ class _MobileSubscriptionViewState extends State<_MobileSubscriptionView> {
                       onPressed: () => setState(() { _selectedPlan = null; _selectedPlanId = null; }),
                       icon: const Icon(Icons.arrow_back_rounded, size: 18), label: Text('Back', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600)),
                       style: TextButton.styleFrom(foregroundColor: const Color(0xFF94A3B8), padding: EdgeInsets.zero)),
-                    const SizedBox(height: 8),
-                    Container(
-                      width: double.infinity, padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(color: color.withOpacity(widget.isDark ? 0.12 : 0.08), borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withOpacity(isCurrent ? 0.6 : 0.3), width: isCurrent ? 2 : 1)),
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Row(children: [
-                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            if (isCurrent) Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              margin: const EdgeInsets.only(bottom: 8),
-                              decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(8)),
-                              child: Text('CURRENT PLAN', style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.w900, color: Colors.white)),
-                            ),
-                            Text(name, style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: color)),
-                          ])),
-                          Container(width: 52, height: 52, decoration: BoxDecoration(color: color, shape: BoxShape.circle), child: Icon(icon, color: Colors.white, size: 26)),
+                    const SizedBox(height: 16),
+                    if (isCurrent)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                        decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(8)),
+                        child: Text('CURRENT PLAN', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1)),
+                      ),
+                    Text(name, style: GoogleFonts.outfit(fontSize: 28, fontWeight: FontWeight.w900, color: textColor)),
+                    const SizedBox(height: 10),
+                    Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                      Text('\$', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: textColor)),
+                      Text('${(p['price'] as num? ?? 0).toInt()}', style: GoogleFonts.outfit(fontSize: 38, fontWeight: FontWeight.w900, color: textColor, height: 1)),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text(durationSuffix, style: GoogleFonts.outfit(fontSize: 14, color: const Color(0xFF94A3B8))),
+                      ),
+                    ]),
+                    const SizedBox(height: 20),
+                    Text('${devices == 999 ? 'Unlimited' : devices} Device${devices == 1 ? '' : 's'}', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: color)),
+                    if (blocked > 0) ...[const SizedBox(height: 4), Text('$blocked Blocked Apps allowed', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600, color: color.withOpacity(0.85)))],
+                    if (hidden > 0) ...[const SizedBox(height: 4), Text('$hidden Hidden Apps allowed', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600, color: color.withOpacity(0.85)))],
+                    if (hasTracking) ...[const SizedBox(height: 4), Text('Realtime Tracking', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600, color: color.withOpacity(0.85)))],
+                    if (customFeatures.isNotEmpty) ...[
+                      const SizedBox(height: 20),
+                      Divider(color: const Color(0xFF64748B).withOpacity(0.25)),
+                      const SizedBox(height: 16),
+                      ...customFeatures.map((f) => Padding(
+                        padding: const EdgeInsets.only(bottom: 14),
+                        child: Row(children: [
+                          Icon(Icons.check_circle_rounded, size: 20, color: color),
+                          const SizedBox(width: 12),
+                          Expanded(child: Text(f, style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: textColor))),
                         ]),
-                        const SizedBox(height: 16),
-                        _bullet('${devices == 999 ? 'Unlimited' : devices} Device${devices == 1 ? '' : 's'}', color),
-                        if (blocked > 0) _bullet('$blocked Blocked Apps Allowed', color),
-                        if (hidden > 0) _bullet('$hidden Hidden Apps Allowed', color),
-                        if (hasTracking) _bullet('Realtime Tracking', color),
-                        ...((p['features'] as List?)?.map((f) => _bullet(f.toString(), color)) ?? []),
-                        const SizedBox(height: 20),
-                        if (!isCurrent)
-                          GestureDetector(
-                            onTap: () => _upgradePlan(context, planId, (p['name'] ?? 'Plan').toString()),
-                            child: Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(12)),
-                              child: Center(child: Text(btnLabel, style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1.5))),
-                            ),
-                          )
-                        else
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(12), border: Border.all(color: color.withOpacity(0.4))),
-                            child: Center(child: Text('CURRENT PLAN', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: color, letterSpacing: 1.5))),
-                          ),
-                      ]),
-                    ),
+                      )),
+                    ],
+                    const SizedBox(height: 24),
+                    if (!isCurrent)
+                      GestureDetector(
+                        onTap: () => _upgradePlan(context, planId, (p['name'] ?? 'Plan').toString()),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(14)),
+                          child: Center(child: Text(btnLabel, style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1.5))),
+                        ),
+                      )
+                    else
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(14), border: Border.all(color: color.withOpacity(0.4))),
+                        child: Center(child: Text('CURRENT PLAN', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: color, letterSpacing: 1.5))),
+                      ),
                   ]),
                 ),
               );

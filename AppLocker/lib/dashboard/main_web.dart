@@ -101,6 +101,12 @@ class _PwaInstallManager {
   static bool _sessionDismissed = false;
 
   static void init(VoidCallback onPromptAvailable) {
+    // Already marked as installed from a previous session?
+    if (html.window.localStorage['pwa_installed'] == 'true') {
+      _installed = true;
+      return;
+    }
+
     // Running as installed PWA (standalone/fullscreen)? Never show banner.
     try {
       final isStandalone = js.context.callMethod('eval', [
@@ -752,8 +758,8 @@ class _PwaInstallBannerState extends State<_PwaInstallBanner>
     final isSafari = _BrowserInfo.isSafari && isIOS;
     final canInstall = _PwaInstallManager.canInstall;
 
-    // Show install button for any browser that can support it
-    final bool showInstallBtn = !isInApp && !isIOS;
+    // Show install button for any browser that can support it (and not already installed)
+    final bool showInstallBtn = !isInApp && !isIOS && !_PwaInstallManager.isInstalled;
     final bool showSafariHint = isIOS && isSafari && !isInApp;
     final bool showInAppHint  = isInApp;
 
