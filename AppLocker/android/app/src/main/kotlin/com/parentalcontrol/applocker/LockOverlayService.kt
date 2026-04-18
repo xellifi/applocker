@@ -614,7 +614,7 @@ class LockOverlayService : Service() {
                         com.google.firebase.firestore.FirebaseFirestore.getInstance()
                             .collection("devices")
                             .document(devId)
-                            .collection("chat")
+                            .collection("messages")
                             .add(mapOf(
                                 "text" to text,
                                 "sender" to "child",
@@ -672,7 +672,7 @@ class LockOverlayService : Service() {
         chatListener = com.google.firebase.firestore.FirebaseFirestore.getInstance()
             .collection("devices")
             .document(overlayDeviceId)
-            .collection("chat")
+            .collection("messages")
             .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.ASCENDING)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) { Log.e(TAG, "Chat listener error: ${error.message}"); return@addSnapshotListener }
@@ -1092,6 +1092,9 @@ class LockOverlayService : Service() {
         try {
             val params = overlayView?.layoutParams as? WindowManager.LayoutParams ?: return
             params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
+            @Suppress("DEPRECATION")
+            params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE or
+                WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE
             windowManager?.updateViewLayout(overlayView, params)
         } catch (e: Exception) { Log.e(TAG, "makeFocusable: ${e.message}") }
     }
@@ -1100,6 +1103,7 @@ class LockOverlayService : Service() {
         try {
             val params = overlayView?.layoutParams as? WindowManager.LayoutParams ?: return
             params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+            params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN
             windowManager?.updateViewLayout(overlayView, params)
             val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
             imm?.hideSoftInputFromWindow(overlayView?.windowToken, 0)
