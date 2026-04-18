@@ -568,10 +568,10 @@ class _ChildHomeScreenState extends State<ChildHomeScreen> {
       await _saveLocalSettings(apps, device.controlMode, tempAccessMap, device.appSchedules);
 
       await channel.invokeMethod('syncBlockedApps', {
-        'blockedApps': apps,
+        'blockedApps': device.subscriptionActive ? apps : <String>[],
         'controlMode': device.controlMode,
-        'tempAccess': tempAccessMap,
-        'appSchedules': device.appSchedules,
+        'tempAccess': device.subscriptionActive ? tempAccessMap : <String, int>{},
+        'appSchedules': device.subscriptionActive ? device.appSchedules : <String, dynamic>{},
       });
       debugPrint(
           '//TEST: Synced apps, mode(${device.controlMode}), schedules, and ${tempAccessMap.length} temp access to native');

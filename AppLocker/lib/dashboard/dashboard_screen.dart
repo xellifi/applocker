@@ -2554,12 +2554,12 @@ class _MobileSchedulesView extends StatelessWidget {
         final List<Map<String, dynamic>> rules = [];
         for (var doc in docs) {
           final data = doc.data() as Map<String, dynamic>;
+          String to12hLocal(String t) { if (t.toUpperCase().contains('AM') || t.toUpperCase().contains('PM')) return t; final parts = t.split(':'); if (parts.length < 2) return t; int h = int.tryParse(parts[0]) ?? 0; final m = int.tryParse(parts[1]) ?? 0; final p = h < 12 ? 'AM' : 'PM'; h = h % 12; if (h == 0) h = 12; return '$h:${m.toString().padLeft(2,'0')} $p'; }
           for (var s in (data['lockSchedules'] as List<dynamic>? ?? [])) {
             final sm = s as Map;
-            String _to12h(String t24) { final parts = t24.split(':'); if (parts.length < 2) return t24; int h = int.tryParse(parts[0]) ?? 0; final m = int.tryParse(parts[1]) ?? 0; final p = h < 12 ? 'AM' : 'PM'; h = h % 12; if (h == 0) h = 12; return '$h:${m.toString().padLeft(2,'0')} $p'; }
             rules.add({
               'deviceId': doc.id, 'type': 'Device Lock', 'target': 'Full Device',
-              'time': '${_to12h(sm['start'] ?? '')} - ${_to12h(sm['end'] ?? '')}',
+              'time': '${to12hLocal(sm['start'] ?? '')} - ${to12hLocal(sm['end'] ?? '')}',
               'rawStart': sm['start'] ?? '', 'rawEnd': sm['end'] ?? '',
               'isLock': true,
             });
@@ -2567,14 +2567,16 @@ class _MobileSchedulesView extends StatelessWidget {
           (data['appSchedules'] as Map<String, dynamic>? ?? {}).forEach((pkg, sched) {
             final s = sched as Map<String, dynamic>;
             final alwaysBlocked = s['alwaysBlocked'] == true;
+            final rawStart = s['start'] as String? ?? '';
+            final rawEnd = s['end'] as String? ?? '';
             rules.add({
               'deviceId': doc.id, 'type': 'App Restriction',
               'target': pkg.split('.').last,
               'pkg': pkg,
-              'rawStart': s['start'] ?? '',
-              'rawEnd': s['end'] ?? '',
+              'rawStart': rawStart,
+              'rawEnd': rawEnd,
               'alwaysBlocked': alwaysBlocked,
-              'time': alwaysBlocked ? 'Always Blocked' : '${s['start']} - ${s['end']}',
+              'time': alwaysBlocked ? 'Always Blocked' : '${to12hLocal(rawStart)} - ${to12hLocal(rawEnd)}',
               'isLock': false,
             });
           });
@@ -3999,6 +4001,92 @@ class _MobileSubscriptionViewState extends State<_MobileSubscriptionView> {
     }
   }
 
+  void _showPlanDialog(BuildContext context, {String? id, Map<String, dynamic>? existing}) {
+    final cardColor = widget.isDark ? const Color(0xFF0F1A35) : Colors.white;
+    final textColor = widget.isDark ? Colors.white : const Color(0xFF1E293B);
+    final borderColor = widget.isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0);
+    final nameCtrl    = TextEditingController(text: existing?['name']);
+    final priceCtrl   = TextEditingController(text: (existing?['price'] ?? '').toString());
+    final limitCtrl   = TextEditingController(text: (existing?['deviceLimit'] ?? '').toString());
+    final blockedCtrl = TextEditingController(text: (existing?['blockedAppsLimit'] ?? '5').toString());
+    final hiddenCtrl  = TextEditingController(text: (existing?['hiddenAppsLimit'] ?? '2').toString());
+    final colorCtrl   = TextEditingController(text: existing?['color'] ?? '0xFF6366F1');
+    final List<TextEditingController> featureCtrls = ((existing?['features'] as List?) ?? ['']).map((f) => TextEditingController(text: f.toString())).toList();
+
+    Widget field(String label, TextEditingController ctrl, {bool isNum = false}) => Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: TextField(
+        controller: ctrl, keyboardType: isNum ? TextInputType.number : TextInputType.text,
+        style: GoogleFonts.outfit(color: textColor),
+        decoration: InputDecoration(
+          labelText: label, labelStyle: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 13),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: borderColor.withOpacity(0.5))),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF6366F1))),
+        ),
+      ),
+    );
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          backgroundColor: cardColor,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: Text(id == null ? 'Create New Plan' : 'Edit Plan', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: textColor)),
+          content: SizedBox(
+            width: 380,
+            child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+              field('Plan Name', nameCtrl),
+              field(r'Monthly Price ($)', priceCtrl, isNum: true),
+              field('Max Devices', limitCtrl, isNum: true),
+              field('Max Blocked Apps', blockedCtrl, isNum: true),
+              field('Max Hidden Apps', hiddenCtrl, isNum: true),
+              field('Hex Color (e.g. 0xFF6366F1)', colorCtrl),
+              const SizedBox(height: 8),
+              Row(children: [
+                Text('FEATURES', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF94A3B8), letterSpacing: 1.5)),
+                const Spacer(),
+                IconButton(onPressed: () => setS(() => featureCtrls.add(TextEditingController())), icon: const Icon(Icons.add_circle_outline_rounded, size: 20, color: Color(0xFF6366F1))),
+              ]),
+              ...featureCtrls.asMap().entries.map((entry) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(children: [
+                  Expanded(child: field('Feature ${entry.key + 1}', entry.value)),
+                  IconButton(onPressed: () => setS(() => featureCtrls.removeAt(entry.key)), icon: const Icon(Icons.remove_circle_outline_rounded, size: 20, color: Colors.redAccent)),
+                ]),
+              )).toList(),
+            ])),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8)))),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6366F1), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+              onPressed: () async {
+                if (nameCtrl.text.trim().isEmpty) return;
+                final planData = {
+                  'name': nameCtrl.text.trim(),
+                  'price': double.tryParse(priceCtrl.text) ?? 0.0,
+                  'deviceLimit': int.tryParse(limitCtrl.text) ?? 1,
+                  'blockedAppsLimit': int.tryParse(blockedCtrl.text) ?? 0,
+                  'hiddenAppsLimit': int.tryParse(hiddenCtrl.text) ?? 0,
+                  'features': featureCtrls.map((c) => c.text.trim()).where((s) => s.isNotEmpty).toList(),
+                  'color': colorCtrl.text.trim(),
+                };
+                if (id == null) {
+                  await FirebaseFirestore.instance.collection('plans').doc(nameCtrl.text.trim().toLowerCase()).set(planData);
+                } else {
+                  await FirebaseFirestore.instance.collection('plans').doc(id).update(planData);
+                }
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+              child: Text('Save Plan', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bg = widget.isDark ? const Color(0xFF060D1F) : const Color(0xFFF8FAFC);
@@ -4092,14 +4180,31 @@ class _MobileSubscriptionViewState extends State<_MobileSubscriptionView> {
 
             if (!snap.hasData) return const Center(child: CircularProgressIndicator());
 
+            final isAdmin = widget.userRole == 'super_admin';
             return Container(
               color: bg,
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('Subscription Plans', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: textColor)),
-                  Text('Active: ${currentPlan.toUpperCase()}${isExpired ? ' (EXPIRED)' : ''}', style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF94A3B8))),
+                  Row(children: [
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('Subscription Plans', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: textColor)),
+                      Text('Active: ${currentPlan.toUpperCase()}${isExpired ? ' (EXPIRED)' : ''}', style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF94A3B8))),
+                    ])),
+                    if (isAdmin) GestureDetector(
+                      onTap: () => _showPlanDialog(context),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(color: const Color(0xFF6366F1), borderRadius: BorderRadius.circular(12)),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          const Icon(Icons.add_rounded, color: Colors.white, size: 16),
+                          const SizedBox(width: 4),
+                          Text('Add Plan', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
+                        ]),
+                      ),
+                    ),
+                  ]),
                   const SizedBox(height: 14),
                   ...plans.map((doc) {
                     final p = doc.data() as Map<String, dynamic>;
@@ -4111,34 +4216,56 @@ class _MobileSubscriptionViewState extends State<_MobileSubscriptionView> {
                     final isLifetime = key.contains('lifetime');
                     final isCurrent = currentPlan == doc.id.toLowerCase() && !isExpired;
                     return GestureDetector(
-                      onTap: () => setState(() { _selectedPlan = {...p, '_color': color, '_icon': icon}; _selectedPlanId = doc.id; }),
+                      onTap: isAdmin ? null : () => setState(() { _selectedPlan = {...p, '_color': color, '_icon': icon}; _selectedPlanId = doc.id; }),
                       child: Container(
                         margin: const EdgeInsets.only(bottom: 10),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        padding: EdgeInsets.only(left: 16, right: isAdmin ? 4 : 8, top: 14, bottom: 14),
                         decoration: BoxDecoration(
                           color: isCurrent ? color.withOpacity(widget.isDark ? 0.15 : 0.07) : (widget.isDark ? const Color(0xFF0F1A35) : Colors.white),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(color: isCurrent ? color : color.withOpacity(0.4), width: isCurrent ? 2 : 1),
                         ),
                         child: Row(children: [
-                          Container(width: 48, height: 48, decoration: BoxDecoration(color: color.withOpacity(0.15), shape: BoxShape.circle), child: Icon(icon, color: color, size: 22)),
-                          const SizedBox(width: 12),
+                          Container(width: 44, height: 44, decoration: BoxDecoration(color: color.withOpacity(0.15), shape: BoxShape.circle), child: Icon(icon, color: color, size: 20)),
+                          const SizedBox(width: 10),
                           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Text(name, style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: textColor)),
-                            if (isCurrent) Text('CURRENT PLAN', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: color)),
+                            Text(name, style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: textColor)),
+                            if (isCurrent) Text('CURRENT PLAN', style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.w900, color: color)),
                           ])),
                           RichText(text: TextSpan(children: [
-                            TextSpan(text: '\$', style: GoogleFonts.outfit(fontSize: 13, color: textColor, fontWeight: FontWeight.w700)),
-                            TextSpan(text: '$price', style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: textColor)),
-                            TextSpan(text: isLifetime ? ' one-time' : '/mo', style: GoogleFonts.outfit(fontSize: 10, color: const Color(0xFF94A3B8))),
+                            TextSpan(text: '\$', style: GoogleFonts.outfit(fontSize: 11, color: textColor, fontWeight: FontWeight.w700)),
+                            TextSpan(text: '$price', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: textColor)),
+                            TextSpan(text: isLifetime ? '\none-time' : '\n/mo', style: GoogleFonts.outfit(fontSize: 9, color: const Color(0xFF94A3B8))),
                           ])),
-                          const SizedBox(width: 10),
-                          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                            Text('${devices == 999 ? '∞' : devices}', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: textColor)),
-                            Text(devices == 1 ? 'Device' : 'Devices', style: GoogleFonts.outfit(fontSize: 10, color: const Color(0xFF94A3B8))),
-                          ]),
                           const SizedBox(width: 8),
-                          Container(width: 34, height: 34, decoration: BoxDecoration(color: isCurrent ? color.withOpacity(0.2) : const Color(0xFF94A3B8).withOpacity(0.15), shape: BoxShape.circle), child: Icon(isCurrent ? Icons.check_rounded : Icons.arrow_forward_rounded, color: isCurrent ? color : const Color(0xFF94A3B8), size: 16)),
+                          if (isAdmin) ...[
+                            IconButton(
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                              onPressed: () => _showPlanDialog(context, id: doc.id, existing: {...p}),
+                              icon: const Icon(Icons.edit_rounded, color: Color(0xFF6366F1), size: 18),
+                              tooltip: 'Edit Plan',
+                            ),
+                            IconButton(
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                              onPressed: () async {
+                                final ok = await showDialog<bool>(context: context, builder: (_) => AlertDialog(
+                                  backgroundColor: widget.isDark ? const Color(0xFF0F1A35) : Colors.white,
+                                  title: Text('Delete $name?', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: textColor)),
+                                  content: Text('This will permanently remove this plan.', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8))),
+                                  actions: [
+                                    TextButton(onPressed: () => Navigator.pop(_, false), child: Text('Cancel', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8)))),
+                                    ElevatedButton(onPressed: () => Navigator.pop(_, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent), child: Text('Delete', style: GoogleFonts.outfit(color: Colors.white))),
+                                  ],
+                                ));
+                                if (ok == true) await FirebaseFirestore.instance.collection('plans').doc(doc.id).delete();
+                              },
+                              icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
+                              tooltip: 'Delete Plan',
+                            ),
+                          ] else
+                            Container(width: 34, height: 34, decoration: BoxDecoration(color: isCurrent ? color.withOpacity(0.2) : const Color(0xFF94A3B8).withOpacity(0.15), shape: BoxShape.circle), child: Icon(isCurrent ? Icons.check_rounded : Icons.arrow_forward_rounded, color: isCurrent ? color : const Color(0xFF94A3B8), size: 16)),
                         ]),
                       ),
                     );
@@ -6205,15 +6332,29 @@ class _SchedulesView extends StatefulWidget {
 }
 
 class _SchedulesViewState extends State<_SchedulesView> {
+  String _to12h(String t) {
+    if (t.toUpperCase().contains('AM') || t.toUpperCase().contains('PM')) return t;
+    final parts = t.split(':');
+    if (parts.length < 2) return t;
+    int h = int.tryParse(parts[0]) ?? 0;
+    final m = int.tryParse(parts[1]) ?? 0;
+    final p = h < 12 ? 'AM' : 'PM';
+    h = h % 12; if (h == 0) h = 12;
+    return '$h:${m.toString().padLeft(2, '0')} $p';
+  }
+
   void _editRule(BuildContext context, Map<String, dynamic> rule) async {
     final deviceId = rule['deviceId'] as String;
     final isDeviceLock = rule['type'] == 'Device Lock';
-    final currentRule = rule['rule'] as String;
+    final rawRule = rule['rawRule'] as String? ?? rule['rule'] as String? ?? '';
 
     if (isDeviceLock) {
-      // Parse "HH:MM AM - HH:MM PM" or "12:00 AM - 12:00 PM" time strings
-      TimeOfDay startTime = const TimeOfDay(hour: 22, minute: 0);
-      TimeOfDay endTime = const TimeOfDay(hour: 6, minute: 0);
+      final rawStart = rule['rawStart'] as String? ?? '';
+      final rawEnd   = rule['rawEnd']   as String? ?? '';
+      final sp = rawStart.split(':');
+      final ep = rawEnd.split(':');
+      TimeOfDay startTime = sp.length >= 2 ? TimeOfDay(hour: int.tryParse(sp[0]) ?? 22, minute: int.tryParse(sp[1]) ?? 0) : const TimeOfDay(hour: 22, minute: 0);
+      TimeOfDay endTime   = ep.length >= 2 ? TimeOfDay(hour: int.tryParse(ep[0]) ?? 6,  minute: int.tryParse(ep[1]) ?? 0) : const TimeOfDay(hour: 6,  minute: 0);
 
       final newStart = await showTimePicker(context: context, initialTime: startTime, helpText: 'Select Lock Start Time');
       if (newStart == null || !context.mounted) return;
@@ -6228,8 +6369,8 @@ class _SchedulesViewState extends State<_SchedulesView> {
       final list = List<Map<String, dynamic>>.from(
         (data['lockSchedules'] ?? []).map((s) => Map<String, dynamic>.from(s))
       );
-      // Find and replace the matching rule
-      final idx = list.indexWhere((s) => '${s['start']} - ${s['end']}' == currentRule);
+      // Find and replace the matching rule using raw 24h values
+      final idx = list.indexWhere((s) => s['start'] == rawStart && s['end'] == rawEnd);
       if (idx != -1) {
         list[idx] = {'start': fmt(newStart), 'end': fmt(newEnd)};
       } else {
@@ -6241,9 +6382,11 @@ class _SchedulesViewState extends State<_SchedulesView> {
       // App Restriction edit
       final pkg = rule['pkgName'] as String? ?? '';
       final target = rule['target'] as String? ?? pkg;
-      bool alwaysBlocked = currentRule == 'Always Blocked';
-      final startCtrl = TextEditingController(text: alwaysBlocked ? '12:00 AM' : currentRule.split(' - ').first);
-      final endCtrl = TextEditingController(text: alwaysBlocked ? '12:00 PM' : (currentRule.split(' - ').length > 1 ? currentRule.split(' - ').last : '12:00 PM'));
+      bool alwaysBlocked = rawRule == 'Always Blocked';
+      final rawStart = rule['rawStart'] as String? ?? '';
+      final rawEnd   = rule['rawEnd']   as String? ?? '';
+      final startCtrl = TextEditingController(text: alwaysBlocked ? '12:00 AM' : _to12h(rawStart));
+      final endCtrl = TextEditingController(text: alwaysBlocked ? '12:00 PM' : _to12h(rawEnd));
 
       await showDialog(
         context: context,
@@ -6321,10 +6464,15 @@ class _SchedulesViewState extends State<_SchedulesView> {
           // Device Lock Schedules
           final lockSchedules = data['lockSchedules'] as List<dynamic>? ?? [];
           for (var s in lockSchedules) {
+            final rawS = s['start'] as String? ?? '';
+            final rawE = s['end']   as String? ?? '';
             allRules.add({
               'deviceId': deviceId,
               'type': 'Device Lock',
-              'rule': '${s['start']} - ${s['end']}',
+              'rule': '${_to12h(rawS)} – ${_to12h(rawE)}',
+              'rawRule': '$rawS - $rawE',
+              'rawStart': rawS,
+              'rawEnd':   rawE,
               'target': 'Full Device',
               'icon': Icons.smartphone_rounded,
               'color': const Color(0xFFEC4899),
@@ -6336,10 +6484,15 @@ class _SchedulesViewState extends State<_SchedulesView> {
           appSchedules.forEach((pkg, schedule) {
             final s = schedule as Map<String, dynamic>;
             final always = s['alwaysBlocked'] ?? false;
+            final rawS = s['start'] as String? ?? '';
+            final rawE = s['end']   as String? ?? '';
             allRules.add({
               'deviceId': deviceId,
               'type': 'App Restriction',
-              'rule': always ? 'Always Blocked' : '${s['start']} - ${s['end']}',
+              'rule': always ? 'Always Blocked' : '${_to12h(rawS)} – ${_to12h(rawE)}',
+              'rawRule': always ? 'Always Blocked' : '$rawS - $rawE',
+              'rawStart': rawS,
+              'rawEnd':   rawE,
               'target': pkg.split('.').last.toUpperCase(),
               'pkgName': pkg,
               'icon': Icons.apps_rounded,
@@ -6418,11 +6571,13 @@ class _SchedulesViewState extends State<_SchedulesView> {
                       IconButton(
                         onPressed: () {
                           if (rule['type'] == 'Device Lock') {
+                            final rawStart = rule['rawStart'] as String? ?? '';
+                            final rawEnd   = rule['rawEnd']   as String? ?? '';
                             FirebaseFirestore.instance.collection('devices').doc(rule['deviceId']).get().then((doc) {
                               if (!doc.exists) return;
                               final data = doc.data() as Map<String, dynamic>;
                               final list = List<Map<String, dynamic>>.from(data['lockSchedules'] ?? []);
-                              list.removeWhere((s) => '${s['start']} - ${s['end']}' == rule['rule']);
+                              list.removeWhere((s) => s['start'] == rawStart && s['end'] == rawEnd);
                               FirebaseFirestore.instance.collection('devices').doc(rule['deviceId']).update({'lockSchedules': list});
                             });
                           } else {
@@ -7659,40 +7814,119 @@ class _PendingTransactionsView extends StatelessWidget {
   const _PendingTransactionsView({required this.isDark, required this.cardColor, required this.textColor, required this.borderColor});
 
   Future<void> _approve(BuildContext context, String txId, String uid, String planId, Color cardColor, Color textColor) async {
-    final durCtrl = TextEditingController(text: '30');
+    String durationUnit = 'months';
+    int durationValue = 1;
+    final valueCtrl = TextEditingController(text: '1');
+
     final ok = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: cardColor,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Approve Payment', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: textColor)),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('This will activate the plan for this user.', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8))),
-          const SizedBox(height: 14),
-          TextField(
-            controller: durCtrl,
-            keyboardType: TextInputType.number,
-            style: GoogleFonts.outfit(color: textColor),
-            decoration: InputDecoration(
-              labelText: 'Duration (days)',
-              labelStyle: GoogleFonts.outfit(color: const Color(0xFF94A3B8)),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      builder: (_) => StatefulBuilder(
+        builder: (_, setS) => AlertDialog(
+          backgroundColor: cardColor,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text('Approve Payment', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: textColor)),
+          content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('This will activate the plan for this user.', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8))),
+            const SizedBox(height: 16),
+            Text('DURATION TYPE', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF94A3B8), letterSpacing: 1.4)),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(border: Border.all(color: const Color(0xFF64748B).withOpacity(0.4)), borderRadius: BorderRadius.circular(12), color: cardColor),
+              child: DropdownButton<String>(
+                value: durationUnit,
+                isExpanded: true,
+                underline: const SizedBox(),
+                dropdownColor: cardColor,
+                style: GoogleFonts.outfit(color: textColor, fontSize: 14),
+                items: const [
+                  DropdownMenuItem(value: 'days',     child: Text('Days (1–30)')),
+                  DropdownMenuItem(value: 'months',   child: Text('Months')),
+                  DropdownMenuItem(value: 'years',    child: Text('Years')),
+                  DropdownMenuItem(value: 'lifetime', child: Text('Lifetime')),
+                ],
+                onChanged: (v) { if (v != null) setS(() { durationUnit = v; valueCtrl.text = '1'; durationValue = 1; }); },
+              ),
             ),
-          ),
-        ]),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(_, false), child: Text('Cancel', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8)))),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF22C55E), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-            onPressed: () => Navigator.pop(_, true),
-            child: Text('Approve & Activate', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
-          ),
-        ],
+            if (durationUnit != 'lifetime') ...[
+              const SizedBox(height: 14),
+              Text(
+                durationUnit == 'days' ? 'DAYS (1–30)' : durationUnit == 'months' ? 'MONTHS' : 'YEARS',
+                style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF94A3B8), letterSpacing: 1.4),
+              ),
+              const SizedBox(height: 8),
+              durationUnit == 'days'
+                ? Wrap(spacing: 8, runSpacing: 8, children: List.generate(30, (i) {
+                    final v = i + 1;
+                    final sel = durationValue == v;
+                    return GestureDetector(
+                      onTap: () => setS(() { durationValue = v; valueCtrl.text = v.toString(); }),
+                      child: Container(
+                        width: 40, height: 36,
+                        decoration: BoxDecoration(
+                          color: sel ? const Color(0xFF22C55E) : const Color(0xFF22C55E).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFF22C55E).withOpacity(sel ? 1 : 0.3)),
+                        ),
+                        child: Center(child: Text('$v', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: sel ? Colors.white : const Color(0xFF22C55E)))),
+                      ),
+                    );
+                  }))
+                : TextField(
+                    controller: valueCtrl,
+                    keyboardType: TextInputType.number,
+                    style: GoogleFonts.outfit(color: textColor),
+                    onChanged: (v) => durationValue = int.tryParse(v) ?? 1,
+                    decoration: InputDecoration(
+                      hintText: durationUnit == 'months' ? 'e.g. 3' : 'e.g. 1',
+                      hintStyle: GoogleFonts.outfit(color: const Color(0xFF94A3B8)),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      suffixText: durationUnit,
+                      suffixStyle: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 12),
+                    ),
+                  ),
+            ] else
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: const Color(0xFFFBBF24).withOpacity(0.1), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFFBBF24).withOpacity(0.4))),
+                  child: Row(children: [
+                    const Icon(Icons.all_inclusive_rounded, color: Color(0xFFFBBF24), size: 20),
+                    const SizedBox(width: 8),
+                    Text('Lifetime access — never expires', style: GoogleFonts.outfit(color: const Color(0xFFFBBF24), fontWeight: FontWeight.w700, fontSize: 13)),
+                  ]),
+                ),
+              ),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(_, false), child: Text('Cancel', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8)))),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF22C55E), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+              onPressed: () => Navigator.pop(_, true),
+              child: Text('Approve & Activate', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
       ),
     );
     if (ok != true) return;
-    final days = int.tryParse(durCtrl.text.trim()) ?? 30;
-    final expiry = DateTime.now().add(Duration(days: days));
+
+    DateTime expiry;
+    if (durationUnit == 'lifetime') {
+      expiry = DateTime(2099, 12, 31);
+    } else if (durationUnit == 'days') {
+      final days = durationValue.clamp(1, 30);
+      expiry = DateTime.now().add(Duration(days: days));
+    } else if (durationUnit == 'months') {
+      final months = durationValue < 1 ? 1 : durationValue;
+      final now = DateTime.now();
+      expiry = DateTime(now.year, now.month + months, now.day);
+    } else {
+      final years = durationValue < 1 ? 1 : durationValue;
+      final now = DateTime.now();
+      expiry = DateTime(now.year + years, now.month, now.day);
+    }
     final batch = FirebaseFirestore.instance.batch();
     batch.update(FirebaseFirestore.instance.collection('transactions').doc(txId), {
       'status': 'approved', 'approvedAt': FieldValue.serverTimestamp(), 'approvedBy': FirebaseAuth.instance.currentUser?.uid,
