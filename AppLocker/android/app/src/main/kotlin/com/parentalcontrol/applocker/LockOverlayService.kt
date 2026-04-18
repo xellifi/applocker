@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
@@ -58,6 +59,8 @@ class LockOverlayService : Service() {
     private var chatListener: com.google.firebase.firestore.ListenerRegistration? = null
     private var chatMessagesLayout: LinearLayout? = null
     private var chatScrollView: ScrollView? = null
+    private var panelKeyboardListener: ViewTreeObserver.OnGlobalLayoutListener? = null
+    private var panelKeyboardRoot: View? = null
 
 
     override fun onCreate() {
@@ -144,6 +147,7 @@ class LockOverlayService : Service() {
 
     private fun hideOverlay() {
         chatListener?.remove(); chatListener = null
+        clearPanelKeyboardLift()
         try {
             if (overlayView != null && windowManager != null) {
                 windowManager?.removeView(overlayView)
@@ -432,7 +436,7 @@ class LockOverlayService : Service() {
 
     private fun showChatPanel(root: FrameLayout) {
         // Remove any existing panel
-        root.findViewWithTag<View>("panel")?.let { root.removeView(it) }
+        closeActivePanel(root)
         makeFocusable()
 
         val ctx = this
@@ -515,7 +519,7 @@ class LockOverlayService : Service() {
         }
         closeBtn.setOnClickListener {
             chatListener?.remove(); chatListener = null
-            root.removeView(panel)
+            closeActivePanel(root)
             makeUnfocusable()
         }
         header.addView(closeBtn)
@@ -645,6 +649,7 @@ class LockOverlayService : Service() {
 
         panel.addView(card)
         root.addView(panel)
+        attachKeyboardLift(root, card, dp(15), dp(15), dp(15), dp(15))
 
         // Request focus on input box + show keyboard after layout settles
         inputBox.postDelayed({
@@ -758,7 +763,7 @@ class LockOverlayService : Service() {
     // ── SMS panel ──────────────────────────────────────────────────────────────
 
     private fun showSmsPanel(root: FrameLayout) {
-        root.findViewWithTag<View>("panel")?.let { root.removeView(it) }
+        closeActivePanel(root)
         makeFocusable()
 
         val ctx = this
@@ -777,17 +782,16 @@ class LockOverlayService : Service() {
             orientation = LinearLayout.VERTICAL
             val lp = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                Gravity.BOTTOM
+                FrameLayout.LayoutParams.MATCH_PARENT
             )
+            lp.setMargins(dp(15), dp(15), dp(15), dp(15))
             layoutParams = lp
             background = GradientDrawable().apply {
-                cornerRadii = floatArrayOf(dp(24).toFloat(), dp(24).toFloat(),
-                    dp(24).toFloat(), dp(24).toFloat(), 0f, 0f, 0f, 0f)
+                cornerRadius = dp(24).toFloat()
                 setColor(Color.parseColor("#1A1A2E"))
                 setStroke(dp(1), Color.parseColor("#40FBBC05"))
             }
-            setPadding(dp(20), dp(16), dp(20), dp(20))
+            setPadding(dp(18), dp(16), dp(18), dp(16))
         }
 
         // ── Header
@@ -842,22 +846,32 @@ class LockOverlayService : Service() {
             }
             isClickable = true; isFocusable = true
         }
-        closeSmsBtn.setOnClickListener { root.removeView(panel); makeUnfocusable() }
+        closeSmsBtn.setOnClickListener { closeActivePanel(root); makeUnfocusable() }
         header.addView(closeSmsBtn)
         card.addView(header)
         card.addView(spacer(16))
 
+        card.addView(TextView(ctx).apply {
+            text = "Use this only when you need help while the phone is locked."
+            setTextColor(Color.parseColor("#94A3B8"))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setLineSpacing(dp(3).toFloat(), 1f)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        })
+        card.addView(spacer(12))
+
         // ── Message input
         val msgInput = EditText(ctx).apply {
             layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(100))
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
             setTextColor(Color.WHITE)
             setHintTextColor(Color.parseColor("#64748B"))
             hint = "Type your message..."
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or
                 InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-            maxLines = 4
+            minLines = 6
             gravity = Gravity.TOP or Gravity.START
             background = GradientDrawable().apply {
                 cornerRadius = dp(14).toFloat()
@@ -925,7 +939,7 @@ class LockOverlayService : Service() {
                     statusTv.text = "✓ SMS sent to $receiverNumber"
                     statusTv.setTextColor(Color.parseColor("#4ADE80"))
                     statusTv.visibility = View.VISIBLE
-                    statusTv.postDelayed({ root.removeView(panel); makeUnfocusable() }, 1500)
+                    statusTv.postDelayed({ closeActivePanel(root); makeUnfocusable() }, 1500)
                     Log.d(TAG, "SMS sent to $receiverNumber")
                 } catch (e: Exception) {
                     statusTv.text = "Failed to send SMS: ${e.message}"
@@ -939,9 +953,10 @@ class LockOverlayService : Service() {
 
         panel.addView(card)
         root.addView(panel)
+        attachKeyboardLift(root, card, dp(15), dp(15), dp(15), dp(15))
 
         closeSmsBtn.setOnClickListener {
-            root.removeView(panel); makeUnfocusable()
+            closeActivePanel(root); makeUnfocusable()
         }
 
         // Show keyboard
@@ -955,7 +970,7 @@ class LockOverlayService : Service() {
     // ── Emergency PIN panel ────────────────────────────────────────────────────
 
     private fun showEmergencyPinPanel(root: FrameLayout) {
-        root.findViewWithTag<View>("panel")?.let { root.removeView(it) }
+        closeActivePanel(root)
         makeFocusable()
 
         val ctx = this
@@ -1031,7 +1046,7 @@ class LockOverlayService : Service() {
                 val t = s?.toString() ?: ""
                 if (t.length >= overlayPin.length) {
                     if (t == overlayPin) {
-                        root.removeView(panel)
+                        closeActivePanel(root)
                         unlockViaFirestore(); notifyFlutterUnlock(); hideOverlay()
                     } else {
                         errorTv.visibility = View.VISIBLE
@@ -1053,7 +1068,7 @@ class LockOverlayService : Service() {
                 LinearLayout.LayoutParams.MATCH_PARENT, dp(40)).apply { topMargin = dp(10) }
             isClickable = true; isFocusable = true
         }
-        cancelBtn.setOnClickListener { root.removeView(panel); makeUnfocusable() }
+        cancelBtn.setOnClickListener { closeActivePanel(root); makeUnfocusable() }
 
         card.addView(pinInput)
         card.addView(errorTv)
@@ -1076,6 +1091,50 @@ class LockOverlayService : Service() {
                 WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE
             windowManager?.updateViewLayout(overlayView, params)
         } catch (e: Exception) { Log.e(TAG, "makeFocusable: ${e.message}") }
+    }
+
+    private fun closeActivePanel(root: FrameLayout) {
+        clearPanelKeyboardLift()
+        root.findViewWithTag<View>("panel")?.let { root.removeView(it) }
+    }
+
+    private fun attachKeyboardLift(
+        root: View,
+        card: View,
+        left: Int,
+        top: Int,
+        right: Int,
+        bottom: Int
+    ) {
+        clearPanelKeyboardLift()
+        val listener = ViewTreeObserver.OnGlobalLayoutListener {
+            val visible = Rect()
+            root.getWindowVisibleDisplayFrame(visible)
+            val fullHeight = root.rootView.height
+            val keyboardHeight = (fullHeight - visible.bottom).coerceAtLeast(0)
+            val effectiveKeyboardHeight = if (keyboardHeight > dp(80)) keyboardHeight else 0
+            val params = card.layoutParams as? FrameLayout.LayoutParams ?: return@OnGlobalLayoutListener
+            val nextBottom = bottom + effectiveKeyboardHeight
+            if (params.leftMargin != left || params.topMargin != top ||
+                params.rightMargin != right || params.bottomMargin != nextBottom) {
+                params.setMargins(left, top, right, nextBottom)
+                card.layoutParams = params
+                chatScrollView?.post { chatScrollView?.fullScroll(View.FOCUS_DOWN) }
+            }
+        }
+        panelKeyboardRoot = root
+        panelKeyboardListener = listener
+        root.viewTreeObserver.addOnGlobalLayoutListener(listener)
+    }
+
+    private fun clearPanelKeyboardLift() {
+        val root = panelKeyboardRoot
+        val listener = panelKeyboardListener
+        if (root != null && listener != null && root.viewTreeObserver.isAlive) {
+            root.viewTreeObserver.removeOnGlobalLayoutListener(listener)
+        }
+        panelKeyboardRoot = null
+        panelKeyboardListener = null
     }
 
     private fun makeUnfocusable() {

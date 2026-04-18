@@ -35,7 +35,7 @@ AppLocker/
 
 ### Child App Screens
 - **Unlock Page (Home)**: Light purple (`#F0EDF8`) background. White AppBar with "AppLocker" bold black + green version badge. Status row card (online indicator + color-coded battery: green ≥50%, orange 20–49%, red <20%). Quote/profile card (❤ doodle + quote text + profile image with green border). Unlock card (open lock icon + "Device Unlocked" + "Enjoy Your Day" greeting).
-- **Locked Page**: Yellow `#FBBC05` background. Lock icon in circle (tap to enter PIN dialog). "LOCKED" bold 42sp. Task box (black border, "YOUR TASKS" title, centered task items in CAPS). "SEND MESSAGE HERE" placeholder button. Footer text.
+- **Locked Page**: Yellow `#FBBC05` background. Lock icon in circle (tap to enter PIN dialog). "LOCKED" bold 42sp. Task box (black border, "YOUR TASKS" title, centered task items in CAPS). MESSAGE and SMS actions open native keyboard-aware overlay panels above the Android keyboard.
 - **Restricted App Page**: Red `#F44336` background. ⚠ triangle emoji. "RESTRICTED" bold white. White-bordered tasks box. White "GOT IT" button.
 
 ### Admin Settings (New Fields)
@@ -94,6 +94,10 @@ Configured as a static deployment:
 6. **Subscriptions**: `_upgradePlan` replaced with full payment flow — GCash/Maya/Bank Transfer selection, QR code display, proof-of-payment URL input, transaction saved to `transactions` Firestore collection with `pending` status for admin approval
 7. **Settings**: Initialization bug fixed — uses `_settingsInitialized` flag with `addPostFrameCallback` + `setState` to avoid duplicate calls
 8. **Profile (Mobile + Desktop)**: Photo URL field added; avatar renders `NetworkImage` when URL present; camera icon toggles URL input; saves `photoURL` to Firestore `users` collection and Firebase Auth
+
+## Recent Child App Fixes (April 2026)
+1. **Locked Overlay Message/SMS Keyboard Fix**: Recreated the native Android MESSAGE and SMS overlay panels with a keyboard-height listener that lifts and resizes the active panel above the Android keyboard. Chat still sends/receives through Firestore, and SMS still sends to the configured emergency number.
+2. **Flutter Overlay Fallback**: Updated the Flutter child chat bottom sheet to shrink and animate above `viewInsets.bottom` so the message input stays visible when the keyboard opens.
 
 ## Replit Migration Notes
 - Dependencies are restored with `flutter pub get` inside `AppLocker/`.
