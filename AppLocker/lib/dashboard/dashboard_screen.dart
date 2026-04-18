@@ -4338,47 +4338,80 @@ class _MobileSettingsViewState extends State<_MobileSettingsView> {
                     context: context,
                     builder: (ctx) => Dialog(
                       backgroundColor: Colors.transparent,
-                      child: Container(
-                        width: 300, padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: widget.isDark ? const Color(0xFF0F1A35) : Colors.white,
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.4)),
-                        ),
-                        child: Column(mainAxisSize: MainAxisSize.min, children: [
-                          Text('Child Screen Preview', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: widget.isDark ? Colors.white : const Color(0xFF1E293B))),
-                          const SizedBox(height: 16),
-                          // Mock phone
-                          Container(
-                            width: 180, height: 320,
-                            decoration: BoxDecoration(color: const Color(0xFF060D1F), borderRadius: BorderRadius.circular(24), border: Border.all(color: const Color(0xFF6366F1), width: 2)),
-                            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                              Container(
-                                width: 80, height: 80,
-                                decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: const Color(0xFF6366F1), width: 2)),
-                                clipBehavior: Clip.hardEdge,
-                                child: imgUrl.isNotEmpty
-                                  ? Image.network(imgUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.person_rounded, size: 40, color: Colors.white30))
-                                  : const Icon(Icons.person_rounded, size: 40, color: Colors.white30),
-                              ),
-                              const SizedBox(height: 12),
-                              if (greeting.isNotEmpty) Text(greeting, style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white), textAlign: TextAlign.center),
-                              const SizedBox(height: 8),
-                              if (quote.isNotEmpty) Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 16),
-                                child: Text('"$quote"', style: GoogleFonts.outfit(fontSize: 10, color: Colors.white60, fontStyle: FontStyle.italic), textAlign: TextAlign.center),
-                              ),
+                      child: SingleChildScrollView(
+                        child: Container(
+                          width: 360,
+                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.18), blurRadius: 32, offset: const Offset(0, 8))]),
+                          padding: const EdgeInsets.all(20),
+                          child: Column(mainAxisSize: MainAxisSize.min, children: [
+                            // App header
+                            Row(children: [
+                              Text('AppLocker', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: const Color(0xFF1E293B))),
+                              const SizedBox(width: 8),
+                              Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: const Color(0xFF22C55E), borderRadius: BorderRadius.circular(20)), child: Text('v2.0.0+12', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white))),
                               const Spacer(),
-                              Padding(padding: const EdgeInsets.only(bottom: 20), child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                                decoration: BoxDecoration(color: const Color(0xFF6366F1), borderRadius: BorderRadius.circular(14)),
-                                child: Text('LOCKED', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 3)),
-                              )),
+                              const Icon(Icons.refresh_rounded, color: Color(0xFF94A3B8), size: 24),
+                              const SizedBox(width: 14),
+                              const Icon(Icons.logout_rounded, color: Color(0xFF94A3B8), size: 24),
                             ]),
-                          ),
-                          const SizedBox(height: 16),
-                          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Close', style: GoogleFonts.outfit(color: const Color(0xFF6366F1), fontWeight: FontWeight.w700))),
-                        ]),
+                            const SizedBox(height: 14),
+                            // Status card
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                              decoration: BoxDecoration(color: const Color(0xFFEEEFF8), borderRadius: BorderRadius.circular(16)),
+                              child: Row(children: [
+                                Container(width: 36, height: 36, decoration: const BoxDecoration(color: Color(0xFF22C55E), shape: BoxShape.circle), child: const Icon(Icons.check_rounded, color: Colors.white, size: 22)),
+                                const SizedBox(width: 12),
+                                Text('Online', style: GoogleFonts.outfit(fontSize: 15, color: const Color(0xFF374151))),
+                                const Spacer(),
+                                const Icon(Icons.battery_full_rounded, color: Color(0xFF22C55E), size: 30),
+                                const SizedBox(width: 6),
+                                Text('100%', style: GoogleFonts.outfit(fontSize: 15, color: const Color(0xFF374151))),
+                              ]),
+                            ),
+                            const SizedBox(height: 12),
+                            // Quote + photo card
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(color: const Color(0xFFEEEFF8), borderRadius: BorderRadius.circular(16)),
+                              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                  const Text('♥ ~', style: TextStyle(fontSize: 22, color: Color(0xFFEF4444))),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    quote.isNotEmpty ? '"$quote"' : '"You are my heart in human form. No matter where life takes you, you will always be my greatest love."',
+                                    style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF1E293B), height: 1.4),
+                                  ),
+                                ])),
+                                const SizedBox(width: 12),
+                                Container(
+                                  width: 105, height: 140,
+                                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFF22C55E), width: 2.5)),
+                                  clipBehavior: Clip.hardEdge,
+                                  child: imgUrl.isNotEmpty
+                                    ? Image.network(imgUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.person_rounded, size: 44, color: Color(0xFF94A3B8)))
+                                    : const Icon(Icons.person_rounded, size: 44, color: Color(0xFF94A3B8)),
+                                ),
+                              ]),
+                            ),
+                            const SizedBox(height: 12),
+                            // Device Unlocked card
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                              decoration: BoxDecoration(color: const Color(0xFFEEEFF8), borderRadius: BorderRadius.circular(16)),
+                              child: Row(children: [
+                                Container(width: 56, height: 56, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle), child: const Icon(Icons.lock_open_rounded, color: Color(0xFF22C55E), size: 32)),
+                                const SizedBox(width: 16),
+                                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                  Text('Device Unlocked', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: const Color(0xFF1E293B))),
+                                  Text('"${greeting.isNotEmpty ? greeting : 'Enjoy Your Day'}"', style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF374151))),
+                                ])),
+                              ]),
+                            ),
+                            const SizedBox(height: 16),
+                            TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Close', style: GoogleFonts.outfit(color: const Color(0xFF22C55E), fontWeight: FontWeight.w700))),
+                          ]),
+                        ),
                       ),
                     ),
                   );
@@ -6684,32 +6717,80 @@ class _SettingsViewState extends State<_SettingsView> {
                       final greeting = _unlockGreetingCtrl.text;
                       showDialog(context: context, builder: (ctx) => Dialog(
                         backgroundColor: Colors.transparent,
-                        child: Container(
-                          width: 320, padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(color: widget.isDark ? const Color(0xFF0F1A35) : Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: const Color(0xFF22C55E).withOpacity(0.5))),
-                          child: Column(mainAxisSize: MainAxisSize.min, children: [
-                            Text('Child Screen Preview', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: textColor)),
-                            const SizedBox(height: 16),
-                            Container(
-                              width: 200, height: 360,
-                              decoration: BoxDecoration(color: const Color(0xFF060D1F), borderRadius: BorderRadius.circular(28), border: Border.all(color: const Color(0xFF22C55E), width: 2)),
-                              child: ClipRRect(borderRadius: BorderRadius.circular(26), child: Column(children: [
-                                Container(height: 16, color: Colors.black, child: Center(child: Container(width: 40, height: 6, decoration: BoxDecoration(color: const Color(0xFF1F2937), borderRadius: BorderRadius.circular(3))))),
-                                Expanded(child: Padding(padding: const EdgeInsets.all(16), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                                  Container(width: 80, height: 80, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: const Color(0xFF22C55E), width: 2)), clipBehavior: Clip.hardEdge,
-                                    child: imgUrl.isNotEmpty ? Image.network(imgUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.person_rounded, size: 40, color: Colors.white30)) : const Icon(Icons.person_rounded, size: 40, color: Colors.white30)),
-                                  const SizedBox(height: 12),
-                                  if (greeting.isNotEmpty) Text(greeting, style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white), textAlign: TextAlign.center),
-                                  const SizedBox(height: 8),
-                                  if (quote.isNotEmpty) Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: Text('"$quote"', style: GoogleFonts.outfit(fontSize: 10, color: Colors.white60, fontStyle: FontStyle.italic), textAlign: TextAlign.center)),
+                        child: SingleChildScrollView(
+                          child: Container(
+                            width: 400,
+                            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.18), blurRadius: 32, offset: const Offset(0, 8))]),
+                            padding: const EdgeInsets.all(24),
+                            child: Column(mainAxisSize: MainAxisSize.min, children: [
+                              // App header
+                              Row(children: [
+                                Text('AppLocker', style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: const Color(0xFF1E293B))),
+                                const SizedBox(width: 8),
+                                Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: const Color(0xFF22C55E), borderRadius: BorderRadius.circular(20)), child: Text('v2.0.0+12', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white))),
+                                const Spacer(),
+                                const Icon(Icons.refresh_rounded, color: Color(0xFF94A3B8), size: 26),
+                                const SizedBox(width: 16),
+                                const Icon(Icons.logout_rounded, color: Color(0xFF94A3B8), size: 26),
+                              ]),
+                              const SizedBox(height: 16),
+                              // Status card
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                                decoration: BoxDecoration(color: const Color(0xFFEEEFF8), borderRadius: BorderRadius.circular(16)),
+                                child: Row(children: [
+                                  Container(width: 38, height: 38, decoration: const BoxDecoration(color: Color(0xFF22C55E), shape: BoxShape.circle), child: const Icon(Icons.check_rounded, color: Colors.white, size: 24)),
+                                  const SizedBox(width: 12),
+                                  Text('Online', style: GoogleFonts.outfit(fontSize: 16, color: const Color(0xFF374151))),
                                   const Spacer(),
-                                  Padding(padding: const EdgeInsets.only(bottom: 20), child: Container(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10), decoration: BoxDecoration(color: const Color(0xFF22C55E), borderRadius: BorderRadius.circular(14)), child: Text('UNLOCK', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 3)))),
-                                ]))),
-                              ])),
-                            ),
-                            const SizedBox(height: 16),
-                            TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Close', style: GoogleFonts.outfit(color: const Color(0xFF22C55E), fontWeight: FontWeight.w700))),
-                          ]),
+                                  const Icon(Icons.battery_full_rounded, color: Color(0xFF22C55E), size: 32),
+                                  const SizedBox(width: 6),
+                                  Text('100%', style: GoogleFonts.outfit(fontSize: 16, color: const Color(0xFF374151))),
+                                ]),
+                              ),
+                              const SizedBox(height: 14),
+                              // Quote + photo card
+                              Container(
+                                padding: const EdgeInsets.all(18),
+                                decoration: BoxDecoration(color: const Color(0xFFEEEFF8), borderRadius: BorderRadius.circular(16)),
+                                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                    const Text('♥ ~', style: TextStyle(fontSize: 24, color: Color(0xFFEF4444))),
+                                    const SizedBox(height: 10),
+                                    Text(
+                                      quote.isNotEmpty ? '"$quote"' : '"You are my heart in human form. No matter where life takes you, you will always be my greatest love."',
+                                      style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700, color: const Color(0xFF1E293B), height: 1.5),
+                                    ),
+                                  ])),
+                                  const SizedBox(width: 14),
+                                  Container(
+                                    width: 120, height: 155,
+                                    decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFF22C55E), width: 2.5)),
+                                    clipBehavior: Clip.hardEdge,
+                                    child: imgUrl.isNotEmpty
+                                      ? Image.network(imgUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.person_rounded, size: 50, color: Color(0xFF94A3B8)))
+                                      : const Icon(Icons.person_rounded, size: 50, color: Color(0xFF94A3B8)),
+                                  ),
+                                ]),
+                              ),
+                              const SizedBox(height: 14),
+                              // Device Unlocked card
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 22),
+                                decoration: BoxDecoration(color: const Color(0xFFEEEFF8), borderRadius: BorderRadius.circular(16)),
+                                child: Row(children: [
+                                  Container(width: 60, height: 60, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle), child: const Icon(Icons.lock_open_rounded, color: Color(0xFF22C55E), size: 34)),
+                                  const SizedBox(width: 18),
+                                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                    Text('Device Unlocked', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: const Color(0xFF1E293B))),
+                                    Text('"${greeting.isNotEmpty ? greeting : 'Enjoy Your Day'}"', style: GoogleFonts.outfit(fontSize: 14, color: const Color(0xFF374151))),
+                                  ])),
+                                ]),
+                              ),
+                              const SizedBox(height: 18),
+                              TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Close', style: GoogleFonts.outfit(color: const Color(0xFF22C55E), fontWeight: FontWeight.w700))),
+                            ]),
+                          ),
                         ),
                       ));
                     },
