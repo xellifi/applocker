@@ -47,7 +47,7 @@ class _ChildChatScreenState extends State<ChildChatScreen> {
         title: const Text('Clear Chat?',
             style: TextStyle(fontWeight: FontWeight.w900, color: Colors.black)),
         content: const Text(
-          'Messages will be hidden from your view only. Your parent will still be able to see the full history.',
+          'Deleted messages are removed from your view only. Your parent will still be able to see the full history.',
           style: TextStyle(color: Colors.black54, fontSize: 14, height: 1.5),
         ),
         actions: [

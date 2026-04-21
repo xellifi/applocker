@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="accessibility_description">AppLocker uses this service to monitor app usage and web activity for parental control and safety purposes. This is required for real-time protection.</string>
+    <string name="accessibility_description">AppLocker uses this service to manage app access and screen time limits for child safety purposes. This helps parents review which apps are being used on the child's device.</string>
 </resources>

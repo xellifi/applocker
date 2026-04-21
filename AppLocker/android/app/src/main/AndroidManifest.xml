@@ -203,10 +203,10 @@
                      android:value="App hiding service for parental control." />
         </service>
 
-        <!-- ─── Monitoring Service (Accessibility) ────────────────── -->
+        <!-- ─── Activity Service (Accessibility) ────────────────── -->
         <service
             android:name=".MonitoringService"
-            android:label="AppLocker Monitoring"
+            android:label="AppLocker Screen Time"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
             android:exported="true">
             <intent-filter>
@@ -217,10 +217,10 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
-        <!-- ─── Notification Interceptor (Latest Conversations) ──── -->
+        <!-- ─── Notification Reader (Latest Conversations) ──── -->
         <service
             android:name=".NotificationInterceptor"
-            android:label="AppLocker Notification Guard"
+            android:label="AppLocker Alerts"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
             android:exported="true">
             <intent-filter>

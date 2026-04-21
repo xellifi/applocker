@@ -372,8 +372,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case _DashboardMenu.devices: return 'My Devices';
       case _DashboardMenu.apps: return 'App Controls';
       case _DashboardMenu.schedules: return 'Schedules';
-      case _DashboardMenu.location: return 'Location';
-      case _DashboardMenu.monitoring: return 'Monitoring';
+      case _DashboardMenu.location: return 'Family Location';
+      case _DashboardMenu.monitoring: return 'Activity Overview';
       case _DashboardMenu.reports: return 'Reports';
       case _DashboardMenu.subscriptions: return 'Subscription';
       case _DashboardMenu.paymentMethods: return 'Payment Methods';
@@ -447,8 +447,8 @@ class _Sidebar extends StatelessWidget {
           if (userRole == 'super_admin') _buildSidebarItem(_DashboardMenu.users, 'Users Admin', HeroIcons.users),
           _buildSidebarItem(_DashboardMenu.apps, 'App Controls', HeroIcons.shieldCheck),
           _buildSidebarItem(_DashboardMenu.schedules, 'Schedules', HeroIcons.calendar),
-          _buildSidebarItem(_DashboardMenu.location, 'Location Tracking', HeroIcons.mapPin),
-          _buildSidebarItem(_DashboardMenu.monitoring, 'Child Monitoring', HeroIcons.magnifyingGlassCircle),
+          _buildSidebarItem(_DashboardMenu.location, 'Family Location', HeroIcons.mapPin),
+          _buildSidebarItem(_DashboardMenu.monitoring, 'Activity Overview', HeroIcons.magnifyingGlassCircle),
           _buildSidebarItem(_DashboardMenu.reports, 'Activity Reports', HeroIcons.chartBar),
           _buildSidebarItem(_DashboardMenu.subscriptions, 'Subscription', HeroIcons.creditCard),
           if (userRole == 'super_admin') _buildSidebarItem(_DashboardMenu.paymentMethods, 'Payment Methods', HeroIcons.creditCard),
@@ -786,8 +786,8 @@ class _DashboardOverview extends StatelessWidget {
       _StatCard(title: 'Total Devices', value: total.toString(), icon: HeroIcons.devicePhoneMobile, color: const Color(0xFF6366F1), isDark: isDark),
       _StatCard(title: 'Online', value: online.toString(), icon: HeroIcons.signal, color: const Color(0xFF10B981), isDark: isDark),
       _StatCard(title: 'Offline', value: offline.toString(), icon: HeroIcons.noSymbol, color: const Color(0xFFEF4444), isDark: isDark),
-      _StatCard(title: 'Blocked Apps', value: blocked.toString(), icon: HeroIcons.shieldExclamation, color: const Color(0xFFF59E0B), isDark: isDark),
-      _StatCard(title: 'Hidden Apps', value: hidden.toString(), icon: HeroIcons.eyeSlash, color: const Color(0xFF8B5CF6), isDark: isDark),
+      _StatCard(title: 'Restricted Apps', value: blocked.toString(), icon: HeroIcons.shieldExclamation, color: const Color(0xFFF59E0B), isDark: isDark),
+      _StatCard(title: 'Filtered Apps', value: hidden.toString(), icon: HeroIcons.eyeSlash, color: const Color(0xFF8B5CF6), isDark: isDark),
       _StatCard(title: 'Total Apps', value: totalApps.toString(), icon: HeroIcons.squaresPlus, color: const Color(0xFFEC4899), isDark: isDark),
     ]; 
   }
@@ -1067,7 +1067,7 @@ class _MobileDashboardHomeState extends State<_MobileDashboardHome> with TickerP
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
                     child: Text(
-                      'No devices paired yet.\nPair a device to start monitoring.',
+                      'No devices paired yet.\nPair a device to get started.',
                       textAlign: TextAlign.center,
                       style: GoogleFonts.outfit(
                         fontSize: 14,
@@ -1661,8 +1661,8 @@ class _MobileMoreSheet extends StatelessWidget {
         (_DashboardMenu.paymentMethods, Icons.credit_card_rounded, 'Payment Methods', 'Manage payment options', const Color(0xFF6366F1)),
         (_DashboardMenu.pendingTransactions, Icons.pending_actions_rounded, 'Pending Payments', 'Approve transactions', const Color(0xFF22C55E)),
       ],
-      (_DashboardMenu.location, Icons.location_on_rounded, 'Location', 'Track child location', const Color(0xFF10B981)),
-      (_DashboardMenu.monitoring, Icons.monitor_heart_rounded, 'Monitoring', 'Child activity logs', const Color(0xFF6366F1)),
+      (_DashboardMenu.location, Icons.location_on_rounded, 'Location', 'View child location', const Color(0xFF10B981)),
+      (_DashboardMenu.monitoring, Icons.monitor_heart_rounded, 'Activity', 'Child activity logs', const Color(0xFF6366F1)),
       (_DashboardMenu.reports, Icons.bar_chart_rounded, 'Reports', 'Usage statistics', const Color(0xFFF59E0B)),
       (_DashboardMenu.subscriptions, Icons.workspace_premium_rounded, 'Subscription', 'Plan & billing', const Color(0xFFEC4899)),
       (_DashboardMenu.settings, Icons.settings_rounded, 'Settings', 'App configuration', const Color(0xFF94A3B8)),
@@ -1849,7 +1849,7 @@ class _MobileDevicesViewState extends State<_MobileDevicesView> {
         backgroundColor: bg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text('Remove Device?', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: textColor)),
-        content: Text('This will unlink the device and stop monitoring.', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8))),
+        content: Text('This will unlink the device and remove all its settings.', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8))),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Cancel', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8)))),
           TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Remove', style: GoogleFonts.outfit(color: Colors.redAccent, fontWeight: FontWeight.bold))),
@@ -2716,8 +2716,8 @@ class _MobileScheduleCard extends StatelessWidget {
               Text(target.toUpperCase(), style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w700)),
               const SizedBox(height: 16),
               SwitchListTile(
-                title: Text('Always Blocked', style: GoogleFonts.outfit(color: isDark ? Colors.white : const Color(0xFF1E293B), fontSize: 13, fontWeight: FontWeight.bold)),
-                subtitle: Text('Block 24/7', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 11)),
+                title: Text('Always Restricted', style: GoogleFonts.outfit(color: isDark ? Colors.white : const Color(0xFF1E293B), fontSize: 13, fontWeight: FontWeight.bold)),
+                subtitle: Text('Restrict 24/7', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 11)),
                 value: alwaysBlocked,
                 activeColor: const Color(0xFFEF4444),
                 onChanged: (v) => setS(() => alwaysBlocked = v),
@@ -3549,7 +3549,7 @@ class _MobileMonitoringView extends StatefulWidget {
 class _MobileMonitoringViewState extends State<_MobileMonitoringView> {
   String _category = 'App Opened';
   String? _selDeviceId;
-  static const _cats = ['App Opened', 'Web Activity', 'Social Messages', 'Calls & SMS'];
+  static const _cats = ['App Opened', 'Web Activity', 'Message Activity', 'Calls & Messages'];
 
   Future<void> _clearHistory(BuildContext context, String deviceId) async {
     final confirm = await showDialog<bool>(context: context,
@@ -3564,7 +3564,7 @@ class _MobileMonitoringViewState extends State<_MobileMonitoringView> {
       ),
     );
     if (confirm != true || !mounted) return;
-    final types = _category == 'Calls & SMS' ? [_activityType, 'sms'] : [_activityType];
+    final types = _category == 'Calls & Messages' ? [_activityType, 'sms'] : [_activityType];
     for (final type in types) {
       final snap = await FirebaseFirestore.instance.collection('devices').doc(deviceId).collection('activity').where('type', isEqualTo: type).get();
       for (final doc in snap.docs) await doc.reference.delete();
@@ -3575,12 +3575,12 @@ class _MobileMonitoringViewState extends State<_MobileMonitoringView> {
   String get _activityType {
     switch (_category) {
       case 'Web Activity': return 'url';
-      case 'Social Messages': return 'message';
-      case 'Calls & SMS': return 'call';
+      case 'Message Activity': return 'message';
+      case 'Calls & Messages': return 'call';
       default: return 'app_usage';
     }
   }
-  String get _listLabel { switch (_category) { case 'Web Activity': return 'Websites'; case 'Social Messages': return 'Messages'; case 'Calls & SMS': return 'Calls & SMS'; default: return 'Apps'; } }
+  String get _listLabel { switch (_category) { case 'Web Activity': return 'Websites'; case 'Message Activity': return 'Messages'; case 'Calls & Messages': return 'Calls & Messages'; default: return 'Apps'; } }
 
   @override
   Widget build(BuildContext context) {
@@ -3648,7 +3648,7 @@ class _MobileMonitoringViewState extends State<_MobileMonitoringView> {
               builder: (context, snap) {
                 final mainDocs = snap.data?.docs ?? [];
                 return StreamBuilder<QuerySnapshot>(
-                  stream: _category == 'Calls & SMS'
+                  stream: _category == 'Calls & Messages'
                       ? FirebaseFirestore.instance.collection('devices').doc(deviceId).collection('activity').where('type', isEqualTo: 'sms').orderBy('timestamp', descending: true).limit(30).snapshots()
                       : const Stream.empty(),
                   builder: (context, smsSnap) {
@@ -3684,8 +3684,8 @@ class _MobileMonitoringViewState extends State<_MobileMonitoringView> {
                         else
                           ...allDocs.where((doc) {
                             final d = doc.data() as Map<String, dynamic>;
-                            // Exclude chathead/bubble notifications from Social Messages
-                            if (_category == 'Social Messages') {
+                            // Exclude chathead/bubble notifications from Message Activity
+                            if (_category == 'Message Activity') {
                               final source = (d['source'] ?? d['packageName'] ?? d['pkg'] ?? '').toString().toLowerCase();
                               final notifTitle = (d['title'] ?? '').toString().toLowerCase();
                               if (source.contains('chathead') || source.contains('bubble') ||
@@ -3738,7 +3738,7 @@ class _MobileMonitoringViewState extends State<_MobileMonitoringView> {
         trailing = Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: const Color(0xFF1D4ED8), borderRadius: BorderRadius.circular(20)), child: Text('${dMin}m', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white)));
         break;
       }
-      case 'Social Messages': {
+      case 'Message Activity': {
         final contact = (data['sender'] ?? data['title'] ?? data['contact'] ?? data['from'] ?? 'Unknown').toString();
         final body = (data['content'] ?? data['body'] ?? data['message'] ?? '').toString();
         final isIn = (data['direction'] ?? 'incoming') == 'incoming';
@@ -4063,8 +4063,8 @@ class _MobileSubscriptionViewState extends State<_MobileSubscriptionView> {
               field('Plan Name', nameCtrl),
               field(r'Price ($)', priceCtrl, isNum: true),
               field('Max Devices', limitCtrl, isNum: true),
-              field('Max Blocked Apps', blockedCtrl, isNum: true),
-              field('Max Hidden Apps', hiddenCtrl, isNum: true),
+              field('Max Restricted Apps', blockedCtrl, isNum: true),
+              field('Max Filtered Apps', hiddenCtrl, isNum: true),
               field('Hex Color (e.g. 0xFF6366F1)', colorCtrl),
               const SizedBox(height: 4),
               Text('PLAN DURATION', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF94A3B8), letterSpacing: 1.5)),
@@ -4233,9 +4233,9 @@ class _MobileSubscriptionViewState extends State<_MobileSubscriptionView> {
                     ]),
                     const SizedBox(height: 20),
                     Text('${devices == 999 ? 'Unlimited' : devices} Device${devices == 1 ? '' : 's'}', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: color)),
-                    if (blocked > 0) ...[const SizedBox(height: 4), Text('$blocked Blocked Apps allowed', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600, color: color.withOpacity(0.85)))],
-                    if (hidden > 0) ...[const SizedBox(height: 4), Text('$hidden Hidden Apps allowed', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600, color: color.withOpacity(0.85)))],
-                    if (hasTracking) ...[const SizedBox(height: 4), Text('Realtime Tracking', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600, color: color.withOpacity(0.85)))],
+                    if (blocked > 0) ...[const SizedBox(height: 4), Text('$blocked Restricted Apps allowed', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600, color: color.withOpacity(0.85)))],
+                    if (hidden > 0) ...[const SizedBox(height: 4), Text('$hidden Filtered Apps allowed', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600, color: color.withOpacity(0.85)))],
+                    if (hasTracking) ...[const SizedBox(height: 4), Text('Family Location', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600, color: color.withOpacity(0.85)))],
                     if (customFeatures.isNotEmpty) ...[
                       const SizedBox(height: 20),
                       Divider(color: const Color(0xFF64748B).withOpacity(0.25)),
@@ -5856,7 +5856,7 @@ class _DevicesListState extends State<_DevicesList> {
     );
   }
   void _showLocation(BuildContext context, Map<String, dynamic> device) { final lat = (device['lat'] as num?)?.toDouble() ?? 0.0, lng = (device['lng'] as num?)?.toDouble() ?? 0.0; showDialog(context: context, builder: (context) => Dialog(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)), child: Container(height: 500, padding: const EdgeInsets.all(8), child: ClipRRect(borderRadius: BorderRadius.circular(16), child: FlutterMap(options: MapOptions(initialCenter: LatLng(lat, lng), initialZoom: 14), children: [TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'), MarkerLayer(markers: [Marker(point: LatLng(lat, lng), width: 60, height: 60, child: const Icon(Icons.location_on_rounded, color: Colors.red, size: 40))])]))))); }
-  void _removeDevice(String deviceId) async { final confirm = await showDialog<bool>(context: context, builder: (context) => AlertDialog(backgroundColor: widget.cardColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), title: const Text('Remove Device?'), content: const Text('This will unlink the device and stop monitoring.'), actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')), TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Remove', style: TextStyle(color: Colors.redAccent)))])); if (confirm == true) await FirebaseFirestore.instance.collection('devices').doc(deviceId).delete(); }
+  void _removeDevice(String deviceId) async { final confirm = await showDialog<bool>(context: context, builder: (context) => AlertDialog(backgroundColor: widget.cardColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), title: const Text('Remove Device?'), content: const Text('This will unlink the device and remove all its settings.'), actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')), TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Remove', style: TextStyle(color: Colors.redAccent)))])); if (confirm == true) await FirebaseFirestore.instance.collection('devices').doc(deviceId).delete(); }
 }
 
 class _LocationCityItem extends StatefulWidget {
@@ -6503,8 +6503,8 @@ class _SchedulesViewState extends State<_SchedulesView> {
               Text(target, style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF94A3B8))),
               const SizedBox(height: 16),
               SwitchListTile(
-                title: Text('Always Blocked', style: GoogleFonts.outfit(color: widget.textColor, fontSize: 13, fontWeight: FontWeight.bold)),
-                subtitle: Text('Block 24/7', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 11)),
+                title: Text('Always Restricted', style: GoogleFonts.outfit(color: widget.textColor, fontSize: 13, fontWeight: FontWeight.bold)),
+                subtitle: Text('Restrict 24/7', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 11)),
                 value: alwaysBlocked,
                 activeColor: const Color(0xFFEF4444),
                 onChanged: (v) => setS(() => alwaysBlocked = v),
@@ -8496,8 +8496,8 @@ class _SubscriptionView extends StatelessWidget {
           const SizedBox(height: 16),
           Text(limit, style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold, color: color)),
           const SizedBox(height: 4),
-          Text('$blockedLimit Blocked Apps allowed', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w600, color: color.withOpacity(0.8))),
-          Text('$hiddenLimit Hidden Apps allowed', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w600, color: color.withOpacity(0.8))),
+          Text('$blockedLimit Restricted Apps allowed', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w600, color: color.withOpacity(0.8))),
+          Text('$hiddenLimit Filtered Apps allowed', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w600, color: color.withOpacity(0.8))),
           const SizedBox(height: 24),
           ...features.map((f) => Padding(padding: const EdgeInsets.only(bottom: 12), child: Row(children: [Icon(Icons.check_circle_rounded, size: 16, color: color), const SizedBox(width: 10), Expanded(child: Text(f, style: GoogleFonts.outfit(fontSize: 13, color: textColor)))]))).toList(),
           const SizedBox(height: 32),
@@ -8553,8 +8553,8 @@ class _SubscriptionView extends StatelessWidget {
                 _buildField('Plan Name', nameCtrl),
                 _buildField(r'Price ($)', priceCtrl, isNum: true),
                 _buildField('Max Devices', limitCtrl, isNum: true),
-                _buildField('Max Blocked Apps', blockedCtrl, isNum: true),
-                _buildField('Max Hidden Apps', hiddenCtrl, isNum: true),
+                _buildField('Max Restricted Apps', blockedCtrl, isNum: true),
+                _buildField('Max Filtered Apps', hiddenCtrl, isNum: true),
                 _buildField('Hex Color (e.g. 0xFF6366F1)', colorCtrl),
 
                 Text('PLAN DURATION', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF94A3B8), letterSpacing: 1.5)),
@@ -8971,9 +8971,9 @@ class _MonitoringViewState extends State<_MonitoringView> with SingleTickerProvi
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Child Monitoring', style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w900, color: widget.textColor)),
+                    Text('Activity Overview', style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w900, color: widget.textColor)),
                     const SizedBox(height: 4),
-                    Text('Live monitoring of app usage, web history, and conversations.', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 14)),
+                    Text('Review app usage, web history, and message activity.', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 14)),
                   ],
                 ),
                 const Spacer(),
@@ -9013,8 +9013,8 @@ class _MonitoringViewState extends State<_MonitoringView> with SingleTickerProvi
                       tabs: const [
                         Tab(text: 'App Opened'),
                         Tab(text: 'Web Activity'),
-                        Tab(text: 'Social Messages'),
-                        Tab(text: 'Calls & SMS'),
+                        Tab(text: 'Message Activity'),
+                        Tab(text: 'Calls & Messages'),
                       ],
                     ),
                   ),
@@ -9028,8 +9028,8 @@ class _MonitoringViewState extends State<_MonitoringView> with SingleTickerProvi
                     final clearLabels = {
                       'app usage': 'App Opened',
                       'web activity': 'Web Activity',
-                      'social': 'Social Messages',
-                      'telephony': 'Calls & SMS',
+                      'social': 'Message Activity',
+                      'telephony': 'Calls & Messages',
                     };
                     final displayLabel = clearLabels[label] ?? label;
                     return Tooltip(
@@ -9325,7 +9325,7 @@ class _MonitoringMessagesTab extends StatelessWidget {
           return true;
         }).toList();
         
-        if (filteredDocs.isEmpty) return _buildEmptyState('No messages intercepted yet.', Icons.message_outlined);
+        if (filteredDocs.isEmpty) return _buildEmptyState('No messages yet.', Icons.message_outlined);
 
         return ListView.builder(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

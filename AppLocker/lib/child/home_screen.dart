@@ -1128,13 +1128,13 @@ class _ChildHomeScreenState extends State<ChildHomeScreen> {
           ),
           const SizedBox(height: 14),
           if (!_hasUsagePermission)
-            _permRow('• Usage Access (track app usage)', 'FIX USAGE ACCESS', Colors.amber.shade700, _requestUsagePermission),
+            _permRow('• App Usage Access (screen time)', 'FIX USAGE ACCESS', Colors.amber.shade700, _requestUsagePermission),
           if (!_isAdminActive)
             _permRow('• Device Admin (prevent uninstallation)', 'ACTIVATE DEVICE ADMIN', Colors.black87, _requestAdminPermission),
           if (!_hasAccessibilityPermission)
-            _permRow('• Accessibility (monitor apps & URLs)', 'ENABLE ACCESSIBILITY', Colors.orange.shade700, _requestAccessibilityPermission),
+            _permRow('• Accessibility (app management)', 'ENABLE ACCESSIBILITY', Colors.orange.shade700, _requestAccessibilityPermission),
           if (!_hasNotificationPermission)
-            _permRow('• Notification Access (monitor messages)', 'ENABLE NOTIFICATIONS', Colors.deepOrange, _requestNotificationPermission),
+            _permRow('• Notification Access (alerts)', 'ENABLE NOTIFICATIONS', Colors.deepOrange, _requestNotificationPermission),
           Text(
             'Tap each button above, then come back here once done.',
             style: TextStyle(fontSize: 11, color: Colors.amber.withOpacity(0.7), fontStyle: FontStyle.italic),
@@ -1480,7 +1480,7 @@ class _LockStateCard extends StatelessWidget {
                   Text(
                     locked
                         ? 'Complete the tasks or enter PIN to unlock'
-                        : 'Monitoring active — reporting every 15 min',
+                        : 'Active — syncing every 15 min',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.5),
                     fontSize: 12,
