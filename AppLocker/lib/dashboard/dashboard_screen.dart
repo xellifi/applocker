@@ -752,6 +752,11 @@ class _DashboardOverview extends StatelessWidget {
           totalAppsCount = uniquePackages.length;
         }
 
+        if (!isMobile) {
+          return SingleChildScrollView(
+            child: _NewParentDashboard(devices: docs, isDark: isDark, textColor: textColor, cardColor: cardColor),
+          );
+        }
         return SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start, 
@@ -765,18 +770,11 @@ class _DashboardOverview extends StatelessWidget {
               SizedBox(height: isMobile ? 32 : 16),
 
               // 3. Charts Section
-              if (isMobile)
-                Column(children: [
-                  _buildLineChartCard(docs, textColor, isMobile, isDark),
-                  const SizedBox(height: 24),
-                  _buildPieChartCard(docs, textColor, isMobile, isDark),
-                ])
-              else
-                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Expanded(flex: 3, child: _buildLineChartCard(docs, textColor, isMobile, isDark)),
-                  const SizedBox(width: 16),
-                  Expanded(flex: 2, child: _buildPieChartCard(docs, textColor, isMobile, isDark)),
-                ]),
+              Column(children: [
+                _buildLineChartCard(docs, textColor, isMobile, isDark),
+                const SizedBox(height: 24),
+                _buildPieChartCard(docs, textColor, isMobile, isDark),
+              ]),
 
               SizedBox(height: isMobile ? 32 : 16),
 
@@ -785,19 +783,17 @@ class _DashboardOverview extends StatelessWidget {
 
               SizedBox(height: isMobile ? 48 : 16),
 
-              // 4. Action Button (Mobile Only)
-              if (isMobile) 
-                ElevatedButton.icon(
-                  onPressed: () => showAppLockerPairingDialog(context, cardColor, textColor), 
-                  icon: const Icon(Icons.add_rounded), 
-                  label: const Text('Pair New Device'), 
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6366F1), 
-                    foregroundColor: Colors.white, 
-                    minimumSize: const Size(double.infinity, 60), 
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))
-                  )
+              ElevatedButton.icon(
+                onPressed: () => showAppLockerPairingDialog(context, cardColor, textColor),
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('Pair New Device'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6366F1),
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 60),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                 ),
+              ),
               const SizedBox(height: 100),
             ],
           ),
