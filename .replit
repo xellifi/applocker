@@ -37,3 +37,8 @@ externalPort = 80
 deploymentTarget = "static"
 build = ["bash", "-c", "cd AppLocker && flutter pub get && flutter build web --target lib/dashboard/main_web.dart --release"]
 publicDir = "AppLocker/build/web"
+
+[userenv]
+
+[userenv.shared]
+FIREBASE_TOKEN = "1//0grn_yyapyK-iCgYIARAAGBASNwF-L9IrEGJzYNVtTBWH2yktt7DXWyTip_3B9FIbqApiKlc8LJtUuFHADgvM18t91s8Tq8xW8mk"
