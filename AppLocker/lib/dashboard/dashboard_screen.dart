@@ -26,8 +26,24 @@ import '../shared/firebase_service.dart';
 import '../shared/plan_gate.dart';
 enum _DashboardMenu { dashboard, devices, apps, schedules, location, monitoring, reports, subscriptions, paymentMethods, pendingTransactions, settings, users, profile }
 
+// ─── Avatar / Gender constants (shared by pairing + profile editor) ──────────
+const List<String> kDeviceAvatars = [
+  '👦','👧','🧒','👨','👩','🧑','👶','🧔','👱','🧕',
+  '🦸','🦸‍♀️','🐱','🐶','🐼','🦊','🦁','🐯','🐵','🐰',
+];
+
+const List<Map<String, String>> kGenders = [
+  {'value': 'boy',    'label': 'Boy',    'emoji': '👦'},
+  {'value': 'girl',   'label': 'Girl',   'emoji': '👧'},
+  {'value': 'other',  'label': 'Other',  'emoji': '🧒'},
+];
+
 // GLOBAL HELPER FOR PAIRING DIALOG
 void showAppLockerPairingDialog(BuildContext context, Color cardColor, Color textColor) async {
+  await _runPairingFlow(context, cardColor, textColor);
+}
+
+Future<void> _runPairingFlow(BuildContext context, Color cardColor, Color textColor) async {
   final user = FirebaseAuth.instance.currentUser;
   if (user == null) return;
 
@@ -91,113 +107,248 @@ void showAppLockerPairingDialog(BuildContext context, Color cardColor, Color tex
     return;
   }
 
-  final String pin = (100000 + Random().nextInt(900000)).toString();
-  FirebaseService.instance.createPairingSession(user.uid, pin);
-  
-  final qrData = jsonEncode({'parentId': user?.uid ?? 'unknown'});
-  
-  showDialog(
+  await showDialog(
     context: context,
     barrierDismissible: true,
-    builder: (BuildContext context) {
-      final size = MediaQuery.of(context).size;
-      final isCompact = size.width < 520 || size.height < 760;
-      return Dialog(
-        backgroundColor: Colors.transparent,
-        elevation: 24,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: 430,
-            maxHeight: size.height * 0.9,
+    builder: (_) => _PairingDialog(parentUid: user.uid, cardColor: cardColor, textColor: textColor),
+  );
+}
+
+class _PairingDialog extends StatefulWidget {
+  final String parentUid; final Color cardColor; final Color textColor;
+  const _PairingDialog({required this.parentUid, required this.cardColor, required this.textColor});
+  @override
+  State<_PairingDialog> createState() => _PairingDialogState();
+}
+
+class _PairingDialogState extends State<_PairingDialog> {
+  int _step = 0; // 0 = profile, 1 = qr/pin
+  final _nameCtrl = TextEditingController();
+  String _gender = 'boy';
+  String _avatar = kDeviceAvatars[0];
+  String? _pin;
+  StreamSubscription<QuerySnapshot>? _devSub;
+  Set<String> _knownDeviceIds = {};
+  bool _paired = false;
+  String? _pairedDeviceName;
+
+  @override
+  void dispose() { _devSub?.cancel(); _nameCtrl.dispose(); super.dispose(); }
+
+  Future<void> _startPairing() async {
+    final name = _nameCtrl.text.trim();
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a name for this device.'), backgroundColor: Colors.redAccent));
+      return;
+    }
+    final pin = (100000 + Random().nextInt(900000)).toString();
+    // Persist profile alongside pairing session so we (or any cloud function) can use it.
+    await FirebaseFirestore.instance.collection('pairing_sessions').doc(pin).set({
+      'parentUid': widget.parentUid,
+      'createdAt': FieldValue.serverTimestamp(),
+      'expiresAt': Timestamp.fromDate(DateTime.now().add(const Duration(minutes: 30))),
+      'profile': {'name': name, 'gender': _gender, 'avatar': _avatar},
+    });
+
+    // Snapshot current devices so we can detect the new one.
+    final initial = await FirebaseFirestore.instance.collection('devices').where('parentUid', isEqualTo: widget.parentUid).get();
+    _knownDeviceIds = initial.docs.map((d) => d.id).toSet();
+
+    // Listen for the new device and merge profile when it arrives.
+    _devSub = FirebaseFirestore.instance.collection('devices').where('parentUid', isEqualTo: widget.parentUid).snapshots().listen((snap) async {
+      for (final doc in snap.docs) {
+        if (!_knownDeviceIds.contains(doc.id)) {
+          _knownDeviceIds.add(doc.id);
+          try {
+            await doc.reference.set({'name': name, 'gender': _gender, 'avatar': _avatar}, SetOptions(merge: true));
+          } catch (_) {}
+          if (mounted) setState(() { _paired = true; _pairedDeviceName = name; });
+          await _devSub?.cancel();
+          break;
+        }
+      }
+    });
+
+    setState(() { _pin = pin; _step = 1; });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final isCompact = size.width < 520 || size.height < 760;
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      elevation: 24,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: 430, maxHeight: size.height * 0.92),
+        child: Container(
+          decoration: BoxDecoration(
+            color: widget.cardColor,
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.18)),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.28), blurRadius: 34, offset: const Offset(0, 18))],
           ),
-          child: Container(
-            decoration: BoxDecoration(
-              color: cardColor,
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.18)),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.28), blurRadius: 34, offset: const Offset(0, 18))],
-            ),
-            child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(24, isCompact ? 20 : 26, 24, isCompact ? 20 : 26),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)]),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 22),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Pair New Device', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: textColor, height: 1.05)),
-                            const SizedBox(height: 3),
-                            Text('Scan or enter the PIN on the child app', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF94A3B8))),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.close_rounded, size: 20),
-                        color: const Color(0xFF94A3B8),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: isCompact ? 18 : 24),
-                  Container(
-                    padding: EdgeInsets.all(isCompact ? 14 : 20),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(28),
-                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 24, offset: const Offset(0, 12))],
-                    ),
-                    child: QrImageView(
-                      data: qrData,
-                      version: QrVersions.auto,
-                      size: isCompact ? 172 : 210,
-                      foregroundColor: const Color(0xFF1E293B),
-                    ),
-                  ),
-                  SizedBox(height: isCompact ? 20 : 26),
-                  Text('6-DIGIT PAIRING PIN', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFF94A3B8), letterSpacing: 1.6)),
-                  const SizedBox(height: 10),
-                  Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.symmetric(vertical: isCompact ? 12 : 15),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(colors: [const Color(0xFF6366F1).withOpacity(0.16), const Color(0xFF8B5CF6).withOpacity(0.12)]),
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.25)),
-                    ),
-                    child: Text(
-                      pin,
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.outfit(fontSize: isCompact ? 30 : 36, fontWeight: FontWeight.w900, color: const Color(0xFF6366F1), letterSpacing: 7),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Keep this window open while pairing. The code is temporary and only works for your account.',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.outfit(color: const Color(0xFF64748B), fontSize: 12.5, height: 1.45, fontWeight: FontWeight.w500),
-                  ),
-                ],
-              ),
-            ),
+          child: SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(24, isCompact ? 20 : 26, 24, isCompact ? 20 : 26),
+            child: _step == 0 ? _buildProfileStep(isCompact) : _buildQrStep(isCompact),
           ),
         ),
-      );
-    },
-  );
+      ),
+    );
+  }
+
+  Widget _header(String title, String subtitle, IconData icon) => Row(children: [
+    Container(width: 44, height: 44,
+      decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)]), borderRadius: BorderRadius.circular(14)),
+      child: Icon(icon, color: Colors.white, size: 22),
+    ),
+    const SizedBox(width: 12),
+    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(title, style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: widget.textColor, height: 1.05)),
+      const SizedBox(height: 3),
+      Text(subtitle, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF94A3B8))),
+    ])),
+    IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded, size: 20), color: const Color(0xFF94A3B8)),
+  ]);
+
+  Widget _buildProfileStep(bool isCompact) {
+    final fieldFill = widget.cardColor.computeLuminance() > 0.5 ? const Color(0xFFF1F5F9) : Colors.white.withOpacity(0.06);
+    return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _header('Setup Profile', 'Step 1 of 2 — name, gender, avatar', Icons.person_add_alt_1_rounded),
+      SizedBox(height: isCompact ? 18 : 22),
+      Center(child: Container(
+        width: 88, height: 88,
+        decoration: BoxDecoration(color: const Color(0xFF6366F1).withOpacity(0.12), shape: BoxShape.circle, border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.4), width: 2)),
+        alignment: Alignment.center,
+        child: Text(_avatar, style: const TextStyle(fontSize: 48)),
+      )),
+      const SizedBox(height: 18),
+      Text('NAME', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFF94A3B8), letterSpacing: 1.4)),
+      const SizedBox(height: 6),
+      TextField(
+        controller: _nameCtrl,
+        style: GoogleFonts.outfit(color: widget.textColor, fontSize: 15, fontWeight: FontWeight.w600),
+        decoration: InputDecoration(
+          hintText: "e.g. Skie's Phone",
+          hintStyle: GoogleFonts.outfit(color: const Color(0xFF94A3B8)),
+          filled: true, fillColor: fieldFill,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        ),
+      ),
+      const SizedBox(height: 16),
+      Text('GENDER', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFF94A3B8), letterSpacing: 1.4)),
+      const SizedBox(height: 8),
+      Row(children: kGenders.map((g) {
+        final selected = _gender == g['value'];
+        return Expanded(child: Padding(
+          padding: const EdgeInsets.only(right: 8),
+          child: GestureDetector(
+            onTap: () => setState(() => _gender = g['value']!),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: selected ? const Color(0xFF6366F1).withOpacity(0.14) : fieldFill,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: selected ? const Color(0xFF6366F1) : Colors.transparent, width: 1.5),
+              ),
+              child: Column(children: [
+                Text(g['emoji']!, style: const TextStyle(fontSize: 22)),
+                const SizedBox(height: 4),
+                Text(g['label']!, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: selected ? const Color(0xFF6366F1) : widget.textColor)),
+              ]),
+            ),
+          ),
+        ));
+      }).toList()),
+      const SizedBox(height: 16),
+      Text('AVATAR', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFF94A3B8), letterSpacing: 1.4)),
+      const SizedBox(height: 8),
+      Wrap(spacing: 8, runSpacing: 8, children: kDeviceAvatars.map((a) {
+        final selected = _avatar == a;
+        return GestureDetector(
+          onTap: () => setState(() => _avatar = a),
+          child: Container(
+            width: 44, height: 44,
+            decoration: BoxDecoration(
+              color: selected ? const Color(0xFF6366F1).withOpacity(0.18) : fieldFill,
+              shape: BoxShape.circle,
+              border: Border.all(color: selected ? const Color(0xFF6366F1) : Colors.transparent, width: 2),
+            ),
+            alignment: Alignment.center,
+            child: Text(a, style: const TextStyle(fontSize: 22)),
+          ),
+        );
+      }).toList()),
+      const SizedBox(height: 22),
+      SizedBox(width: double.infinity, child: ElevatedButton(
+        onPressed: _startPairing,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF6366F1), foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+        child: Text('Continue to Pairing', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15)),
+      )),
+    ]);
+  }
+
+  Widget _buildQrStep(bool isCompact) {
+    final qrData = jsonEncode({'parentId': widget.parentUid});
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      _header('Pair New Device', 'Step 2 of 2 — scan or enter PIN', Icons.qr_code_scanner_rounded),
+      SizedBox(height: isCompact ? 16 : 20),
+      if (_paired) Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(color: const Color(0xFF22C55E).withOpacity(0.12), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFF22C55E).withOpacity(0.4))),
+        child: Row(children: [
+          const Icon(Icons.check_circle_rounded, color: Color(0xFF22C55E)),
+          const SizedBox(width: 10),
+          Expanded(child: Text('${_pairedDeviceName ?? "Device"} paired successfully!', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: const Color(0xFF22C55E)))),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text('Done', style: GoogleFonts.outfit(color: const Color(0xFF22C55E), fontWeight: FontWeight.w800))),
+        ]),
+      ) else Container(
+        padding: EdgeInsets.all(isCompact ? 14 : 20),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(28),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 24, offset: const Offset(0, 12))]),
+        child: QrImageView(data: qrData, version: QrVersions.auto, size: isCompact ? 172 : 210, foregroundColor: const Color(0xFF1E293B)),
+      ),
+      SizedBox(height: isCompact ? 18 : 22),
+      Text('6-DIGIT PAIRING PIN', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFF94A3B8), letterSpacing: 1.6)),
+      const SizedBox(height: 10),
+      Container(
+        width: double.infinity, padding: EdgeInsets.symmetric(vertical: isCompact ? 12 : 15),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(colors: [const Color(0xFF6366F1).withOpacity(0.16), const Color(0xFF8B5CF6).withOpacity(0.12)]),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.25)),
+        ),
+        child: Text(_pin ?? '------', textAlign: TextAlign.center,
+          style: GoogleFonts.outfit(fontSize: isCompact ? 30 : 36, fontWeight: FontWeight.w900, color: const Color(0xFF6366F1), letterSpacing: 7)),
+      ),
+      const SizedBox(height: 12),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(color: const Color(0xFF6366F1).withOpacity(0.08), borderRadius: BorderRadius.circular(12)),
+        child: Row(children: [
+          Container(width: 36, height: 36,
+            decoration: BoxDecoration(color: const Color(0xFF6366F1).withOpacity(0.15), shape: BoxShape.circle),
+            alignment: Alignment.center,
+            child: Text(_avatar, style: const TextStyle(fontSize: 20))),
+          const SizedBox(width: 10),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(_nameCtrl.text.trim(), style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: widget.textColor, fontSize: 14)),
+            Text('Profile will apply automatically when paired', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF94A3B8))),
+          ])),
+        ]),
+      ),
+      const SizedBox(height: 12),
+      Text('Keep this window open while pairing. The code is temporary and only works for your account.',
+        textAlign: TextAlign.center,
+        style: GoogleFonts.outfit(color: const Color(0xFF64748B), fontSize: 12.5, height: 1.45, fontWeight: FontWeight.w500)),
+    ]);
+  }
 }
 
 class DashboardScreen extends StatefulWidget {
@@ -2005,13 +2156,15 @@ class _MobileDevicesViewState extends State<_MobileDevicesView> {
                 final isOnline = (data['status'] ?? 'offline') == 'online';
                 final battery = ((data['battery'] ?? 0) as num).toInt();
                 final isLocked = data['locked'] == true;
-                final deviceName = (data['model'] ?? data['name'] ?? doc.id).toString();
+                final deviceName = (data['name'] ?? data['model'] ?? doc.id).toString();
+                final avatar = (data['avatar'] ?? '').toString();
                 final latRaw = data['lat'] ?? data['latitude'];
                 final lngRaw = data['lng'] ?? data['longitude'] ?? data['lon'];
                 final lat = latRaw != null ? (latRaw as num).toDouble() : null;
                 final lng = lngRaw != null ? (lngRaw as num).toDouble() : null;
                 return _MobileDeviceListCard(
                   name: deviceName, deviceId: doc.id, isOnline: isOnline, battery: battery,
+                  avatar: avatar,
                   isDark: widget.isDark, isLocked: isLocked,
                   lat: lat, lng: lng,
                   onChat: () => _openChat(context, doc.id),
@@ -2048,7 +2201,8 @@ class _MobileDeviceListCard extends StatefulWidget {
   final VoidCallback onChat; final VoidCallback onLock;
   final VoidCallback? onLocation; final VoidCallback? onSchedule; final VoidCallback? onRemove;
   final VoidCallback? onApps; final VoidCallback? onMonitoring; final VoidCallback? onReports; final VoidCallback? onSettings;
-  const _MobileDeviceListCard({required this.name, required this.deviceId, required this.isOnline, required this.battery, required this.isDark, required this.isLocked, required this.onChat, required this.onLock, this.lat, this.lng, this.onLocation, this.onSchedule, this.onRemove, this.onApps, this.onMonitoring, this.onReports, this.onSettings});
+  final String? avatar;
+  const _MobileDeviceListCard({required this.name, required this.deviceId, required this.isOnline, required this.battery, required this.isDark, required this.isLocked, required this.onChat, required this.onLock, this.lat, this.lng, this.onLocation, this.onSchedule, this.onRemove, this.onApps, this.onMonitoring, this.onReports, this.onSettings, this.avatar});
 
   @override
   State<_MobileDeviceListCard> createState() => _MobileDeviceListCardState();
@@ -2080,6 +2234,115 @@ class _MobileDeviceListCardState extends State<_MobileDeviceListCard> {
     }
   }
 
+  Future<void> _openEditProfile(BuildContext context) async {
+    final isDark = widget.isDark;
+    final bg = isDark ? const Color(0xFF0F1A35) : Colors.white;
+    final textColor = isDark ? Colors.white : const Color(0xFF1E293B);
+    final fieldFill = isDark ? Colors.white.withOpacity(0.06) : const Color(0xFFF1F5F9);
+
+    final docRef = FirebaseFirestore.instance.collection('devices').doc(widget.deviceId);
+    final snap = await docRef.get();
+    final data = snap.data() ?? {};
+    final nameCtrl = TextEditingController(text: (data['name'] ?? widget.name).toString());
+    String gender = (data['gender'] ?? 'boy').toString();
+    String avatar = (data['avatar'] ?? widget.avatar ?? kDeviceAvatars[0]).toString();
+    if (!kDeviceAvatars.contains(avatar)) avatar = kDeviceAvatars[0];
+
+    if (!context.mounted) return;
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setS) => Dialog(
+        backgroundColor: bg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Container(width: 40, height: 40,
+                decoration: BoxDecoration(color: const Color(0xFF6366F1).withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
+                child: const Icon(Icons.person_rounded, color: Color(0xFF6366F1)),
+              ),
+              const SizedBox(width: 10),
+              Expanded(child: Text('Edit Device Profile', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: textColor))),
+              IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close_rounded), color: const Color(0xFF94A3B8)),
+            ]),
+            const SizedBox(height: 12),
+            Center(child: Container(
+              width: 80, height: 80,
+              decoration: BoxDecoration(color: const Color(0xFF6366F1).withOpacity(0.12), shape: BoxShape.circle, border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.4), width: 2)),
+              alignment: Alignment.center,
+              child: Text(avatar, style: const TextStyle(fontSize: 42)),
+            )),
+            const SizedBox(height: 16),
+            Text('NAME', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFF94A3B8), letterSpacing: 1.4)),
+            const SizedBox(height: 6),
+            TextField(
+              controller: nameCtrl,
+              style: GoogleFonts.outfit(color: textColor, fontSize: 15, fontWeight: FontWeight.w600),
+              decoration: InputDecoration(filled: true, fillColor: fieldFill,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14)),
+            ),
+            const SizedBox(height: 14),
+            Text('GENDER', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFF94A3B8), letterSpacing: 1.4)),
+            const SizedBox(height: 8),
+            Row(children: kGenders.map((g) {
+              final selected = gender == g['value'];
+              return Expanded(child: Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: GestureDetector(
+                  onTap: () => setS(() => gender = g['value']!),
+                  child: Container(padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: selected ? const Color(0xFF6366F1).withOpacity(0.14) : fieldFill,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: selected ? const Color(0xFF6366F1) : Colors.transparent, width: 1.5)),
+                    child: Column(children: [
+                      Text(g['emoji']!, style: const TextStyle(fontSize: 22)),
+                      const SizedBox(height: 4),
+                      Text(g['label']!, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: selected ? const Color(0xFF6366F1) : textColor)),
+                    ])),
+                ),
+              ));
+            }).toList()),
+            const SizedBox(height: 14),
+            Text('AVATAR', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFF94A3B8), letterSpacing: 1.4)),
+            const SizedBox(height: 8),
+            Wrap(spacing: 8, runSpacing: 8, children: kDeviceAvatars.map((a) {
+              final selected = avatar == a;
+              return GestureDetector(
+                onTap: () => setS(() => avatar = a),
+                child: Container(width: 44, height: 44,
+                  decoration: BoxDecoration(
+                    color: selected ? const Color(0xFF6366F1).withOpacity(0.18) : fieldFill,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: selected ? const Color(0xFF6366F1) : Colors.transparent, width: 2)),
+                  alignment: Alignment.center,
+                  child: Text(a, style: const TextStyle(fontSize: 22))),
+              );
+            }).toList()),
+            const SizedBox(height: 18),
+            SizedBox(width: double.infinity, child: ElevatedButton(
+              onPressed: () async {
+                final newName = nameCtrl.text.trim();
+                if (newName.isEmpty) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Name is required.'), backgroundColor: Colors.redAccent));
+                  return;
+                }
+                await docRef.set({'name': newName, 'gender': gender, 'avatar': avatar}, SetOptions(merge: true));
+                if (ctx.mounted) Navigator.pop(ctx);
+                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile updated.'), backgroundColor: Color(0xFF22C55E)));
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6366F1), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+              child: Text('Save Profile', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15)),
+            )),
+          ]),
+        ),
+      )),
+    );
+  }
+
   void _showFeaturesSheet(BuildContext context) {
     final isDark = widget.isDark;
     final bg = isDark ? const Color(0xFF0F1A35) : Colors.white;
@@ -2098,6 +2361,7 @@ class _MobileDeviceListCardState extends State<_MobileDeviceListCard> {
     }
 
     final tiles = <_FeatureTileData>[
+      _FeatureTileData('Edit Profile', Icons.person_outline_rounded, () { Navigator.pop(context); _openEditProfile(context); }),
       _FeatureTileData('Lock Apps', Icons.apps_rounded, () => closeAndRun(widget.onApps)),
       _FeatureTileData('Lock Device', Icons.smartphone_rounded, () => closeAndRun(widget.onLock)),
       _FeatureTileData('Apps Usage', Icons.bar_chart_rounded, () => closeAndRun(widget.onMonitoring)),
@@ -2238,8 +2502,10 @@ class _MobileDeviceListCardState extends State<_MobileDeviceListCard> {
           decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(18), border: Border.all(color: borderColor, width: 1.5)),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              Container(width: 52, height: 52, decoration: BoxDecoration(color: circleColor, shape: BoxShape.circle),
-                child: const Icon(Icons.smartphone_rounded, color: Colors.white, size: 24)),
+              Container(width: 52, height: 52, decoration: BoxDecoration(color: circleColor, shape: BoxShape.circle), alignment: Alignment.center,
+                child: (widget.avatar != null && widget.avatar!.isNotEmpty)
+                  ? Text(widget.avatar!, style: const TextStyle(fontSize: 26))
+                  : const Icon(Icons.smartphone_rounded, color: Colors.white, size: 24)),
               const SizedBox(width: 12),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(children: [Icon(Icons.battery_charging_full_rounded, size: 12, color: batColor), const SizedBox(width: 3), Text('${widget.battery}%', style: GoogleFonts.outfit(fontSize: 11, color: batColor, fontWeight: FontWeight.w700))]),
