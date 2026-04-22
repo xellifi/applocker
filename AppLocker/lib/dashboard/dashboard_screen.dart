@@ -44,57 +44,112 @@ Widget _buildAvatarPinMarker({
   required String name,
   required bool isOnline,
   required bool isDark,
-}) {
-  final accent = isOnline ? const Color(0xFF22C55E) : const Color(0xFF94A3B8);
-  final bubbleBg = isDark ? const Color(0xFF0F1A35) : Colors.white;
-  final txt = isDark ? Colors.white : const Color(0xFF1E293B);
-  final initials = name.isEmpty ? '?' : name.trim().substring(0, 1).toUpperCase();
-  return Column(mainAxisSize: MainAxisSize.min, children: [
-    Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: bubbleBg,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: accent, width: 1.4),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 6, offset: const Offset(0, 2))],
-      ),
-      child: Text(
-        name.length > 14 ? '${name.substring(0, 12)}…' : name,
-        style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w800, color: txt),
-      ),
-    ),
-    const SizedBox(height: 2),
-    Stack(alignment: Alignment.center, clipBehavior: Clip.none, children: [
+}) => _AnimatedAvatarPin(avatar: avatar, name: name, isOnline: isOnline, isDark: isDark);
+
+class _AnimatedAvatarPin extends StatefulWidget {
+  final String avatar;
+  final String name;
+  final bool isOnline;
+  final bool isDark;
+  const _AnimatedAvatarPin({required this.avatar, required this.name, required this.isOnline, required this.isDark});
+  @override
+  State<_AnimatedAvatarPin> createState() => _AnimatedAvatarPinState();
+}
+
+class _AnimatedAvatarPinState extends State<_AnimatedAvatarPin> with TickerProviderStateMixin {
+  late final AnimationController _beat;
+  late final Animation<double> _scale;
+  late final AnimationController _ring;
+
+  @override
+  void initState() {
+    super.initState();
+    _beat = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))..repeat(reverse: true);
+    _scale = Tween<double>(begin: 1.0, end: 1.12).animate(CurvedAnimation(parent: _beat, curve: Curves.easeInOut));
+    _ring = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800))..repeat();
+  }
+
+  @override
+  void dispose() {
+    _beat.dispose();
+    _ring.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = widget.isOnline ? const Color(0xFF22C55E) : const Color(0xFF94A3B8);
+    final bubbleBg = widget.isDark ? const Color(0xFF0F1A35) : Colors.white;
+    final txt = widget.isDark ? Colors.white : const Color(0xFF1E293B);
+    final initials = widget.name.isEmpty ? '?' : widget.name.trim().substring(0, 1).toUpperCase();
+
+    return Column(mainAxisSize: MainAxisSize.min, children: [
       Container(
-        width: 44, height: 44,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
         decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight,
-            colors: [accent, accent.withOpacity(0.7)]),
-          border: Border.all(color: Colors.white, width: 3),
-          boxShadow: [BoxShadow(color: accent.withOpacity(0.45), blurRadius: 10, spreadRadius: 1, offset: const Offset(0, 3))],
+          color: bubbleBg,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: accent, width: 1.4),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 6, offset: const Offset(0, 2))],
         ),
-        alignment: Alignment.center,
-        child: avatar.isNotEmpty
-          ? Text(avatar, style: const TextStyle(fontSize: 22))
-          : Text(initials, style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
-      ),
-      Positioned(
-        bottom: -6,
-        child: ClipPath(
-          clipper: _PinTailClipper(),
-          child: Container(width: 14, height: 10, color: Colors.white),
+        child: Text(
+          widget.name.length > 14 ? '${widget.name.substring(0, 12)}…' : widget.name,
+          style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w800, color: txt),
         ),
       ),
-      Positioned(
-        bottom: -4,
-        child: ClipPath(
-          clipper: _PinTailClipper(),
-          child: Container(width: 10, height: 7, color: accent),
-        ),
+      const SizedBox(height: 2),
+      SizedBox(
+        width: 80, height: 64,
+        child: Stack(alignment: Alignment.center, clipBehavior: Clip.none, children: [
+          if (widget.isOnline)
+            AnimatedBuilder(
+              animation: _ring,
+              builder: (_, __) {
+                final t = _ring.value;
+                return IgnorePointer(child: Container(
+                  width: 30 + 50 * t, height: 30 + 50 * t,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: accent.withOpacity((1 - t).clamp(0.0, 1.0) * 0.55), width: 2),
+                  ),
+                ));
+              },
+            ),
+          ScaleTransition(
+            scale: _scale,
+            child: Container(
+              width: 44, height: 44,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight,
+                  colors: [accent, accent.withOpacity(0.7)]),
+                border: Border.all(color: Colors.white, width: 3),
+                boxShadow: [BoxShadow(color: accent.withOpacity(0.45), blurRadius: 10, spreadRadius: 1, offset: const Offset(0, 3))],
+              ),
+              alignment: Alignment.center,
+              child: widget.avatar.isNotEmpty
+                ? Text(widget.avatar, style: const TextStyle(fontSize: 22))
+                : Text(initials, style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
+            ),
+          ),
+          Positioned(
+            bottom: 4,
+            child: ClipPath(
+              clipper: _PinTailClipper(),
+              child: Container(width: 14, height: 10, color: Colors.white),
+            ),
+          ),
+          Positioned(
+            bottom: 6,
+            child: ClipPath(
+              clipper: _PinTailClipper(),
+              child: Container(width: 10, height: 7, color: accent),
+            ),
+          ),
+        ]),
       ),
-    ]),
-  ]);
+    ]);
+  }
 }
 
 class _PinTailClipper extends CustomClipper<Path> {
@@ -1434,6 +1489,7 @@ class _MobileDashboardHomeState extends State<_MobileDashboardHome> with TickerP
                         isOnline: isOnline,
                         isDark: widget.isDark,
                         hasScheduledLock: hasScheduledLock,
+                        avatar: (data['avatar'] ?? '').toString(),
                         onTap: () => widget.onNavigate?.call(_DashboardMenu.devices),
                       ),
                     );
@@ -1680,6 +1736,7 @@ class _MobileDeviceCard extends StatefulWidget {
   final bool isOnline;
   final bool isDark;
   final bool hasScheduledLock;
+  final String avatar;
   final VoidCallback? onTap;
 
   const _MobileDeviceCard({
@@ -1691,6 +1748,7 @@ class _MobileDeviceCard extends StatefulWidget {
     required this.isOnline,
     required this.isDark,
     this.hasScheduledLock = false,
+    this.avatar = '',
     this.onTap,
   });
 
@@ -1750,6 +1808,19 @@ class _MobileDeviceCardState extends State<_MobileDeviceCard> {
             ),
             child: Row(
               children: [
+                Container(
+                  width: 44, height: 44,
+                  margin: const EdgeInsets.only(right: 12),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withOpacity(0.18),
+                    border: Border.all(color: Colors.white.withOpacity(0.4), width: 1.5),
+                  ),
+                  alignment: Alignment.center,
+                  child: widget.avatar.isNotEmpty
+                    ? Text(widget.avatar, style: const TextStyle(fontSize: 24))
+                    : const Icon(Icons.smartphone_rounded, color: Colors.white, size: 22),
+                ),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
