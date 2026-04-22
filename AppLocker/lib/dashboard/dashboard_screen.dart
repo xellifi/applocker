@@ -3079,7 +3079,23 @@ class _MobileAppControlsViewState extends State<_MobileAppControlsView> {
                           padding: EdgeInsets.zero,
                           onSelected: (action) async {
                             final ref = FirebaseFirestore.instance.collection('devices').doc(selDoc.id);
+                            final uid = FirebaseAuth.instance.currentUser?.uid;
+                            // Gate scheduled restrictions before opening the sheet
                             if (action == 'schedule_block') {
+                              if (uid != null) {
+                                final allowedRestrict = await PlanGate.requireForUser(
+                                  context, uid, (f) => f.appRestrictions,
+                                  featureLabel: 'App Restrictions',
+                                );
+                                if (!allowedRestrict) return;
+                                if (!context.mounted) return;
+                                final allowedSched = await PlanGate.requireForUser(
+                                  context, uid, (f) => f.scheduleLock,
+                                  featureLabel: 'Scheduled App Restrictions',
+                                );
+                                if (!allowedSched) return;
+                                if (!context.mounted) return;
+                              }
                               showModalBottomSheet(
                                 context: context, isScrollControlled: true, backgroundColor: Colors.transparent,
                                 builder: (_) => _AppBlockScheduleSheet(
@@ -3087,6 +3103,14 @@ class _MobileAppControlsViewState extends State<_MobileAppControlsView> {
                                 ),
                               );
                               return;
+                            }
+                            // Gate Block / Hide actions on the appRestrictions feature
+                            if ((action == 'block_now' || action == 'hide') && uid != null) {
+                              final allowed = await PlanGate.requireForUser(
+                                context, uid, (f) => f.appRestrictions,
+                                featureLabel: 'App Restrictions',
+                              );
+                              if (!allowed) return;
                             }
                             final List<dynamic> blocked = List.from(data['blockedApps'] ?? []);
                             final List<dynamic> hidden  = List.from(data['hiddenApps']  ?? []);
@@ -6284,9 +6308,32 @@ class _AppActionButton extends StatelessWidget {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             padding: EdgeInsets.zero,
             onSelected: (action) async {
+              final uid = FirebaseAuth.instance.currentUser?.uid;
               if (action == 'schedule_block') {
+                if (uid != null) {
+                  final allowedRestrict = await PlanGate.requireForUser(
+                    context, uid, (f) => f.appRestrictions,
+                    featureLabel: 'App Restrictions',
+                  );
+                  if (!allowedRestrict) return;
+                  if (!context.mounted) return;
+                  final allowedSched = await PlanGate.requireForUser(
+                    context, uid, (f) => f.scheduleLock,
+                    featureLabel: 'Scheduled App Restrictions',
+                  );
+                  if (!allowedSched) return;
+                  if (!context.mounted) return;
+                }
                 _showRestrictionDialog(context, pkg, appName);
                 return;
+              }
+              if ((action == 'block_now' || action == 'hide') && uid != null) {
+                final allowed = await PlanGate.requireForUser(
+                  context, uid, (f) => f.appRestrictions,
+                  featureLabel: 'App Restrictions',
+                );
+                if (!allowed) return;
+                if (!context.mounted) return;
               }
               final newBlocked = List<String>.from(blockedApps)..remove(pkg);
               final newHidden  = List<String>.from(hiddenApps)..remove(pkg);
