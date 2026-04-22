@@ -38,6 +38,79 @@ const List<Map<String, String>> kGenders = [
   {'value': 'other',  'label': 'Other',  'emoji': '🧒'},
 ];
 
+// ─── Map Marker Helper ───────────────────────────────────────────────────────
+Widget _buildAvatarPinMarker({
+  required String avatar,
+  required String name,
+  required bool isOnline,
+  required bool isDark,
+}) {
+  final accent = isOnline ? const Color(0xFF22C55E) : const Color(0xFF94A3B8);
+  final bubbleBg = isDark ? const Color(0xFF0F1A35) : Colors.white;
+  final txt = isDark ? Colors.white : const Color(0xFF1E293B);
+  final initials = name.isEmpty ? '?' : name.trim().substring(0, 1).toUpperCase();
+  return Column(mainAxisSize: MainAxisSize.min, children: [
+    Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bubbleBg,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: accent, width: 1.4),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 6, offset: const Offset(0, 2))],
+      ),
+      child: Text(
+        name.length > 14 ? '${name.substring(0, 12)}…' : name,
+        style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w800, color: txt),
+      ),
+    ),
+    const SizedBox(height: 2),
+    Stack(alignment: Alignment.center, clipBehavior: Clip.none, children: [
+      Container(
+        width: 44, height: 44,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight,
+            colors: [accent, accent.withOpacity(0.7)]),
+          border: Border.all(color: Colors.white, width: 3),
+          boxShadow: [BoxShadow(color: accent.withOpacity(0.45), blurRadius: 10, spreadRadius: 1, offset: const Offset(0, 3))],
+        ),
+        alignment: Alignment.center,
+        child: avatar.isNotEmpty
+          ? Text(avatar, style: const TextStyle(fontSize: 22))
+          : Text(initials, style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
+      ),
+      Positioned(
+        bottom: -6,
+        child: ClipPath(
+          clipper: _PinTailClipper(),
+          child: Container(width: 14, height: 10, color: Colors.white),
+        ),
+      ),
+      Positioned(
+        bottom: -4,
+        child: ClipPath(
+          clipper: _PinTailClipper(),
+          child: Container(width: 10, height: 7, color: accent),
+        ),
+      ),
+    ]),
+  ]);
+}
+
+class _PinTailClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    final p = Path();
+    p.moveTo(0, 0);
+    p.lineTo(size.width, 0);
+    p.lineTo(size.width / 2, size.height);
+    p.close();
+    return p;
+  }
+  @override
+  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
+}
+
 // GLOBAL HELPER FOR PAIRING DIALOG
 void showAppLockerPairingDialog(BuildContext context, Color cardColor, Color textColor) async {
   await _runPairingFlow(context, cardColor, textColor);
@@ -3981,16 +4054,18 @@ class _MobileLocationViewState extends State<_MobileLocationView> with SingleTic
         LatLng center = const LatLng(14.5995, 120.9842);
         for (var doc in devices) {
           final data = doc.data() as Map<String, dynamic>;
-          final deviceName = (data['deviceName'] ?? data['model'] ?? data['name'] ?? doc.id).toString();
+          final deviceName = (data['name'] ?? data['deviceName'] ?? data['model'] ?? doc.id).toString();
+          final avatar = (data['avatar'] ?? '').toString();
+          final isOnline = (data['status'] ?? 'offline').toString().toLowerCase() == 'online';
           final lat = (data['lat'] as num?)?.toDouble() ?? 0.0;
           final lng = (data['lng'] as num?)?.toDouble() ?? 0.0;
           if (lat != 0.0 || lng != 0.0) {
             center = LatLng(lat, lng);
-            markers.add(Marker(point: LatLng(lat, lng), width: 80, height: 70, child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(6), border: Border.all(color: const Color(0xFF22C55E))),
-                child: Text(deviceName.length > 12 ? '${deviceName.substring(0, 10)}...' : deviceName, style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.bold, color: const Color(0xFF1E293B)))),
-              const Icon(Icons.location_on_rounded, color: Colors.red, size: 28),
-            ])));
+            markers.add(Marker(
+              point: LatLng(lat, lng), width: 100, height: 96,
+              alignment: Alignment.topCenter,
+              child: _buildAvatarPinMarker(avatar: avatar, name: deviceName, isOnline: isOnline, isDark: widget.isDark),
+            ));
           }
         }
         return Container(
@@ -4053,7 +4128,13 @@ class _MobileLocationViewState extends State<_MobileLocationView> with SingleTic
                   child: FlutterMap(
                     options: MapOptions(initialCenter: center, initialZoom: 13),
                     children: [
-                      TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.parentalcontrol.applocker'),
+                      TileLayer(
+                        urlTemplate: widget.isDark
+                          ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+                          : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+                        subdomains: const ['a', 'b', 'c', 'd'],
+                        userAgentPackageName: 'com.parentalcontrol.applocker',
+                      ),
                       MarkerLayer(markers: markers),
                     ],
                   ),
@@ -6622,7 +6703,34 @@ class _DevicesListState extends State<_DevicesList> {
       ),
     );
   }
-  void _showLocation(BuildContext context, Map<String, dynamic> device) { final lat = (device['lat'] as num?)?.toDouble() ?? 0.0, lng = (device['lng'] as num?)?.toDouble() ?? 0.0; showDialog(context: context, builder: (context) => Dialog(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)), child: Container(height: 500, padding: const EdgeInsets.all(8), child: ClipRRect(borderRadius: BorderRadius.circular(16), child: FlutterMap(options: MapOptions(initialCenter: LatLng(lat, lng), initialZoom: 14), children: [TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'), MarkerLayer(markers: [Marker(point: LatLng(lat, lng), width: 60, height: 60, child: const Icon(Icons.location_on_rounded, color: Colors.red, size: 40))])]))))); }
+  void _showLocation(BuildContext context, Map<String, dynamic> device) {
+    final lat = (device['lat'] as num?)?.toDouble() ?? 0.0;
+    final lng = (device['lng'] as num?)?.toDouble() ?? 0.0;
+    final name = (device['name'] ?? device['model'] ?? 'Device').toString();
+    final avatar = (device['avatar'] ?? '').toString();
+    final isOnline = (device['status'] ?? 'offline').toString().toLowerCase() == 'online';
+    showDialog(context: context, builder: (context) => Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: Container(height: 500, padding: const EdgeInsets.all(8), child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: FlutterMap(
+          options: MapOptions(initialCenter: LatLng(lat, lng), initialZoom: 14),
+          children: [
+            TileLayer(
+              urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+              subdomains: const ['a', 'b', 'c', 'd'],
+              userAgentPackageName: 'com.parentalcontrol.applocker',
+            ),
+            MarkerLayer(markers: [Marker(
+              point: LatLng(lat, lng), width: 110, height: 100,
+              alignment: Alignment.topCenter,
+              child: _buildAvatarPinMarker(avatar: avatar, name: name, isOnline: isOnline, isDark: false),
+            )]),
+          ],
+        ),
+      )),
+    ));
+  }
   void _removeDevice(String deviceId) async { final confirm = await showDialog<bool>(context: context, builder: (context) => AlertDialog(backgroundColor: widget.cardColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), title: const Text('Remove Device?'), content: const Text('This will unlink the device and remove all its settings.'), actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')), TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Remove', style: TextStyle(color: Colors.redAccent)))])); if (confirm == true) await FirebaseFirestore.instance.collection('devices').doc(deviceId).delete(); }
 }
 
@@ -7418,35 +7526,19 @@ class _LocationView extends StatelessWidget {
           final data = doc.data() as Map<String, dynamic>;
           final lat = (data['lat'] as num?)?.toDouble() ?? 0.0;
           final lng = (data['lng'] as num?)?.toDouble() ?? 0.0;
-          final isOnline = data['status'] == 'online';
-          
+          final isOnline = (data['status'] ?? 'offline').toString().toLowerCase() == 'online';
+          final name = (data['name'] ?? data['model'] ?? doc.id).toString();
+          final avatar = (data['avatar'] ?? '').toString();
+
           if (lat != 0.0 || lng != 0.0) {
             center ??= LatLng(lat, lng);
             markers.add(
               Marker(
                 point: LatLng(lat, lng),
-                width: 80,
-                height: 80,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF1E293B) : Colors.white, 
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: isOnline ? const Color(0xFF10B981) : const Color(0xFF94A3B8), width: 1.5),
-                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, 4))]
-                      ),
-                      child: Text(
-                        doc.id.length > 10 ? '${doc.id.substring(0, 8)}...' : doc.id, 
-                        style: GoogleFonts.outfit(color: isDark ? Colors.white : const Color(0xFF1E293B), fontSize: 10, fontWeight: FontWeight.bold)
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    const Icon(Icons.location_on_rounded, color: Colors.red, size: 36),
-                  ],
-                ),
+                width: 110,
+                height: 100,
+                alignment: Alignment.topCenter,
+                child: _buildAvatarPinMarker(avatar: avatar, name: name, isOnline: isOnline, isDark: isDark),
               ),
             );
           }
@@ -7502,10 +7594,11 @@ class _LocationView extends StatelessWidget {
                   options: MapOptions(initialCenter: center ?? const LatLng(0,0), initialZoom: center != null ? 12 : 2), 
                   children: [
                     TileLayer(
-                      urlTemplate: isDark 
+                      urlTemplate: isDark
                         ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-                        : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
                       subdomains: const ['a', 'b', 'c', 'd'],
+                      userAgentPackageName: 'com.parentalcontrol.applocker',
                     ),
                     MarkerLayer(markers: markers),
                   ]
