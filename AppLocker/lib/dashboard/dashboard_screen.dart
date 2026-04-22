@@ -1317,7 +1317,7 @@ class _MobileDashboardHomeState extends State<_MobileDashboardHome> with TickerP
                   ...docs.take(6).map((doc) {
                     final data = doc.data() as Map<String, dynamic>;
                     // Match same field priority as the Devices page
-                    final rawName = data['model'] ?? data['deviceName'] ?? data['name'] ?? data['brand'] ?? '';
+                    final rawName = data['name'] ?? data['deviceName'] ?? data['model'] ?? data['brand'] ?? '';
                     final name = rawName.toString().trim().isEmpty ? doc.id : rawName.toString().trim();
                     final status = data['status'] ?? 'offline';
                     final battery = data['battery'] ?? data['batteryLevel'] ?? 0;
@@ -2508,11 +2508,9 @@ class _MobileDeviceListCardState extends State<_MobileDeviceListCard> {
                   : const Icon(Icons.smartphone_rounded, color: Colors.white, size: 24)),
               const SizedBox(width: 12),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [Icon(Icons.battery_charging_full_rounded, size: 12, color: batColor), const SizedBox(width: 3), Text('${widget.battery}%', style: GoogleFonts.outfit(fontSize: 11, color: batColor, fontWeight: FontWeight.w700))]),
-                const SizedBox(height: 2),
                 Text(widget.name, style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: textColor), maxLines: 1, overflow: TextOverflow.ellipsis),
                 Text(widget.deviceId.length > 18 ? widget.deviceId.substring(0, 18) + '…' : widget.deviceId, style: GoogleFonts.outfit(fontSize: 10, color: subColor), maxLines: 1, overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 2),
+                const SizedBox(height: 4),
                 Row(children: [
                   Container(width: 7, height: 7, decoration: BoxDecoration(color: widget.isOnline ? const Color(0xFF22C55E) : const Color(0xFF94A3B8), shape: BoxShape.circle)),
                   const SizedBox(width: 5),
@@ -2525,7 +2523,21 @@ class _MobileDeviceListCardState extends State<_MobileDeviceListCard> {
                   ],
                 ]),
               ])),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                decoration: BoxDecoration(
+                  color: batColor.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: batColor.withOpacity(0.35)),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.battery_charging_full_rounded, size: 13, color: batColor),
+                  const SizedBox(width: 3),
+                  Text('${widget.battery}%', style: GoogleFonts.outfit(fontSize: 11, color: batColor, fontWeight: FontWeight.w800)),
+                ]),
+              ),
+              const SizedBox(width: 6),
               GestureDetector(
                 onTap: widget.onLock,
                 child: Container(
@@ -6288,15 +6300,19 @@ class _DevicesListState extends State<_DevicesList> {
               () {
                 final isOnlineDevice = (device['status'] ?? 'offline').toString().toLowerCase() == 'online';
                 final circleCol = isOnlineDevice ? const Color(0xFF22C55E) : const Color(0xFF94A3B8);
+                final avatar = (device['avatar'] ?? '').toString();
                 return Container(
                   width: 52, height: 52,
                   decoration: BoxDecoration(color: circleCol, shape: BoxShape.circle),
-                  child: const Icon(Icons.smartphone_rounded, color: Colors.white, size: 24),
+                  alignment: Alignment.center,
+                  child: avatar.isNotEmpty
+                    ? Text(avatar, style: const TextStyle(fontSize: 26))
+                    : const Icon(Icons.smartphone_rounded, color: Colors.white, size: 24),
                 );
               }(),
               const SizedBox(width: 16),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(deviceId, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 18, color: widget.textColor), maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text((device['name'] ?? device['model'] ?? deviceId).toString(), style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 18, color: widget.textColor), maxLines: 1, overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 4),
                 Row(children: [
                   Container(width: 7, height: 7, decoration: BoxDecoration(
