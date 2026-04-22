@@ -35,9 +35,18 @@ class PlanFeatures {
   });
 
   factory PlanFeatures.fromMap(Map<String, dynamic> p) {
-    final f = (p['features'] is Map)
-        ? Map<String, dynamic>.from(p['features'] as Map)
-        : <String, dynamic>{};
+    // Super admin saves the per-feature toggles under `featuresMap`. Older
+    // plans used `features` (a list of strings or a map). Accept both so a
+    // plan saved either way behaves correctly.
+    final Map<String, dynamic> f = {};
+    if (p['featuresMap'] is Map) {
+      f.addAll(Map<String, dynamic>.from(p['featuresMap'] as Map));
+    }
+    if (p['features'] is Map) {
+      // Map values in `features` only fill in keys not already provided by `featuresMap`
+      final legacy = Map<String, dynamic>.from(p['features'] as Map);
+      legacy.forEach((k, v) { f.putIfAbsent(k, () => v); });
+    }
     bool b(String k, bool def) => (f[k] is bool) ? f[k] as bool : def;
     int i(dynamic v, int def) => v == null ? def : (int.tryParse(v.toString()) ?? def);
     return PlanFeatures(

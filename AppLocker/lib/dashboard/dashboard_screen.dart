@@ -3197,6 +3197,20 @@ class _AppBlockScheduleSheetState extends State<_AppBlockScheduleSheet> {
   }
 
   Future<void> _save() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null) {
+      final allowedRestrict = await PlanGate.requireForUser(
+        context, uid, (f) => f.appRestrictions,
+        featureLabel: 'App Restrictions',
+      );
+      if (!allowedRestrict) return;
+      final allowedSched = await PlanGate.requireForUser(
+        context, uid, (f) => f.scheduleLock,
+        featureLabel: 'Scheduled App Restrictions',
+      );
+      if (!allowedSched) return;
+    }
+    if (!mounted) return;
     setState(() => _saving = true);
     try {
       final start = _fmt24(_startTime);
@@ -5826,87 +5840,21 @@ class _DevicesListState extends State<_DevicesList> {
   }
 
   void _showScheduleDialog(BuildContext context, String deviceId, Map<String, dynamic> device) {
-    final List<dynamic> schedules = device['lockSchedules'] as List<dynamic>? ?? [];
-    
-    showDialog(
+    // Use the same polished bottom-sheet design as mobile so the experience is
+    // consistent everywhere. Centered on desktop with a max width.
+    showModalBottomSheet(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          backgroundColor: widget.cardColor,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          title: Row(
-            children: [
-              const Icon(Icons.timer_rounded, color: Color(0xFFEC4899)),
-              const SizedBox(width: 12),
-              Text('Device Lock Schedules', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 20, color: widget.textColor)),
-            ],
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Align(
+        alignment: Alignment.center,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460),
+          child: _ScheduleLockSheet(
+            deviceId: deviceId,
+            deviceData: device,
+            isDark: widget.isDark,
           ),
-          content: SizedBox(
-            width: 400,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (schedules.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 24),
-                    child: Text('No active schedules for this device.', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8))),
-                  ),
-                ...schedules.asMap().entries.map((entry) {
-                  final idx = entry.key;
-                  final s = entry.value as Map<String, dynamic>;
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: widget.textColor.withOpacity(0.05), borderRadius: BorderRadius.circular(12)),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.lock_clock_rounded, size: 16, color: Color(0xFF94A3B8)),
-                        const SizedBox(width: 12),
-                        Expanded(child: Text('${s['start']} - ${s['end']}', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: widget.textColor))),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.redAccent),
-                          onPressed: () {
-                            schedules.removeAt(idx);
-                            FirebaseFirestore.instance.collection('devices').doc(deviceId).update({'lockSchedules': schedules});
-                            setDialogState(() {});
-                          },
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-                const SizedBox(height: 16),
-                ElevatedButton.icon(
-                  onPressed: () async {
-                    final start = await showTimePicker(context: context, initialTime: TimeOfDay.now());
-                    if (start == null) return;
-                    final end = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(DateTime.now().add(const Duration(hours: 1))));
-                    if (end == null) return;
-                    
-                    final startDt = DateTime(2022, 1, 1, start.hour, start.minute);
-                    final endDt = DateTime(2022, 1, 1, end.hour, end.minute);
-                    
-                    final String startStr = DateFormat('h:mm a').format(startDt);
-                    final String endStr = DateFormat('h:mm a').format(endDt);
-                    
-                    schedules.add({'start': startStr, 'end': endStr, 'enabled': true});
-                    FirebaseFirestore.instance.collection('devices').doc(deviceId).update({'lockSchedules': schedules});
-                    setDialogState(() {});
-                  },
-                  icon: const Icon(Icons.add_rounded, size: 18),
-                  label: const Text('Add Rule'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6366F1),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: Text('Done', style: GoogleFonts.outfit(color: const Color(0xFF6366F1), fontWeight: FontWeight.bold))),
-          ],
         ),
       ),
     );
@@ -6263,150 +6211,27 @@ class _AppActionButton extends StatelessWidget {
     required this.hiddenLimit,
   });
   void _showRestrictionDialog(BuildContext context, String pkg, String appName) {
-    final schedule = appSchedules[pkg] as Map<String, dynamic>? ?? {};
-    final TextEditingController startCtrl = TextEditingController(text: schedule['start'] ?? '12:00 AM');
-    final TextEditingController endCtrl = TextEditingController(text: schedule['end'] ?? '12:00 PM');
-    bool alwaysBlocked = schedule['alwaysBlocked'] ?? true;
-
-    showDialog(
+    // Use the same polished bottom-sheet design as mobile so the experience is
+    // consistent everywhere. Centered on desktop with a max width.
+    showModalBottomSheet(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          title: Row(
-            children: [
-              const Icon(Icons.security_rounded, color: Color(0xFF6366F1)),
-              const SizedBox(width: 12),
-              Text('Setup Rules', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: isDark ? Colors.white : Colors.black)),
-            ],
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Align(
+        alignment: Alignment.center,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460),
+          child: _AppBlockScheduleSheet(
+            deviceId: deviceId,
+            pkg: pkg,
+            appName: appName,
+            isDark: isDark,
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(appName, style: GoogleFonts.outfit(fontSize: 14, color: const Color(0xFF94A3B8))),
-              const SizedBox(height: 20),
-              
-              // Always Blocked Card
-              Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(color: alwaysBlocked ? const Color(0xFFEF4444).withOpacity(0.1) : Colors.transparent, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFF64748B), width: 0.5)),
-                child: SwitchListTile(
-                  title: Text('Until I turn off', style: GoogleFonts.outfit(color: isDark ? Colors.white : Colors.black, fontSize: 13, fontWeight: FontWeight.bold)),
-                  subtitle: Text('Device remains blocked 24/7', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 11)),
-                  value: alwaysBlocked,
-                  activeColor: const Color(0xFFEF4444),
-                  onChanged: (val) => setDialogState(() => alwaysBlocked = val),
-                ),
-              ),
-              
-              if (!alwaysBlocked) ...[
-                const SizedBox(height: 24),
-                Text('SAFE ACCESS WINDOW', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF94A3B8), letterSpacing: 1.5)),
-                const SizedBox(height: 12),
-                
-                // Unified Time Card (matching My Device layout)
-                InkWell(
-                  onTap: () async {
-                    final start = await showTimePicker(context: context, initialTime: TimeOfDay.now());
-                    if (start == null) return;
-                    final end = await showTimePicker(context: context, initialTime: const TimeOfDay(hour: 23, minute: 59));
-                    if (end == null) return;
-                    
-                    final startDt = DateTime(2022, 1, 1, start.hour, start.minute);
-                    final endDt = DateTime(2022, 1, 1, end.hour, end.minute);
-                    
-                    setDialogState(() {
-                      startCtrl.text = DateFormat('h:mm a', 'en_US').format(startDt);
-                      endCtrl.text = DateFormat('h:mm a', 'en_US').format(endDt);
-                    });
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFF64748B), width: 0.5)),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.access_time_rounded, color: Color(0xFF6366F1), size: 20),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Usable Time Window', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF94A3B8))),
-                              const SizedBox(height: 2),
-                              Text('${startCtrl.text} - ${endCtrl.text}', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: isDark ? Colors.white : Colors.black)),
-                            ],
-                          ),
-                        ),
-                        const Icon(Icons.edit_rounded, size: 16, color: Color(0xFF94A3B8)),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text('App will be blocked outside this window.', style: GoogleFonts.outfit(color: const Color(0xFF64748B), fontSize: 11, fontStyle: FontStyle.italic)),
-              ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context), 
-              child: Text('Cancel', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontWeight: FontWeight.bold))
-            ),
-            ElevatedButton(
-            onPressed: () async {
-                final uid = FirebaseAuth.instance.currentUser?.uid;
-                if (uid != null) {
-                  final allowed = await PlanGate.requireForUser(
-                    context, uid, (f) => f.appRestrictions,
-                    featureLabel: 'App Restrictions',
-                  );
-                  if (!allowed) { Navigator.pop(context); return; }
-                  // Schedule-window restrictions also need scheduleLock
-                  if (!alwaysBlocked) {
-                    final canSchedule = await PlanGate.requireForUser(
-                      context, uid, (f) => f.scheduleLock,
-                      featureLabel: 'Scheduled App Restrictions',
-                    );
-                    if (!canSchedule) { Navigator.pop(context); return; }
-                  }
-                }
-                if (!blockedApps.contains(pkg) && blockedApps.length >= blockedLimit) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Purchase a higher plan to block more than $blockedLimit apps.'), backgroundColor: Colors.redAccent));
-                  Navigator.pop(context);
-                  return;
-                }
-
-                final newSchedules = Map<String, dynamic>.from(appSchedules);
-                newSchedules[pkg] = {
-                  'start': startCtrl.text,
-                  'end': endCtrl.text,
-                  'alwaysBlocked': alwaysBlocked,
-                };
-                
-                final newBlocked = List<String>.from(blockedApps);
-                if (!newBlocked.contains(pkg)) newBlocked.add(pkg);
-
-                FirebaseFirestore.instance.collection('devices').doc(deviceId).update({
-                  'appSchedules': newSchedules,
-                  'blockedApps': newBlocked,
-                });
-                Navigator.pop(context);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6366F1),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12)
-              ),
-              child: Text('Save Rule', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-            ),
-          ],
         ),
       ),
     );
   }
+
 
 
   @override
