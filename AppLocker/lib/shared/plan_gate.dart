@@ -105,6 +105,10 @@ class PlanGate {
     try {
       final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
       final data = doc.data() as Map<String, dynamic>? ?? {};
+      final role = (data['role'] ?? '').toString();
+      if (role == 'super_admin') {
+        return (planId: 'pro', expired: false);
+      }
       final plan = (data['plan'] ?? 'free').toString().toLowerCase();
       final exp = (data['expiryDate'] as Timestamp?)?.toDate();
       final expired = exp != null && exp.isBefore(DateTime.now()) && plan != 'free';
