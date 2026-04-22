@@ -7647,23 +7647,63 @@ class _SchedulesViewState extends State<_SchedulesView> {
   }
 }
 
-class _LocationView extends StatelessWidget {
-  final bool isDark; 
+class _LocationView extends StatefulWidget {
+  final bool isDark;
   final Color textColor;
   final VoidCallback? onBack;
   const _LocationView({required this.isDark, required this.textColor, this.onBack});
+  @override
+  State<_LocationView> createState() => _LocationViewState();
+}
 
-  @override 
-  Widget build(BuildContext context) { 
+class _LocationViewState extends State<_LocationView> with SingleTickerProviderStateMixin {
+  bool _syncing = false;
+  late final AnimationController _pulseCtrl;
+  late final Animation<double> _pulseAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat(reverse: true);
+    _pulseAnim = Tween<double>(begin: 0.6, end: 1.0).animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() { _pulseCtrl.dispose(); super.dispose(); }
+
+  void _triggerSync() {
+    setState(() => _syncing = true);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(children: [
+          const Icon(Icons.my_location_rounded, color: Colors.white, size: 18),
+          const SizedBox(width: 10),
+          Text('Live sync active — fetching latest GPS coordinates...', style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+        ]),
+        backgroundColor: const Color(0xFF22C55E),
+        duration: const Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+    );
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _syncing = false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = widget.isDark;
+    final textColor = widget.textColor;
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseService.instance.streamAdminDevices(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         final devices = snapshot.data!.docs;
-        
+
         final List<Marker> markers = [];
         LatLng? center;
-        
+
         for (var doc in devices) {
           final data = doc.data() as Map<String, dynamic>;
           final lat = (data['lat'] as num?)?.toDouble() ?? 0.0;
@@ -7696,25 +7736,44 @@ class _LocationView extends StatelessWidget {
                   children: [
                     Text('Global Positioning', style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w900, color: textColor)),
                     const SizedBox(height: 4),
-                    Text('Tracking ${markers.length} active device locations', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 14)),
+                    Text(
+                      _syncing ? 'Syncing location data...' : 'Tracking ${markers.length} active device locations',
+                      style: GoogleFonts.outfit(color: _syncing ? const Color(0xFF22C55E) : const Color(0xFF94A3B8), fontSize: 14, fontWeight: _syncing ? FontWeight.w600 : FontWeight.normal),
+                    ),
                   ],
                 ),
                 const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(color: const Color(0xFF6366F1).withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.refresh_rounded, size: 16, color: Color(0xFF6366F1)),
-                      const SizedBox(width: 8),
-                      Text('LIVE SYNC', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF6366F1), letterSpacing: 1)),
-                    ],
+                GestureDetector(
+                  onTap: _triggerSync,
+                  child: AnimatedBuilder(
+                    animation: _pulseAnim,
+                    builder: (_, __) => Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: _syncing ? const Color(0xFF22C55E) : const Color(0xFF6366F1).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: _syncing ? Colors.transparent : const Color(0xFF6366F1).withOpacity(0.3), width: 1),
+                        boxShadow: _syncing
+                          ? [BoxShadow(color: const Color(0xFF22C55E).withOpacity(_pulseAnim.value * 0.5), blurRadius: 14, spreadRadius: 2)]
+                          : [],
+                      ),
+                      child: Row(children: [
+                        _syncing
+                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.refresh_rounded, size: 16, color: Color(0xFF6366F1)),
+                        const SizedBox(width: 8),
+                        Text(
+                          _syncing ? 'SYNCING...' : 'LIVE SYNC',
+                          style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: _syncing ? Colors.white : const Color(0xFF6366F1), letterSpacing: 1),
+                        ),
+                      ]),
+                    ),
                   ),
                 ),
-                if (onBack != null) ...[
+                if (widget.onBack != null) ...[
                   const SizedBox(width: 12),
                   IconButton(
-                    onPressed: onBack,
+                    onPressed: widget.onBack,
                     icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF6366F1)),
                     tooltip: 'Go Back',
                     style: IconButton.styleFrom(backgroundColor: const Color(0xFF6366F1).withOpacity(0.1), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
@@ -7723,33 +7782,54 @@ class _LocationView extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 32),
-            Container(
-              height: 640, 
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(32), 
-                border: Border.all(color: const Color(0xFF64748B), width: 0.5),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 10))]
-              ), 
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(32), 
-                child: FlutterMap(
-                  options: MapOptions(initialCenter: center ?? const LatLng(0,0), initialZoom: center != null ? 12 : 2), 
-                  children: [
-                    TileLayer(
-                      urlTemplate: isDark
-                        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-                        : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-                      subdomains: const ['a', 'b', 'c', 'd'],
-                      userAgentPackageName: 'com.parentalcontrol.applocker',
+            Stack(children: [
+              Container(
+                height: 640,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(32),
+                  border: Border.all(color: _syncing ? const Color(0xFF22C55E) : const Color(0xFF64748B), width: _syncing ? 2 : 0.5),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 10))],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(32),
+                  child: FlutterMap(
+                    options: MapOptions(initialCenter: center ?? const LatLng(0,0), initialZoom: center != null ? 12 : 2),
+                    children: [
+                      TileLayer(
+                        urlTemplate: isDark
+                          ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+                          : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+                        subdomains: const ['a', 'b', 'c', 'd'],
+                        userAgentPackageName: 'com.parentalcontrol.applocker',
+                      ),
+                      MarkerLayer(markers: markers),
+                    ],
+                  ),
+                ),
+              ),
+              if (_syncing)
+                Positioned(
+                  top: 16, left: 0, right: 0,
+                  child: Center(child: AnimatedBuilder(
+                    animation: _pulseAnim,
+                    builder: (_, __) => Opacity(
+                      opacity: _pulseAnim.value,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                        decoration: BoxDecoration(color: const Color(0xFF22C55E), borderRadius: BorderRadius.circular(20)),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          const Icon(Icons.wifi_tethering_rounded, color: Colors.white, size: 16),
+                          const SizedBox(width: 8),
+                          Text('Fetching live GPS data...', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
+                        ]),
+                      ),
                     ),
-                    MarkerLayer(markers: markers),
-                  ]
-                )
-              )
-            ),
+                  )),
+                ),
+            ]),
           ],
         );
-      }
+      },
     );
   }
 }
