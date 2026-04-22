@@ -1336,25 +1336,29 @@ class _OnboardingPageView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final screenH = MediaQuery.of(context).size.height;
-    final compact = screenH < 720;
-    final heroSize = compact ? 140.0 : 180.0;
-    final iconBox = compact ? 76.0 : 96.0;
-    final outerR = compact ? 66.0 : 85.0;
-    final middleR = compact ? 52.0 : 68.0;
-    final topPad = compact ? 64.0 : 80.0;
-    final bottomPad = compact ? 180.0 : 200.0;
-    final heroToBadge = compact ? 22.0 : 36.0;
-    return SingleChildScrollView(
+    // 3 size tiers so everything fits without scrolling
+    final tiny = screenH < 600;
+    final compact = screenH < 760;
+    final heroSize = tiny ? 110.0 : (compact ? 134.0 : 168.0);
+    final iconBox = tiny ? 60.0 : (compact ? 72.0 : 90.0);
+    final outerR = tiny ? 52.0 : (compact ? 62.0 : 78.0);
+    final middleR = tiny ? 40.0 : (compact ? 50.0 : 62.0);
+    final iconGlyph = tiny ? 30.0 : (compact ? 36.0 : 42.0);
+    final topPad = tiny ? 56.0 : (compact ? 68.0 : 80.0);
+    final bottomPad = tiny ? 140.0 : (compact ? 160.0 : 180.0);
+    final heroToBadge = tiny ? 12.0 : (compact ? 18.0 : 28.0);
+    final badgeToTitle = tiny ? 10.0 : 14.0;
+    final titleToSub = tiny ? 8.0 : 12.0;
+    final subToFeatures = tiny ? 14.0 : 20.0;
+    final featureGap = tiny ? 6.0 : 8.0;
+    final titleSize = tiny ? 22.0 : (compact ? 26.0 : (isMobile ? 28.0 : 34.0));
+    final subSize = tiny ? 12.5 : (compact ? 13.0 : (isMobile ? 14.0 : 15.0));
+    return Padding(
       padding: EdgeInsets.fromLTRB(24, topPad, 24, bottomPad),
-      physics: const ClampingScrollPhysics(),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          minHeight: screenH - topPad - bottomPad,
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.max,
+        children: [
           // Hero icon with orbiting rings
           AnimatedBuilder(
             animation: floatAnim,
@@ -1399,7 +1403,7 @@ class _OnboardingPageView extends StatelessWidget {
                         ],
                       ),
                       child:
-                          Icon(page.icon, color: Colors.white, size: 46),
+                          Icon(page.icon, color: Colors.white, size: iconGlyph),
                     ),
                     // Small floating dots
                     ..._buildOrbitDots(page.accentColor),
@@ -1411,7 +1415,7 @@ class _OnboardingPageView extends StatelessWidget {
 
           SizedBox(height: heroToBadge),
 
-          // Badge
+          // Badge — first page has no badge text? keep all badges
           Container(
             padding:
                 const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
@@ -1431,14 +1435,14 @@ class _OnboardingPageView extends StatelessWidget {
             ),
           ).animate(target: isActive ? 1 : 0).fadeIn(delay: 100.ms),
 
-          const SizedBox(height: 16),
+          SizedBox(height: badgeToTitle),
 
           // Title
           Text(
             page.title,
             textAlign: TextAlign.center,
             style: GoogleFonts.outfit(
-              fontSize: isMobile ? 28 : 34,
+              fontSize: titleSize,
               fontWeight: FontWeight.w900,
               color: Colors.white,
               height: 1.15,
@@ -1448,27 +1452,30 @@ class _OnboardingPageView extends StatelessWidget {
               .fadeIn(delay: 200.ms)
               .moveY(begin: 20, end: 0, delay: 200.ms),
 
-          const SizedBox(height: 14),
+          SizedBox(height: titleToSub),
 
           // Subtitle
           Text(
             page.subtitle,
             textAlign: TextAlign.center,
             style: GoogleFonts.outfit(
-              fontSize: isMobile ? 14 : 15,
+              fontSize: subSize,
               color: Colors.white60,
-              height: 1.6,
+              height: 1.5,
             ),
           ).animate(target: isActive ? 1 : 0)
               .fadeIn(delay: 300.ms)
               .moveY(begin: 15, end: 0, delay: 300.ms),
 
           if (page.features.isNotEmpty) ...[
-            const SizedBox(height: 24),
+            SizedBox(height: subToFeatures),
             ...page.features.asMap().entries.map(
               (e) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _FeatureRow(item: e.value, color: page.accentColor)
+                padding: EdgeInsets.only(bottom: featureGap),
+                child: _FeatureRow(
+                        item: e.value,
+                        color: page.accentColor,
+                        compact: tiny || compact)
                     .animate(target: isActive ? 1 : 0)
                     .fadeIn(delay: Duration(milliseconds: 400 + e.key * 100))
                     .moveX(begin: -20, end: 0,
@@ -1532,30 +1539,36 @@ class _RingDecor extends StatelessWidget {
 class _FeatureRow extends StatelessWidget {
   final _FeatureItem item;
   final Color color;
-  const _FeatureRow({required this.item, required this.color});
+  final bool compact;
+  const _FeatureRow({required this.item, required this.color, this.compact = false});
 
   @override
   Widget build(BuildContext context) {
+    final box = compact ? 26.0 : 32.0;
+    final ic = compact ? 14.0 : 16.0;
+    final txt = compact ? 12.5 : 14.0;
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Container(
-          width: 32,
-          height: 32,
+          width: box,
+          height: box,
           decoration: BoxDecoration(
             color: color.withOpacity(0.12),
             shape: BoxShape.circle,
             border: Border.all(color: color.withOpacity(0.25)),
           ),
-          child: Icon(item.icon, color: color, size: 16),
+          child: Icon(item.icon, color: color, size: ic),
         ),
-        const SizedBox(width: 12),
-        Text(
-          item.label,
-          style: GoogleFonts.outfit(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Colors.white.withOpacity(0.85)),
+        SizedBox(width: compact ? 9 : 12),
+        Flexible(
+          child: Text(
+            item.label,
+            style: GoogleFonts.outfit(
+                fontSize: txt,
+                fontWeight: FontWeight.w600,
+                color: Colors.white.withOpacity(0.85)),
+          ),
         ),
       ],
     );
