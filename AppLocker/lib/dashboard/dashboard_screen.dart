@@ -1827,7 +1827,16 @@ class _MobileDevicesView extends StatefulWidget {
   @override State<_MobileDevicesView> createState() => _MobileDevicesViewState();
 }
 class _MobileDevicesViewState extends State<_MobileDevicesView> {
-  void _openChat(BuildContext context, String deviceId) {
+  Future<void> _openChat(BuildContext context, String deviceId) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null) {
+      final allowed = await PlanGate.requireForUser(
+        context, uid, (f) => f.chat,
+        featureLabel: 'Parent ↔ Child Chat',
+      );
+      if (!allowed) return;
+    }
+    if (!context.mounted) return;
     showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent,
       builder: (_) => _MobileChatSheet(deviceId: deviceId, isDark: widget.isDark));
   }
@@ -4203,6 +4212,7 @@ class _MobileSubscriptionViewState extends State<_MobileSubscriptionView> {
                 } else {
                   await FirebaseFirestore.instance.collection('plans').doc(id).update(planData);
                 }
+                PlanGate.invalidateCache();
                 if (ctx.mounted) Navigator.pop(ctx);
               },
               child: Text('Save Plan', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -5623,7 +5633,18 @@ class _DevicesListState extends State<_DevicesList> {
               const SizedBox(width: 12),
               _buildMiniActionButton(icon: Icons.location_on_rounded, color: const Color(0xFF6366F1), onTap: () => _showLocation(context, device)),
               const SizedBox(width: 12),
-              _buildMiniActionButton(icon: Icons.message_rounded, color: const Color(0xFFF59E0B), onTap: () => _showChatDialog(context, deviceId)),
+              _buildMiniActionButton(icon: Icons.message_rounded, color: const Color(0xFFF59E0B), onTap: () async {
+                final uid = FirebaseAuth.instance.currentUser?.uid;
+                if (uid != null) {
+                  final allowed = await PlanGate.requireForUser(
+                    context, uid, (f) => f.chat,
+                    featureLabel: 'Parent ↔ Child Chat',
+                  );
+                  if (!allowed) return;
+                }
+                if (!context.mounted) return;
+                _showChatDialog(context, deviceId);
+              }),
               const SizedBox(width: 12),
               _buildMiniActionButton(icon: Icons.history_rounded, color: const Color(0xFF8B5CF6), onTap: () => showDialog(context: context, builder: (_) => AlertDialog(backgroundColor: widget.cardColor, title: const Text('Device Activity History'), content: const Text('Detailed activity history will be populated here as events synchronize from the device.')))),
               const SizedBox(width: 12),
@@ -8786,6 +8807,7 @@ class _SubscriptionView extends StatelessWidget {
                 } else {
                   await FirebaseFirestore.instance.collection('plans').doc(id).update(planData);
                 }
+                PlanGate.invalidateCache();
                 Navigator.pop(context);
               },
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6366F1), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),

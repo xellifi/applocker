@@ -120,19 +120,37 @@ class PlanGate {
     return require(context, cur.planId, check, featureLabel: featureLabel);
   }
 
+  /// Plans are fetched fresh each time so super-admin toggle changes take
+  /// effect immediately without requiring users to sign out. A short in-memory
+  /// throttle prevents hammering Firestore on bursts of checks.
+  static final Map<String, ({PlanFeatures features, DateTime at})> _shortCache = {};
+  static const Duration _cacheTtl = Duration(seconds: 10);
+
   static Future<PlanFeatures> load(String planId) async {
     final id = planId.toLowerCase();
     if (id == 'trial') return PlanFeatures.trial;
-    if (_cache.containsKey(id)) return _cache[id]!;
+    final cached = _shortCache[id];
+    if (cached != null && DateTime.now().difference(cached.at) < _cacheTtl) {
+      return cached.features;
+    }
     try {
       final doc = await FirebaseFirestore.instance.collection('plans').doc(id).get();
       if (doc.exists) {
         final f = PlanFeatures.fromMap(doc.data() as Map<String, dynamic>);
-        _cache[id] = f;
+        _shortCache[id] = (features: f, at: DateTime.now());
         return f;
       }
     } catch (_) {}
-    return id == 'free' ? PlanFeatures.free : const PlanFeatures();
+    final fallback = id == 'free' ? PlanFeatures.free : const PlanFeatures();
+    _shortCache[id] = (features: fallback, at: DateTime.now());
+    return fallback;
+  }
+
+  /// Clear the in-memory plan cache. Call this after super-admin updates a plan
+  /// or when the user manually refreshes their plan view.
+  static void invalidateCache() {
+    _shortCache.clear();
+    _cache.clear();
   }
 
   /// Check that a feature is enabled for the current user; if not, show the
