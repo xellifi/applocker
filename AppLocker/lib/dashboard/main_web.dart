@@ -1335,36 +1335,51 @@ class _OnboardingPageView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 80, 24, 160),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
+    final screenH = MediaQuery.of(context).size.height;
+    final compact = screenH < 720;
+    final heroSize = compact ? 140.0 : 180.0;
+    final iconBox = compact ? 76.0 : 96.0;
+    final outerR = compact ? 66.0 : 85.0;
+    final middleR = compact ? 52.0 : 68.0;
+    final topPad = compact ? 64.0 : 80.0;
+    final bottomPad = compact ? 180.0 : 200.0;
+    final heroToBadge = compact ? 22.0 : 36.0;
+    return SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(24, topPad, 24, bottomPad),
+      physics: const ClampingScrollPhysics(),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          minHeight: screenH - topPad - bottomPad,
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
           // Hero icon with orbiting rings
           AnimatedBuilder(
             animation: floatAnim,
             builder: (_, __) => Transform.translate(
               offset: Offset(0, floatAnim.value * 0.6),
               child: SizedBox(
-                width: 180,
-                height: 180,
+                width: heroSize,
+                height: heroSize,
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
                     // Outer ring
                     _RingDecor(
-                        radius: 85,
+                        radius: outerR,
                         color: page.accentColor.withOpacity(0.12),
                         borderColor: page.accentColor.withOpacity(0.2)),
                     // Middle ring
                     _RingDecor(
-                        radius: 68,
+                        radius: middleR,
                         color: page.accentColor.withOpacity(0.08),
                         borderColor: page.accentColor.withOpacity(0.15)),
                     // Icon container
                     Container(
-                      width: 96,
-                      height: 96,
+                      width: iconBox,
+                      height: iconBox,
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           begin: Alignment.topLeft,
@@ -1394,7 +1409,7 @@ class _OnboardingPageView extends StatelessWidget {
             ),
           ),
 
-          const SizedBox(height: 36),
+          SizedBox(height: heroToBadge),
 
           // Badge
           Container(
