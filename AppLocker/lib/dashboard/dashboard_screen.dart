@@ -2019,6 +2019,10 @@ class _MobileDevicesViewState extends State<_MobileDevicesView> {
                   onLocation: () => widget.onNavigate?.call(_DashboardMenu.location),
                   onSchedule: () => _openScheduleDialog(context, doc.id, data),
                   onRemove: () => _removeDevice(context, doc.id),
+                  onApps: () => widget.onNavigate?.call(_DashboardMenu.apps),
+                  onMonitoring: () => widget.onNavigate?.call(_DashboardMenu.monitoring),
+                  onReports: () => widget.onNavigate?.call(_DashboardMenu.reports),
+                  onSettings: () => widget.onNavigate?.call(_DashboardMenu.settings),
                 );
               }),
               const SizedBox(height: 12),
@@ -2043,7 +2047,8 @@ class _MobileDeviceListCard extends StatefulWidget {
   final double? lat; final double? lng;
   final VoidCallback onChat; final VoidCallback onLock;
   final VoidCallback? onLocation; final VoidCallback? onSchedule; final VoidCallback? onRemove;
-  const _MobileDeviceListCard({required this.name, required this.deviceId, required this.isOnline, required this.battery, required this.isDark, required this.isLocked, required this.onChat, required this.onLock, this.lat, this.lng, this.onLocation, this.onSchedule, this.onRemove});
+  final VoidCallback? onApps; final VoidCallback? onMonitoring; final VoidCallback? onReports; final VoidCallback? onSettings;
+  const _MobileDeviceListCard({required this.name, required this.deviceId, required this.isOnline, required this.battery, required this.isDark, required this.isLocked, required this.onChat, required this.onLock, this.lat, this.lng, this.onLocation, this.onSchedule, this.onRemove, this.onApps, this.onMonitoring, this.onReports, this.onSettings});
 
   @override
   State<_MobileDeviceListCard> createState() => _MobileDeviceListCardState();
@@ -2073,6 +2078,123 @@ class _MobileDeviceListCardState extends State<_MobileDeviceListCard> {
     if (old.lat != widget.lat || old.lng != widget.lng) {
       _fetchLocationName();
     }
+  }
+
+  void _showFeaturesSheet(BuildContext context) {
+    final isDark = widget.isDark;
+    final bg = isDark ? const Color(0xFF0F1A35) : Colors.white;
+    final textColor = isDark ? Colors.white : const Color(0xFF1E293B);
+    final subColor = isDark ? Colors.white60 : const Color(0xFF64748B);
+    final tileBg = isDark ? Colors.white.withOpacity(0.04) : const Color(0xFFF8FAFC);
+    final accent = const Color(0xFF2563EB);
+
+    void closeAndRun(VoidCallback? cb) {
+      Navigator.pop(context);
+      if (cb != null) cb();
+    }
+    void soon(String label) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$label — coming soon'), backgroundColor: accent));
+    }
+
+    final tiles = <_FeatureTileData>[
+      _FeatureTileData('Lock Apps', Icons.apps_rounded, () => closeAndRun(widget.onApps)),
+      _FeatureTileData('Lock Device', Icons.smartphone_rounded, () => closeAndRun(widget.onLock)),
+      _FeatureTileData('Apps Usage', Icons.bar_chart_rounded, () => closeAndRun(widget.onMonitoring)),
+      _FeatureTileData('Location', Icons.location_on_outlined, () => closeAndRun(widget.onLocation)),
+      _FeatureTileData('Sounds', Icons.headphones_rounded, () => soon('Sounds'), badge: 'new'),
+      _FeatureTileData('Screen Captures', Icons.center_focus_strong_rounded, () => soon('Screen Captures'), badge: 'new'),
+      _FeatureTileData('News Feed', Icons.article_outlined, () => soon('News Feed')),
+      _FeatureTileData('Messengers History', Icons.chat_bubble_outline_rounded, () => soon('Messengers History')),
+      _FeatureTileData('Web Control', Icons.public_rounded, () => soon('Web Control')),
+      _FeatureTileData('Youtube Control', Icons.play_circle_outline_rounded, () => soon('Youtube Control')),
+      _FeatureTileData('Protect Eyes', Icons.remove_red_eye_outlined, () => soon('Protect Eyes')),
+      _FeatureTileData('Night Mode', Icons.nightlight_outlined, () => soon('Night Mode')),
+      _FeatureTileData('Call History', Icons.phone_in_talk_outlined, () => soon('Call History')),
+      _FeatureTileData('SMS History', Icons.sms_outlined, () => soon('SMS History')),
+      _FeatureTileData('View Photos', Icons.image_outlined, () => soon('View Photos')),
+      _FeatureTileData('Contacts', Icons.contact_page_outlined, () => soon('Contacts')),
+      _FeatureTileData('Statistics', Icons.pie_chart_outline_rounded, () => closeAndRun(widget.onReports)),
+      _FeatureTileData('Settings', Icons.settings_rounded, () => closeAndRun(widget.onSettings)),
+      _FeatureTileData('Disconnect Device', Icons.power_settings_new_rounded, () => closeAndRun(widget.onRemove), danger: true),
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.85, minChildSize: 0.5, maxChildSize: 0.95, expand: false,
+        builder: (ctx, scroll) => Container(
+          decoration: BoxDecoration(color: bg, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
+          child: Column(children: [
+            const SizedBox(height: 10),
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: subColor.withOpacity(0.3), borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 14),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(children: [
+                GestureDetector(onTap: () => Navigator.pop(ctx), child: Icon(Icons.arrow_back_rounded, color: textColor)),
+                Expanded(child: Center(child: Text(widget.name, style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, color: textColor)))),
+                const SizedBox(width: 24),
+              ]),
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(color: accent, borderRadius: BorderRadius.circular(14)),
+                child: Row(children: [
+                  Expanded(child: Text(
+                    'Supervise the child\'s device.\nTo get control of a child\'s device you must setup device supervision',
+                    style: GoogleFonts.outfit(color: Colors.white, fontSize: 12, height: 1.4),
+                  )),
+                  const Icon(Icons.chevron_right_rounded, color: Colors.white),
+                ]),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Expanded(
+              child: GridView.builder(
+                controller: scroll,
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, mainAxisSpacing: 12, crossAxisSpacing: 12, childAspectRatio: 0.95),
+                itemCount: tiles.length,
+                itemBuilder: (_, i) {
+                  final t = tiles[i];
+                  final color = t.danger ? const Color(0xFFEF4444) : accent;
+                  return GestureDetector(
+                    onTap: t.onTap,
+                    child: Container(
+                      decoration: BoxDecoration(color: tileBg, borderRadius: BorderRadius.circular(16), border: Border.all(color: isDark ? Colors.white12 : const Color(0xFFE2E8F0))),
+                      child: Stack(children: [
+                        Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                          Container(width: 44, height: 44, decoration: BoxDecoration(color: color.withOpacity(0.10), borderRadius: BorderRadius.circular(12)), child: Icon(t.icon, color: color, size: 24)),
+                          const SizedBox(height: 8),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: Text(t.label, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis, style: GoogleFonts.outfit(fontSize: 11.5, fontWeight: FontWeight.w600, color: textColor, height: 1.2)),
+                          ),
+                        ])),
+                        if (t.badge != null) Positioned(
+                          top: 6, right: 6,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(color: const Color(0xFFEF4444), borderRadius: BorderRadius.circular(6)),
+                            child: Text(t.badge!, style: GoogleFonts.outfit(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700)),
+                          ),
+                        ),
+                      ]),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ]),
+        ),
+      ),
+    );
   }
 
   Future<void> _fetchLocationName() async {
@@ -2166,7 +2288,7 @@ class _MobileDeviceListCardState extends State<_MobileDeviceListCard> {
                 Container(width: 1, height: 36, color: widget.isDark ? Colors.white10 : const Color(0xFFE2E8F0)),
                 _DevActCircle(icon: Icons.calendar_month_rounded, color: const Color(0xFF6366F1), label: 'Schedule', onTap: widget.onSchedule ?? () {}),
                 Container(width: 1, height: 36, color: widget.isDark ? Colors.white10 : const Color(0xFFE2E8F0)),
-                _DevActCircle(icon: Icons.delete_outline_rounded, color: const Color(0xFFEF4444), label: 'Remove', onTap: widget.onRemove ?? () {}),
+                _DevActCircle(icon: Icons.more_horiz_rounded, color: const Color(0xFF22C55E), label: 'More', onTap: () => _showFeaturesSheet(context)),
               ]),
             ),
           ]),
@@ -2174,6 +2296,11 @@ class _MobileDeviceListCardState extends State<_MobileDeviceListCard> {
       },
     );
   }
+}
+
+class _FeatureTileData {
+  final String label; final IconData icon; final VoidCallback onTap; final String? badge; final bool danger;
+  _FeatureTileData(this.label, this.icon, this.onTap, {this.badge, this.danger = false});
 }
 
 class _DevActCircle extends StatelessWidget {
