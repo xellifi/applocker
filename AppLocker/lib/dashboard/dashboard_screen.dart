@@ -752,11 +752,6 @@ class _DashboardOverview extends StatelessWidget {
           totalAppsCount = uniquePackages.length;
         }
 
-        if (!isMobile) {
-          return SingleChildScrollView(
-            child: _NewParentDashboard(devices: docs, isDark: isDark, textColor: textColor, cardColor: cardColor),
-          );
-        }
         return SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start, 
