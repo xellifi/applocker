@@ -2325,6 +2325,70 @@ class _MobileDevicesViewState extends State<_MobileDevicesView> {
     }
   }
 
+  void _showDeviceLocationDialog(BuildContext context, String name, String avatar, bool isOnline, double? lat, double? lng) {
+    final bg = widget.isDark ? const Color(0xFF0F1A35) : Colors.white;
+    final textColor = widget.isDark ? Colors.white : const Color(0xFF1E293B);
+    if (lat == null || lng == null || (lat == 0.0 && lng == 0.0)) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('No GPS data yet for $name', style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+        backgroundColor: const Color(0xFFF59E0B),
+        behavior: SnackBarBehavior.floating,
+      ));
+      return;
+    }
+    showDialog(context: context, builder: (ctx) => Dialog(
+      backgroundColor: bg,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      insetPadding: const EdgeInsets.all(16),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 520),
+        padding: const EdgeInsets.all(12),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 6, 8, 10),
+            child: Row(children: [
+              Container(
+                width: 36, height: 36,
+                decoration: BoxDecoration(shape: BoxShape.circle, color: (isOnline ? const Color(0xFF22C55E) : const Color(0xFF94A3B8)).withOpacity(0.15)),
+                alignment: Alignment.center,
+                child: avatar.isNotEmpty ? Text(avatar, style: const TextStyle(fontSize: 20)) : const Icon(Icons.smartphone_rounded, color: Color(0xFF6366F1), size: 18),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(name, style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: textColor), maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text(isOnline ? 'Online · Live location' : 'Offline · Last known', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF94A3B8))),
+              ])),
+              IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8))),
+            ]),
+          ),
+          SizedBox(
+            height: 420,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: FlutterMap(
+                options: MapOptions(initialCenter: LatLng(lat, lng), initialZoom: 15),
+                children: [
+                  TileLayer(
+                    urlTemplate: widget.isDark
+                      ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+                      : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+                    subdomains: const ['a', 'b', 'c', 'd'],
+                    userAgentPackageName: 'com.parentalcontrol.applocker',
+                  ),
+                  MarkerLayer(markers: [Marker(
+                    point: LatLng(lat, lng), width: 110, height: 100,
+                    alignment: Alignment.topCenter,
+                    child: _buildAvatarPinMarker(avatar: avatar, name: name, isOnline: isOnline, isDark: widget.isDark),
+                  )]),
+                ],
+              ),
+            ),
+          ),
+        ]),
+      ),
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     final bg = widget.isDark ? const Color(0xFF060D1F) : const Color(0xFFF8FAFC);
@@ -2386,7 +2450,7 @@ class _MobileDevicesViewState extends State<_MobileDevicesView> {
                   lat: lat, lng: lng,
                   onChat: () => _openChat(context, doc.id),
                   onLock: () => _toggleLock(doc.id, isLocked),
-                  onLocation: () => widget.onNavigate?.call(_DashboardMenu.location),
+                  onLocation: () => _showDeviceLocationDialog(context, deviceName, avatar, isOnline, lat, lng),
                   onSchedule: () => _openScheduleDialog(context, doc.id, data),
                   onRemove: () => _removeDevice(context, doc.id),
                   onApps: () => widget.onNavigate?.call(_DashboardMenu.apps),
