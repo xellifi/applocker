@@ -282,11 +282,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
         final bool isMobile = MediaQuery.of(context).size.width <= 1024;
         final bgColor = _isDark
-            ? (isMobile ? const Color(0xFF060D1F) : const Color(0xFF0D0D10))
-            : const Color(0xFFF8FAFC);
-        final cardColor = _isDark ? const Color(0xFF18181B) : Colors.white;
-        final textColor = _isDark ? Colors.white : const Color(0xFF1E293B);
-        final borderColor = const Color(0xFF64748B);
+            ? (isMobile ? const Color(0xFF060D1F) : const Color(0xFF0B0B0E))
+            : (isMobile ? const Color(0xFFF8FAFC) : const Color(0xFFF6F7F9));
+        final cardColor = _isDark ? const Color(0xFF15161A) : Colors.white;
+        final textColor = _isDark ? Colors.white : const Color(0xFF0F172A);
+        final borderColor = _isDark ? const Color(0xFF26272B) : const Color(0xFFE5E7EB);
 
         if (isMobile) {
           return Scaffold(
@@ -353,7 +353,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.all(32),
+                      padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
                       child: _buildContent(
                           textColor, cardColor, borderColor, false, userRole),
                     ),
@@ -436,13 +436,14 @@ class _Sidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bgColor = isDark ? const Color(0xFF0D0D10) : Colors.white; 
+    final bgColor = isDark ? const Color(0xFF0F1014) : Colors.white;
+    final divider = isDark ? const Color(0xFF26272B) : const Color(0xFFE5E7EB);
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 300), width: isCollapsed ? 80 : 280, decoration: BoxDecoration(color: bgColor, border: const Border(right: BorderSide(color: Color(0xFF64748B), width: 0.5))),
+      duration: const Duration(milliseconds: 300), width: isCollapsed ? 64 : 224, decoration: BoxDecoration(color: bgColor, border: Border(right: BorderSide(color: divider, width: 1))),
       child: Column(children: [
-        const SizedBox(height: 32), _buildBrand(), const SizedBox(height: 32),
-        Expanded(child: ListView(padding: const EdgeInsets.symmetric(horizontal: 16), children: [
-          if (!isCollapsed) Padding(padding: const EdgeInsets.only(left: 12, bottom: 16), child: Text('MAIN MENU', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF94A3B8), letterSpacing: 2))),
+        const SizedBox(height: 20), _buildBrand(), const SizedBox(height: 20),
+        Expanded(child: ListView(padding: const EdgeInsets.symmetric(horizontal: 10), children: [
+          if (!isCollapsed) Padding(padding: const EdgeInsets.only(left: 10, bottom: 8), child: Text('MAIN MENU', style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.w700, color: const Color(0xFF94A3B8), letterSpacing: 1.6))),
           _buildSidebarItem(_DashboardMenu.dashboard, 'Dashboard', HeroIcons.squares2x2),
           _buildSidebarItem(_DashboardMenu.devices, userRole == 'super_admin' ? 'Global Devices' : 'My Devices', HeroIcons.devicePhoneMobile),
           if (userRole == 'super_admin') _buildSidebarItem(_DashboardMenu.users, 'Users Admin', HeroIcons.users),
@@ -457,12 +458,12 @@ class _Sidebar extends StatelessWidget {
           _buildSidebarItem(_DashboardMenu.settings, 'Settings', HeroIcons.cog6Tooth),
           _buildSidebarItem(_DashboardMenu.profile, 'My Profile', HeroIcons.user),
         ])),
-        Padding(padding: const EdgeInsets.all(16.0), child: _SidebarItem(icon: HeroIcons.arrowLeftOnRectangle, label: 'Logout', isSelected: false, onTap: () => FirebaseAuth.instance.signOut(), color: Colors.redAccent, isCollapsed: isCollapsed, isDark: isDark)),
-        const SizedBox(height: 16),
+        Padding(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8), child: _SidebarItem(icon: HeroIcons.arrowLeftOnRectangle, label: 'Logout', isSelected: false, onTap: () => FirebaseAuth.instance.signOut(), color: const Color(0xFFEF4444), isCollapsed: isCollapsed, isDark: isDark)),
+        const SizedBox(height: 8),
       ]),
     );
   }
-  Widget _buildBrand() { return Row(mainAxisAlignment: MainAxisAlignment.center, children: [Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: const Color(0xFF6366F1), borderRadius: BorderRadius.circular(14), boxShadow: [BoxShadow(color: const Color(0xFF6366F1).withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 4))]), child: const Icon(Icons.security_rounded, color: Colors.white, size: 22)), if (!isCollapsed) ...[const SizedBox(width: 14), Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('AppLocker', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: -0.5, color: isDark ? Colors.white : const Color(0xFF1E293B))), Text('PARENTAL CONTROL', style: GoogleFonts.outfit(fontSize: 8, fontWeight: FontWeight.w900, color: const Color(0xFF6366F1), letterSpacing: 1.5))]) ]]); }
+  Widget _buildBrand() { return Row(mainAxisAlignment: MainAxisAlignment.center, children: [Container(padding: const EdgeInsets.all(7), decoration: BoxDecoration(color: const Color(0xFF6366F1), borderRadius: BorderRadius.circular(9)), child: const Icon(Icons.shield_rounded, color: Colors.white, size: 16)), if (!isCollapsed) ...[const SizedBox(width: 10), Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [Text('AppLocker', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, letterSpacing: -0.3, color: isDark ? Colors.white : const Color(0xFF0F172A))), Text('Parental Control', style: GoogleFonts.outfit(fontSize: 8.5, fontWeight: FontWeight.w600, color: const Color(0xFF94A3B8), letterSpacing: 0.5))]) ]]); }
 }
 
 class _SidebarItem extends StatelessWidget {
@@ -470,8 +471,42 @@ class _SidebarItem extends StatelessWidget {
   const _SidebarItem({required this.icon, required this.label, required this.isSelected, required this.onTap, this.color, required this.isCollapsed, required this.isDark});
   @override
   Widget build(BuildContext context) {
-    final activeColor = color ?? const Color(0xFF6366F1); final baseColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
-    return Padding(padding: const EdgeInsets.only(bottom: 6), child: InkWell(onTap: onTap, borderRadius: BorderRadius.circular(14), child: AnimatedContainer(duration: const Duration(milliseconds: 200), padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16), decoration: BoxDecoration(color: isSelected ? activeColor.withOpacity(0.12) : Colors.transparent, borderRadius: BorderRadius.circular(14), border: isSelected ? Border.all(color: activeColor.withOpacity(0.2)) : null), child: Row(children: [HeroIcon(icon, size: 20, color: isSelected ? activeColor : baseColor, style: isSelected ? HeroIconStyle.solid : HeroIconStyle.outline), if (!isCollapsed) ...[const SizedBox(width: 14), Expanded(child: Text(label, style: GoogleFonts.outfit(fontSize: 14, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500, color: isSelected ? activeColor : baseColor)))]]))));
+    final activeColor = color ?? const Color(0xFF6366F1);
+    final baseColor = isDark ? const Color(0xFFA1A1AA) : const Color(0xFF64748B);
+    final selectedBg = isDark ? activeColor.withOpacity(0.14) : activeColor.withOpacity(0.08);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? selectedBg : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(children: [
+            HeroIcon(icon, size: 17, color: isSelected ? activeColor : baseColor, style: isSelected ? HeroIconStyle.solid : HeroIconStyle.outline),
+            if (!isCollapsed) ...[
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  label,
+                  style: GoogleFonts.outfit(
+                    fontSize: 12.5,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                    color: isSelected ? activeColor : baseColor,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ]),
+        ),
+      ),
+    );
   }
 }
 
@@ -481,15 +516,35 @@ class _Header extends StatelessWidget {
   const _Header({required this.title, required this.onMenuPressed, required this.isDark, required this.onThemeToggle, required this.isMobile, this.userRole = 'parent', this.onAdminBadgeTap});
   @override
   Widget build(BuildContext context) {
-    final bgColor = isDark ? const Color(0xFF0D0D10) : Colors.white; final textColor = isDark ? Colors.white : const Color(0xFF1E293B);
+    final bgColor = isDark ? const Color(0xFF0F1014) : Colors.white;
+    final textColor = isDark ? Colors.white : const Color(0xFF0F172A);
+    final divider = isDark ? const Color(0xFF26272B) : const Color(0xFFE5E7EB);
+    final mutedColor = isDark ? const Color(0xFFA1A1AA) : const Color(0xFF94A3B8);
     return Container(
-      height: isMobile ? 70 : 80, padding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 24), decoration: BoxDecoration(color: bgColor, border: const Border(bottom: BorderSide(color: Color(0xFF64748B), width: 0.5))),
+      height: isMobile ? 70 : 56,
+      padding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 18),
+      decoration: BoxDecoration(color: bgColor, border: Border(bottom: BorderSide(color: divider, width: 1))),
       child: Row(children: [
-        IconButton(onPressed: onMenuPressed, icon: Icon(isMobile ? Icons.menu_rounded : Icons.menu_open_rounded, color: const Color(0xFF6366F1))), const SizedBox(width: 8), 
-        if (!isMobile) Text(title, style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, color: textColor)), 
-        const Spacer(), 
-        IconButton(onPressed: onThemeToggle, icon: Icon(isDark ? Icons.light_mode_rounded : Icons.dark_mode_outlined, color: const Color(0xFF94A3B8), size: 20)), 
-        const SizedBox(width: 12), 
+        InkWell(
+          onTap: onMenuPressed,
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.all(6),
+            child: Icon(isMobile ? Icons.menu_rounded : Icons.menu_open_rounded, color: mutedColor, size: isMobile ? 22 : 18),
+          ),
+        ),
+        const SizedBox(width: 10),
+        if (!isMobile) Text(_titleCase(title), style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700, color: textColor, letterSpacing: -0.2)),
+        const Spacer(),
+        InkWell(
+          onTap: onThemeToggle,
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.all(6),
+            child: Icon(isDark ? Icons.light_mode_rounded : Icons.dark_mode_outlined, color: mutedColor, size: 17),
+          ),
+        ),
+        const SizedBox(width: 10),
         StreamBuilder<DocumentSnapshot>(
           stream: FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser?.uid).snapshots(),
           builder: (context, snapshot) {
@@ -503,28 +558,38 @@ class _Header extends StatelessWidget {
             }
             final badgeColor = isAdmin ? const Color(0xFFEF4444) : const Color(0xFF6366F1);
             final badge = Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), 
-              decoration: BoxDecoration(color: badgeColor.withOpacity(0.1), borderRadius: BorderRadius.circular(10)), 
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: badgeColor.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: badgeColor.withOpacity(0.2), width: 1),
+              ),
               child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(isAdmin ? Icons.admin_panel_settings_rounded : Icons.workspace_premium_rounded, size: 16, color: badgeColor), 
-                  const SizedBox(width: 6), 
-                  Text(plan, style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: badgeColor)),
-                ]
-              )
+                  Icon(isAdmin ? Icons.admin_panel_settings_rounded : Icons.workspace_premium_rounded, size: 12, color: badgeColor),
+                  const SizedBox(width: 5),
+                  Text(plan, style: GoogleFonts.outfit(fontSize: 9.5, fontWeight: FontWeight.w800, color: badgeColor, letterSpacing: 0.4)),
+                ],
+              ),
             );
             if (isAdmin && onAdminBadgeTap != null) {
               return GestureDetector(onTap: onAdminBadgeTap, child: badge);
             }
             return badge;
-          }
+          },
         ),
         if (!isMobile) ...[
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
           _buildAdminSelector(context),
         ]
       ]),
     );
+  }
+
+  String _titleCase(String s) {
+    if (s.isEmpty) return s;
+    return s.split(' ').map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}').join(' ');
   }
 
   Widget _buildAdminSelector(BuildContext context) { 
@@ -557,30 +622,39 @@ class _Header extends StatelessWidget {
         ),
       ],
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), 
-        decoration: BoxDecoration(color: isDark ? const Color(0xFF18181B) : const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFF64748B), width: 0.5)), 
-        child: Row(children: [
-          Container(padding: const EdgeInsets.all(1.5), decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: const Color(0xFF6366F1), width: 1.5)), child: const CircleAvatar(radius: 12, backgroundColor: Colors.white, child: Icon(Icons.person, size: 16, color: Color(0xFF6366F1)))), 
-          const SizedBox(width: 10), 
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF18191D) : const Color(0xFFF6F7F9),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: isDark ? const Color(0xFF26272B) : const Color(0xFFE5E7EB), width: 1),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 22, height: 22,
+            decoration: const BoxDecoration(color: Color(0xFF6366F1), shape: BoxShape.circle),
+            child: const Icon(Icons.person, size: 13, color: Colors.white),
+          ),
+          const SizedBox(width: 8),
           StreamBuilder<DocumentSnapshot>(
             stream: FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser?.uid).snapshots(),
             builder: (context, snapshot) {
               String roleText = 'Admin';
               if (snapshot.hasData && snapshot.data!.data() != null) {
                 final Map<String, dynamic> data = snapshot.data!.data() as Map<String, dynamic>;
-                roleText = (data['role'] ?? 'admin').toString().replaceAll('_', ' ').toUpperCase();
+                final raw = (data['role'] ?? 'admin').toString().replaceAll('_', ' ');
+                roleText = raw.split(' ').map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}').join(' ');
               }
               return Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                Text(roleText, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.white : const Color(0xFF1E293B))), 
-                Text('Main Account', style: GoogleFonts.outfit(fontSize: 9, color: const Color(0xFF94A3B8)))
+                Text(roleText, style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w700, color: isDark ? Colors.white : const Color(0xFF0F172A), height: 1.1)),
+                Text('Main Account', style: GoogleFonts.outfit(fontSize: 8.5, color: const Color(0xFF94A3B8), height: 1.1)),
               ]);
-            }
-          ), 
-          const SizedBox(width: 8),
-          const Icon(Icons.unfold_more_rounded, size: 14, color: Color(0xFF94A3B8))
-        ])
+            },
+          ),
+          const SizedBox(width: 6),
+          const Icon(Icons.unfold_more_rounded, size: 12, color: Color(0xFF94A3B8)),
+        ]),
       ),
-    ); 
+    );
   }
 
   void _showEditProfile(BuildContext context) {
@@ -683,27 +757,27 @@ class _DashboardOverview extends StatelessWidget {
             children: [
               // 1. Parental Glass Header
               _buildParentalHeader(totalDevices, onlineDevices, textColor, cardColor),
-              const SizedBox(height: 32),
+              SizedBox(height: isMobile ? 24 : 16),
 
               // 2. Metrics Grid
               _buildParentalMetrics(totalDevices, onlineDevices, offlineDevices, totalAppsCount, textColor),
-              const SizedBox(height: 48),
+              SizedBox(height: isMobile ? 32 : 16),
 
               // 3. Charts Section
-              if (isMobile) 
+              if (isMobile)
                 Column(children: [
                   _buildLineChartCard(docs, textColor, isMobile, isDark),
                   const SizedBox(height: 24),
                   _buildPieChartCard(docs, textColor, isMobile, isDark),
                 ])
-              else 
+              else
                 Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Expanded(flex: 3, child: _buildLineChartCard(docs, textColor, isMobile, isDark)),
-                  const SizedBox(width: 24),
+                  const SizedBox(width: 16),
                   Expanded(flex: 2, child: _buildPieChartCard(docs, textColor, isMobile, isDark)),
                 ]),
-              
-              const SizedBox(height: 48),
+
+              SizedBox(height: isMobile ? 48 : 16),
 
               // 4. Action Button (Mobile Only)
               if (isMobile) 
@@ -727,52 +801,66 @@ class _DashboardOverview extends StatelessWidget {
   }
 
   Widget _buildParentalHeader(int total, int online, Color textColor, Color cardColor) {
-    return Container(
-      padding: EdgeInsets.all(isMobile ? 24 : 32),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF6366F1).withOpacity(0.1) : const Color(0xFF6366F1).withOpacity(0.05),
-        borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.4), width: 1.5),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Parental Suite', style: GoogleFonts.outfit(fontSize: isMobile ? 24 : 32, fontWeight: FontWeight.w900, color: textColor, letterSpacing: -1)),
-                const SizedBox(height: 4),
-                Text('Currently protecting $total devices with $online online.', style: GoogleFonts.outfit(fontSize: 14, color: const Color(0xFF94A3B8))),
-              ],
+    if (isMobile) {
+      return Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF6366F1).withOpacity(0.1) : const Color(0xFF6366F1).withOpacity(0.05),
+          borderRadius: BorderRadius.circular(32),
+          border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.4), width: 1.5),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Parental Suite', style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w900, color: textColor, letterSpacing: -1)),
+          const SizedBox(height: 4),
+          Text('Currently protecting $total devices with $online online.', style: GoogleFonts.outfit(fontSize: 14, color: const Color(0xFF94A3B8))),
+        ]),
+      );
+    }
+    final subColor = isDark ? const Color(0xFFA1A1AA) : const Color(0xFF64748B);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Dashboard', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w700, color: textColor, letterSpacing: -0.4, height: 1.1)),
+              const SizedBox(height: 3),
+              Text('Protecting $total ${total == 1 ? "device" : "devices"} • $online online', style: GoogleFonts.outfit(fontSize: 12, color: subColor)),
+            ],
+          ),
+        ),
+        Builder(builder: (context) => SizedBox(
+          height: 34,
+          child: ElevatedButton.icon(
+            onPressed: () => showAppLockerPairingDialog(context, cardColor, textColor),
+            icon: const Icon(Icons.add_rounded, size: 15),
+            label: Text('Pair Device', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF6366F1),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
             ),
           ),
-          if (!isMobile) 
-             Builder(builder: (context) => ElevatedButton.icon(
-                onPressed: () => showAppLockerPairingDialog(context, cardColor, textColor), 
-                icon: const Icon(Icons.add_rounded), 
-                label: const Text('Pair New Device'), 
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6366F1), 
-                  foregroundColor: Colors.white, 
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), 
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14)
-                )
-             )),
-        ],
-      ),
+        )),
+      ],
     );
   }
 
   Widget _buildParentalMetrics(int total, int online, int offline, int apps, Color textColor) {
     return LayoutBuilder(builder: (context, constraints) {
       int count = constraints.maxWidth < 600 ? 2 : 4;
+      final spacing = isMobile ? 24.0 : 12.0;
+      final ratio = isMobile ? (constraints.maxWidth < 600 ? 1.4 : 1.8) : 2.6;
       return GridView.count(
         crossAxisCount: count,
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
-        mainAxisSpacing: 24,
-        crossAxisSpacing: 24,
-        childAspectRatio: constraints.maxWidth < 600 ? 1.4 : 1.8,
+        mainAxisSpacing: spacing,
+        crossAxisSpacing: spacing,
+        childAspectRatio: ratio,
         children: [
           _StatCard(title: 'Devices', value: total.toString(), icon: HeroIcons.devicePhoneMobile, color: const Color(0xFF6366F1), isDark: isDark),
           _StatCard(title: 'Online', value: online.toString(), icon: HeroIcons.signal, color: const Color(0xFF10B981), isDark: isDark),
@@ -5176,56 +5264,61 @@ class _StatCard extends StatelessWidget {
   const _StatCard({required this.title, required this.value, required this.icon, required this.color, required this.isDark});
   @override
   Widget build(BuildContext context) {
-    final bgColor = isDark ? color.withOpacity(0.12) : color.withOpacity(0.06); 
-    final valueColor = isDark ? Colors.white : const Color(0xFF1E293B);
-    final labelColor = isDark ? Colors.white70 : const Color(0xFF64748B);
+    final cardBg = isDark ? const Color(0xFF15161A) : Colors.white;
+    final borderC = isDark ? const Color(0xFF26272B) : const Color(0xFFE5E7EB);
+    final valueColor = isDark ? Colors.white : const Color(0xFF0F172A);
+    final labelColor = isDark ? const Color(0xFFA1A1AA) : const Color(0xFF64748B);
 
     return Container(
-      padding: const EdgeInsets.all(24), 
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: bgColor, 
-        borderRadius: BorderRadius.circular(24), 
-        border: Border.all(color: color.withOpacity(0.4), width: 1.5),
+        color: cardBg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: borderC, width: 1),
       ),
-      child: Stack(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Icon - Top Right
-          Positioned(
-            top: 0,
-            right: 0,
-            child: Container(
-              padding: const EdgeInsets.all(12), 
-              decoration: BoxDecoration(color: color.withOpacity(0.15), shape: BoxShape.circle), 
-              child: HeroIcon(icon, size: 28, color: color, style: HeroIconStyle.solid)
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: color.withOpacity(isDark ? 0.16 : 0.10),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Center(
+              child: HeroIcon(icon, size: 17, color: color, style: HeroIconStyle.solid),
             ),
           ),
-          
-          // Value - Middle Left
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              value, 
-              style: GoogleFonts.outfit(
-                fontSize: 42, 
-                fontWeight: FontWeight.w900, 
-                color: valueColor,
-                letterSpacing: -1
-              )
-            ),
-          ),
-          
-          // Title - Bottom Middle
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Text(
-              title.toUpperCase(), 
-              style: GoogleFonts.outfit(
-                fontSize: 12, 
-                fontWeight: FontWeight.w900, 
-                color: labelColor, 
-                letterSpacing: 2
-              ), 
-              maxLines: 1
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.outfit(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: labelColor,
+                    height: 1.1,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: GoogleFonts.outfit(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: valueColor,
+                    letterSpacing: -0.4,
+                    height: 1.1,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -5242,7 +5335,7 @@ class _SuperAdminDashboard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textColor = isDark ? Colors.white : const Color(0xFF1E293B);
+    final textColor = isDark ? Colors.white : const Color(0xFF0F172A);
     
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('users').snapshots(),
@@ -5257,33 +5350,29 @@ class _SuperAdminDashboard extends StatelessWidget {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 1. Hero Welcome Header
                 _buildSuperHeader(users.length, textColor),
-                const SizedBox(height: 32),
+                SizedBox(height: isMobile ? 32 : 16),
 
-                // 2. Global Key Metrics
                 _buildGlobalMetrics(users.length, devices.length, online, textColor),
-                const SizedBox(height: 48),
+                SizedBox(height: isMobile ? 48 : 16),
 
-                // 3. Charts Section
-                if (isMobile) 
+                if (isMobile)
                   Column(children: [
                     _buildLineChartCard(devices, textColor, isMobile, isDark),
                     const SizedBox(height: 24),
                     _buildPieChartCard(users, textColor, isMobile, isDark),
                   ])
-                else 
+                else
                   Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Expanded(flex: 3, child: _buildLineChartCard(devices, textColor, isMobile, isDark)),
-                    const SizedBox(width: 24),
+                    const SizedBox(width: 16),
                     Expanded(flex: 2, child: _buildPieChartCard(users, textColor, isMobile, isDark)),
                   ]),
-                  
-                const SizedBox(height: 48),
-                
-                // 4. Recent Activity Log
+
+                SizedBox(height: isMobile ? 48 : 16),
+
                 _buildHistoryLog(users, textColor),
-                const SizedBox(height: 100),
+                SizedBox(height: isMobile ? 100 : 32),
               ],
             );
           }
@@ -5293,111 +5382,147 @@ class _SuperAdminDashboard extends StatelessWidget {
   }
 
   Widget _buildSuperHeader(int userCount, Color textColor) {
-    return Container(
-      padding: EdgeInsets.all(isMobile ? 24 : 32),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: isDark ? [const Color(0xFF6366F1), const Color(0xFF8B5CF6)] : [const Color(0xFF4F46E5), const Color(0xFF6366F1)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(32),
-        boxShadow: [BoxShadow(color: const Color(0xFF6366F1).withOpacity(0.3), blurRadius: 30, offset: const Offset(0, 20))],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
-                  child: Text('COMMAND CENTER', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 2)),
-                ),
-                const SizedBox(height: 16),
-                Text('Global System Overview', style: GoogleFonts.outfit(fontSize: isMobile ? 20 : 36, fontWeight: FontWeight.w900, color: Colors.white)),
-                const SizedBox(height: 8),
-                Text('Currently presiding over $userCount active accounts across all platforms.', style: GoogleFonts.outfit(fontSize: 14, color: Colors.white.withOpacity(0.8))),
-              ],
-            ),
+    if (isMobile) {
+      return Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF4F46E5), Color(0xFF6366F1)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
-          if (!isMobile) const HeroIcon(HeroIcons.cpuChip, size: 80, color: Colors.white24),
-        ],
-      ),
+          borderRadius: BorderRadius.circular(32),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
+              child: Text('COMMAND CENTER', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 2)),
+            ),
+            const SizedBox(height: 16),
+            Text('Global System Overview', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.white)),
+            const SizedBox(height: 8),
+            Text('Presiding over $userCount active accounts.', style: GoogleFonts.outfit(fontSize: 14, color: Colors.white.withOpacity(0.85))),
+          ],
+        ),
+      );
+    }
+    final subColor = isDark ? const Color(0xFFA1A1AA) : const Color(0xFF64748B);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Text('Command Center', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w700, color: textColor, letterSpacing: -0.4, height: 1.1)),
+                const SizedBox(width: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEF4444).withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(5),
+                    border: Border.all(color: const Color(0xFFEF4444).withOpacity(0.25), width: 1),
+                  ),
+                  child: Text('ADMIN', style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.w800, color: const Color(0xFFEF4444), letterSpacing: 0.6)),
+                ),
+              ]),
+              const SizedBox(height: 3),
+              Text('Global system overview • $userCount accounts', style: GoogleFonts.outfit(fontSize: 12, color: subColor)),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
   Widget _buildGlobalMetrics(int users, int devices, int online, Color textColor) {
     return LayoutBuilder(builder: (context, constraints) {
-      int count = constraints.maxWidth < 600 ? 2 : (constraints.maxWidth < 1100 ? 2 : 4);
+      int count = constraints.maxWidth < 600 ? 2 : 4;
+      final spacing = isMobile ? 24.0 : 12.0;
+      final ratio = isMobile ? (constraints.maxWidth < 600 ? 1.4 : 2.0) : 2.6;
       return GridView.count(
         crossAxisCount: count,
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
-        mainAxisSpacing: 24,
-        crossAxisSpacing: 24,
-        childAspectRatio: constraints.maxWidth < 600 ? 1.4 : 2.0,
+        mainAxisSpacing: spacing,
+        crossAxisSpacing: spacing,
+        childAspectRatio: ratio,
         children: [
-          _AdminStatItem(title: 'TOTAL USERS', value: users.toString(), icon: HeroIcons.users, color: Colors.orange),
-          _AdminStatItem(title: 'GLOBAL DEVICES', value: devices.toString(), icon: HeroIcons.devicePhoneMobile, color: Colors.blue),
-          _AdminStatItem(title: 'ONLINE NOW', value: online.toString(), icon: HeroIcons.signal, color: Colors.green),
-          _AdminStatItem(title: 'SYSTEM HEALTH', value: '99.9%', icon: HeroIcons.checkBadge, color: Colors.purple),
+          _StatCard(title: 'Total Users', value: users.toString(), icon: HeroIcons.users, color: const Color(0xFFF59E0B), isDark: isDark),
+          _StatCard(title: 'Global Devices', value: devices.toString(), icon: HeroIcons.devicePhoneMobile, color: const Color(0xFF6366F1), isDark: isDark),
+          _StatCard(title: 'Online Now', value: online.toString(), icon: HeroIcons.signal, color: const Color(0xFF10B981), isDark: isDark),
+          _StatCard(title: 'System Health', value: '99.9%', icon: HeroIcons.checkBadge, color: const Color(0xFF8B5CF6), isDark: isDark),
         ],
       );
     });
   }
 
   Widget _buildHistoryLog(List<QueryDocumentSnapshot> users, Color textColor) {
+    final cardBg = isDark ? const Color(0xFF15161A) : Colors.white;
+    final borderC = isDark ? const Color(0xFF26272B) : const Color(0xFFE5E7EB);
+    final subColor = isDark ? const Color(0xFFA1A1AA) : const Color(0xFF64748B);
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.all(isMobile ? 20 : 32),
+      padding: EdgeInsets.all(isMobile ? 20 : 18),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF18181B) : Colors.white,
-        borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: textColor.withOpacity(0.2), width: 1.5),
+        color: cardBg,
+        borderRadius: BorderRadius.circular(isMobile ? 32 : 12),
+        border: Border.all(color: borderC, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Text('GLOBAL ACCOUNT ACCESS', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold, color: textColor, letterSpacing: 1)),
+              Text(isMobile ? 'GLOBAL ACCOUNT ACCESS' : 'Recent Accounts', style: GoogleFonts.outfit(fontSize: isMobile ? 14 : 13, fontWeight: isMobile ? FontWeight.bold : FontWeight.w600, color: textColor, letterSpacing: isMobile ? 1 : -0.2)),
               const Spacer(),
-              const Icon(Icons.more_horiz_rounded, color: Color(0xFF94A3B8)),
+              Icon(Icons.more_horiz_rounded, color: subColor, size: isMobile ? 20 : 16),
             ],
           ),
-          const SizedBox(height: 32),
+          SizedBox(height: isMobile ? 32 : 12),
           ListView.separated(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             itemCount: users.take(5).length,
-            separatorBuilder: (_, __) => Divider(color: textColor.withOpacity(0.05)),
+            separatorBuilder: (_, __) => Divider(color: textColor.withOpacity(0.06), height: isMobile ? 16 : 1),
             itemBuilder: (context, index) {
               final user = users[index].data() as Map<String, dynamic>;
               final email = user['email'] ?? 'Unknown User';
               final role = user['role'] ?? 'parent';
               final plan = user['plan'] ?? 'free';
-              
+              final isPro = plan.toString().toLowerCase() == 'pro';
+
               return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
+                padding: EdgeInsets.symmetric(vertical: isMobile ? 12 : 8),
                 child: Row(
                   children: [
-                    CircleAvatar(backgroundColor: const Color(0xFF6366F1).withOpacity(0.1), child: Text(email[0].toUpperCase(), style: const TextStyle(color: Color(0xFF6366F1)))),
-                    const SizedBox(width: 16),
+                    CircleAvatar(
+                      radius: isMobile ? 20 : 13,
+                      backgroundColor: const Color(0xFF6366F1).withOpacity(0.12),
+                      child: Text(email[0].toUpperCase(), style: GoogleFonts.outfit(color: const Color(0xFF6366F1), fontSize: isMobile ? 14 : 11, fontWeight: FontWeight.w700)),
+                    ),
+                    SizedBox(width: isMobile ? 16 : 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(email, style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: textColor, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
-                          Text(role.toString().toUpperCase(), style: GoogleFonts.outfit(fontSize: 10, color: const Color(0xFF94A3B8), fontWeight: FontWeight.bold)),
+                          Text(email, style: GoogleFonts.outfit(fontWeight: FontWeight.w600, color: textColor, fontSize: isMobile ? 14 : 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+                          Text(role.toString().toUpperCase(), style: GoogleFonts.outfit(fontSize: isMobile ? 10 : 9, color: subColor, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
                         ],
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(color: (plan.toString().toLowerCase() == 'pro' ? Colors.blue : Colors.grey).withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                      child: Text(plan.toString().toUpperCase(), style: GoogleFonts.outfit(fontSize: 9, fontWeight: FontWeight.bold, color: plan.toString().toLowerCase() == 'pro' ? Colors.blue : Colors.grey)),
+                      padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 6, vertical: isMobile ? 4 : 3),
+                      decoration: BoxDecoration(
+                        color: (isPro ? const Color(0xFF6366F1) : const Color(0xFF94A3B8)).withOpacity(0.10),
+                        borderRadius: BorderRadius.circular(5),
+                        border: Border.all(color: (isPro ? const Color(0xFF6366F1) : const Color(0xFF94A3B8)).withOpacity(0.25), width: 1),
+                      ),
+                      child: Text(plan.toString().toUpperCase(), style: GoogleFonts.outfit(fontSize: isMobile ? 9 : 8.5, fontWeight: FontWeight.w800, color: isPro ? const Color(0xFF6366F1) : const Color(0xFF94A3B8), letterSpacing: 0.4)),
                     ),
                   ],
                 ),
@@ -5412,20 +5537,22 @@ class _SuperAdminDashboard extends StatelessWidget {
 
 // SHARED CHART WIDGETS
 Widget _buildLineChartCard(List<QueryDocumentSnapshot> docs, Color textColor, bool isMobile, bool isDark) {
+  final cardBg = isDark ? const Color(0xFF15161A) : Colors.white;
+  final borderC = isDark ? const Color(0xFF26272B) : const Color(0xFFE5E7EB);
   return Container(
-    padding: EdgeInsets.all(isMobile ? 20 : 32),
+    padding: EdgeInsets.all(isMobile ? 20 : 18),
     decoration: BoxDecoration(
-      color: isDark ? const Color(0xFF18181B) : Colors.white,
-      borderRadius: BorderRadius.circular(32),
-      border: Border.all(color: textColor.withOpacity(0.2), width: 1.5),
+      color: cardBg,
+      borderRadius: BorderRadius.circular(isMobile ? 32 : 12),
+      border: Border.all(color: borderC, width: 1),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('ACTIVITY TREND', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold, color: textColor, letterSpacing: 1)),
-        const SizedBox(height: 24),
+        Text(isMobile ? 'ACTIVITY TREND' : 'Activity Trend', style: GoogleFonts.outfit(fontSize: isMobile ? 14 : 13, fontWeight: isMobile ? FontWeight.bold : FontWeight.w600, color: textColor, letterSpacing: isMobile ? 1 : -0.2)),
+        SizedBox(height: isMobile ? 24 : 12),
         SizedBox(
-          height: isMobile ? 200 : 250,
+          height: isMobile ? 200 : 200,
           child: LineChart(
             LineChartData(
               gridData: FlGridData(show: false),
@@ -5436,7 +5563,7 @@ Widget _buildLineChartCard(List<QueryDocumentSnapshot> docs, Color textColor, bo
                   spots: [const FlSpot(0, 1), const FlSpot(2, 3), const FlSpot(4, 2), const FlSpot(6, 5), const FlSpot(8, 4), const FlSpot(10, 6)],
                   isCurved: true,
                   color: const Color(0xFF6366F1),
-                  barWidth: isMobile ? 4 : 6,
+                  barWidth: isMobile ? 4 : 2.5,
                   isStrokeCapRound: true,
                   dotData: FlDotData(show: false),
                   belowBarData: BarAreaData(show: true, color: const Color(0xFF6366F1).withOpacity(0.1)),
@@ -5468,24 +5595,26 @@ Widget _buildPieChartCard(List<QueryDocumentSnapshot> docs, Color textColor, boo
      t1 = 'PRO'; t2 = 'STR'; t3 = 'FREE';
   }
 
+  final cardBg = isDark ? const Color(0xFF15161A) : Colors.white;
+  final borderC = isDark ? const Color(0xFF26272B) : const Color(0xFFE5E7EB);
   return Container(
-    padding: EdgeInsets.all(isMobile ? 20 : 32),
+    padding: EdgeInsets.all(isMobile ? 20 : 18),
     decoration: BoxDecoration(
-      color: isDark ? const Color(0xFF18181B) : Colors.white,
-      borderRadius: BorderRadius.circular(32),
-      border: Border.all(color: textColor.withOpacity(0.2), width: 1.5),
+      color: cardBg,
+      borderRadius: BorderRadius.circular(isMobile ? 32 : 12),
+      border: Border.all(color: borderC, width: 1),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(isAdminView ? 'DEVICE REACH' : 'SUBSCRIPTION MIX', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold, color: textColor, letterSpacing: 1)),
-        const SizedBox(height: 24),
+        Text(isMobile ? (isAdminView ? 'DEVICE REACH' : 'SUBSCRIPTION MIX') : (isAdminView ? 'Device Reach' : 'Subscription Mix'), style: GoogleFonts.outfit(fontSize: isMobile ? 14 : 13, fontWeight: isMobile ? FontWeight.bold : FontWeight.w600, color: textColor, letterSpacing: isMobile ? 1 : -0.2)),
+        SizedBox(height: isMobile ? 24 : 12),
         SizedBox(
-          height: isMobile ? 200 : 250,
+          height: isMobile ? 200 : 200,
           child: PieChart(
             PieChartData(
-              sectionsSpace: 8,
-              centerSpaceRadius: isMobile ? 40 : 60,
+              sectionsSpace: isMobile ? 8 : 4,
+              centerSpaceRadius: isMobile ? 40 : 50,
               sections: [
                 PieChartSectionData(value: val1 == 0 && val2 == 0 ? 1 : val1, color: const Color(0xFF6366F1), title: t1, radius: 25, titleStyle: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 10)),
                 PieChartSectionData(value: val2, color: const Color(0xFF10B981), title: t2, radius: 25, titleStyle: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 10)),
