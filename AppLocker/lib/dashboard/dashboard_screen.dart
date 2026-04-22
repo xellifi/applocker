@@ -18,6 +18,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'dart:math';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -776,6 +777,11 @@ class _DashboardOverview extends StatelessWidget {
                   const SizedBox(width: 16),
                   Expanded(flex: 2, child: _buildPieChartCard(docs, textColor, isMobile, isDark)),
                 ]),
+
+              SizedBox(height: isMobile ? 32 : 16),
+
+              // 3.5 Real-time Activity Feed
+              _ActivityFeedCard(devices: docs, textColor: textColor, isMobile: isMobile, isDark: isDark),
 
               SizedBox(height: isMobile ? 48 : 16),
 
@@ -5536,6 +5542,198 @@ class _SuperAdminDashboard extends StatelessWidget {
 }
 
 // SHARED CHART WIDGETS
+class _ActivityFeedCard extends StatefulWidget {
+  final List<QueryDocumentSnapshot> devices;
+  final Color textColor;
+  final bool isMobile;
+  final bool isDark;
+  const _ActivityFeedCard({required this.devices, required this.textColor, required this.isMobile, required this.isDark});
+
+  @override
+  State<_ActivityFeedCard> createState() => _ActivityFeedCardState();
+}
+
+class _ActivityFeedCardState extends State<_ActivityFeedCard> {
+  final Map<String, List<Map<String, dynamic>>> _eventsByDevice = {};
+  final Map<String, StreamSubscription> _subs = {};
+  final Map<String, String> _deviceNames = {};
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _resync();
+    _ticker = Timer.periodic(const Duration(seconds: 30), (_) { if (mounted) setState(() {}); });
+  }
+
+  @override
+  void didUpdateWidget(covariant _ActivityFeedCard old) {
+    super.didUpdateWidget(old);
+    final newIds = widget.devices.map((d) => d.id).toSet();
+    final oldIds = _subs.keys.toSet();
+    if (!newIds.containsAll(oldIds) || !oldIds.containsAll(newIds)) {
+      _resync();
+    } else {
+      for (final d in widget.devices) {
+        final m = d.data() as Map<String, dynamic>;
+        _deviceNames[d.id] = (m['model'] ?? m['deviceName'] ?? m['name'] ?? m['brand'] ?? 'Device').toString();
+      }
+    }
+  }
+
+  void _resync() {
+    final newIds = widget.devices.map((d) => d.id).toSet();
+    for (final id in _subs.keys.toList()) {
+      if (!newIds.contains(id)) {
+        _subs[id]?.cancel();
+        _subs.remove(id);
+        _eventsByDevice.remove(id);
+        _deviceNames.remove(id);
+      }
+    }
+    for (final dev in widget.devices) {
+      final id = dev.id;
+      final m = dev.data() as Map<String, dynamic>;
+      _deviceNames[id] = (m['model'] ?? m['deviceName'] ?? m['name'] ?? m['brand'] ?? 'Device').toString();
+      if (_subs.containsKey(id)) continue;
+      _subs[id] = FirebaseFirestore.instance
+          .collection('devices').doc(id).collection('activity')
+          .orderBy('timestamp', descending: true).limit(15)
+          .snapshots()
+          .listen((snap) {
+        if (!mounted) return;
+        setState(() {
+          _eventsByDevice[id] = snap.docs.map((d) => Map<String, dynamic>.from(d.data())..['__id'] = d.id..['__deviceId'] = id).toList();
+        });
+      }, onError: (_) {});
+    }
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    for (final s in _subs.values) { s.cancel(); }
+    super.dispose();
+  }
+
+  String _relTime(dynamic ts) {
+    DateTime? dt;
+    if (ts is Timestamp) dt = ts.toDate();
+    else if (ts is int) dt = DateTime.fromMillisecondsSinceEpoch(ts);
+    if (dt == null) return '';
+    final diff = DateTime.now().difference(dt);
+    if (diff.inSeconds < 60) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return DateFormat('MMM d', 'en_US').format(dt);
+  }
+
+  ({IconData icon, Color color, String label, String detail}) _describe(Map<String, dynamic> e) {
+    final type = (e['type'] ?? '').toString();
+    final appName = (e['appName'] ?? e['name'] ?? '').toString();
+    final pkg = (e['packageName'] ?? '').toString();
+    final content = (e['content'] ?? '').toString();
+    final sender = (e['sender'] ?? e['from'] ?? '').toString();
+    final blocked = e['blocked'] == true || e['status']?.toString().toLowerCase() == 'blocked';
+    switch (type) {
+      case 'app_usage':
+        if (blocked) {
+          return (icon: Icons.block_rounded, color: const Color(0xFFEF4444), label: 'App blocked', detail: appName.isNotEmpty ? appName : pkg);
+        }
+        return (icon: Icons.apps_rounded, color: const Color(0xFF6366F1), label: 'App opened', detail: appName.isNotEmpty ? appName : pkg);
+      case 'url':
+        return (icon: Icons.public_rounded, color: const Color(0xFF0EA5E9), label: 'Website', detail: content.isNotEmpty ? content : pkg);
+      case 'message':
+        return (icon: Icons.chat_bubble_outline_rounded, color: const Color(0xFF10B981), label: sender.isNotEmpty ? 'Msg from $sender' : 'Message', detail: content.isNotEmpty ? content : pkg);
+      case 'sms':
+        return (icon: Icons.sms_outlined, color: const Color(0xFF10B981), label: sender.isNotEmpty ? 'SMS from $sender' : 'SMS', detail: content);
+      case 'call':
+        return (icon: Icons.call_rounded, color: const Color(0xFFF59E0B), label: sender.isNotEmpty ? 'Call · $sender' : 'Call', detail: content);
+      case 'schedule':
+      case 'schedule_trigger':
+        return (icon: Icons.access_time_rounded, color: const Color(0xFFF59E0B), label: 'Schedule triggered', detail: appName.isNotEmpty ? appName : (e['ruleName'] ?? '').toString());
+      case 'lock':
+        return (icon: Icons.lock_rounded, color: const Color(0xFFEF4444), label: 'Device locked', detail: '');
+      case 'unlock':
+        return (icon: Icons.lock_open_rounded, color: const Color(0xFF10B981), label: 'Device unlocked', detail: '');
+      default:
+        return (icon: Icons.info_outline_rounded, color: const Color(0xFF94A3B8), label: type.isNotEmpty ? type : 'Event', detail: appName.isNotEmpty ? appName : content);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cardBg = widget.isDark ? const Color(0xFF15161A) : Colors.white;
+    final borderC = widget.isDark ? const Color(0xFF26272B) : const Color(0xFFE5E7EB);
+    final subColor = widget.isDark ? const Color(0xFFA1A1AA) : const Color(0xFF64748B);
+
+    final all = _eventsByDevice.values.expand((l) => l).toList()
+      ..sort((a, b) {
+        final ta = a['timestamp']; final tb = b['timestamp'];
+        int va = ta is Timestamp ? ta.millisecondsSinceEpoch : (ta is int ? ta : 0);
+        int vb = tb is Timestamp ? tb.millisecondsSinceEpoch : (tb is int ? tb : 0);
+        return vb.compareTo(va);
+      });
+    final shown = all.take(20).toList();
+
+    return Container(
+      padding: EdgeInsets.all(widget.isMobile ? 20 : 18),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(widget.isMobile ? 32 : 12),
+        border: Border.all(color: borderC, width: 1),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(
+            width: 8, height: 8,
+            decoration: const BoxDecoration(color: Color(0xFF10B981), shape: BoxShape.circle),
+          ).animate(onPlay: (c) => c.repeat()).fadeIn(duration: 800.ms).then().fadeOut(duration: 800.ms),
+          const SizedBox(width: 8),
+          Text(widget.isMobile ? 'LIVE ACTIVITY' : 'Live Activity',
+              style: GoogleFonts.outfit(fontSize: widget.isMobile ? 14 : 13, fontWeight: widget.isMobile ? FontWeight.bold : FontWeight.w600, color: widget.textColor, letterSpacing: widget.isMobile ? 1 : -0.2)),
+          const Spacer(),
+          if (shown.isNotEmpty)
+            Text('${shown.length} recent', style: GoogleFonts.outfit(fontSize: 11, color: subColor)),
+        ]),
+        SizedBox(height: widget.isMobile ? 16 : 12),
+        if (widget.devices.isEmpty)
+          Padding(padding: const EdgeInsets.symmetric(vertical: 24), child: Center(child: Text('Pair a device to see live activity', style: GoogleFonts.outfit(fontSize: 13, color: subColor))))
+        else if (shown.isEmpty)
+          Padding(padding: const EdgeInsets.symmetric(vertical: 24), child: Center(child: Text('Waiting for events…', style: GoogleFonts.outfit(fontSize: 13, color: subColor))))
+        else
+          Column(children: shown.map((e) {
+            final d = _describe(e);
+            final devName = _deviceNames[e['__deviceId']] ?? 'Device';
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Container(
+                  width: 32, height: 32,
+                  decoration: BoxDecoration(color: d.color.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+                  child: Icon(d.icon, size: 16, color: d.color),
+                ),
+                const SizedBox(width: 12),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    Flexible(child: Text(d.label, style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: widget.textColor), overflow: TextOverflow.ellipsis)),
+                    const SizedBox(width: 6),
+                    Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: subColor.withOpacity(0.12), borderRadius: BorderRadius.circular(6)),
+                      child: Text(devName, style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w600, color: subColor))),
+                  ]),
+                  if (d.detail.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 2), child: Text(d.detail, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.outfit(fontSize: 12, color: subColor))),
+                ])),
+                const SizedBox(width: 8),
+                Text(_relTime(e['timestamp']), style: GoogleFonts.outfit(fontSize: 11, color: subColor)),
+              ]),
+            ).animate().fadeIn(duration: 250.ms).slideY(begin: -0.05, end: 0);
+          }).toList()),
+      ]),
+    );
+  }
+}
+
 Widget _buildLineChartCard(List<QueryDocumentSnapshot> docs, Color textColor, bool isMobile, bool isDark) {
   final cardBg = isDark ? const Color(0xFF15161A) : Colors.white;
   final borderC = isDark ? const Color(0xFF26272B) : const Color(0xFFE5E7EB);
