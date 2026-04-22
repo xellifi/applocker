@@ -221,14 +221,32 @@ class _ParentDashboardAppState extends State<ParentDashboardApp> {
       title: 'AppLocker Admin',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF060D1F),
         colorScheme: ColorScheme.fromSeed(
+          brightness: Brightness.dark,
           seedColor: const Color(0xFF6366F1),
           primary: const Color(0xFF6366F1),
           secondary: const Color(0xFFA855F7),
+          surface: const Color(0xFF060D1F),
         ),
         useMaterial3: true,
-        textTheme: GoogleFonts.outfitTextTheme(),
+        textTheme: GoogleFonts.outfitTextTheme(ThemeData(brightness: Brightness.dark).textTheme),
       ),
+      darkTheme: ThemeData(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF060D1F),
+        colorScheme: ColorScheme.fromSeed(
+          brightness: Brightness.dark,
+          seedColor: const Color(0xFF6366F1),
+          primary: const Color(0xFF6366F1),
+          secondary: const Color(0xFFA855F7),
+          surface: const Color(0xFF060D1F),
+        ),
+        useMaterial3: true,
+        textTheme: GoogleFonts.outfitTextTheme(ThemeData(brightness: Brightness.dark).textTheme),
+      ),
+      themeMode: ThemeMode.dark,
       home: Builder(
         builder: (context) => Stack(
           children: [
@@ -264,22 +282,18 @@ class _AppShellState extends State<_AppShell> {
   @override
   void initState() {
     super.initState();
-    _onboardingDone =
-        html.window.localStorage['applocker_onboarding_done'] == 'true' ||
-            FirebaseAuth.instance.currentUser != null;
+    // Onboarding is now the permanent home page for every visit.
+    // Logged-in users skip it and go straight to the dashboard.
+    _onboardingDone = FirebaseAuth.instance.currentUser != null;
+    html.window.localStorage.remove('applocker_onboarding_done');
   }
 
   void _finishOnboarding() {
-    html.window.localStorage['applocker_onboarding_done'] = 'true';
     setState(() => _onboardingDone = true);
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_onboardingDone) {
-      return OnboardingScreen(onDone: _finishOnboarding);
-    }
-
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
@@ -291,12 +305,15 @@ class _AppShellState extends State<_AppShell> {
             ),
           );
         }
-        if (!snapshot.hasData) {
-          html.window.localStorage.remove('applocker_logged_in');
-          return const LoginScreen();
+        if (snapshot.hasData) {
+          html.window.localStorage['applocker_logged_in'] = 'true';
+          return const DashboardScreen();
         }
-        html.window.localStorage['applocker_logged_in'] = 'true';
-        return const DashboardScreen();
+        html.window.localStorage.remove('applocker_logged_in');
+        if (!_onboardingDone) {
+          return OnboardingScreen(onDone: _finishOnboarding);
+        }
+        return const LoginScreen();
       },
     );
   }
