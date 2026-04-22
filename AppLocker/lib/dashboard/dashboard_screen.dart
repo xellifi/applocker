@@ -22,6 +22,7 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../shared/firebase_service.dart';
+import '../shared/plan_gate.dart';
 enum _DashboardMenu { dashboard, devices, apps, schedules, location, monitoring, reports, subscriptions, paymentMethods, pendingTransactions, settings, users, profile }
 
 // GLOBAL HELPER FOR PAIRING DIALOG
@@ -2354,6 +2355,14 @@ class _ScheduleLockSheetState extends State<_ScheduleLockSheet> {
   }
 
   Future<void> _addSchedule(List<dynamic> currentSchedules) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null) {
+      final allowed = await PlanGate.requireForUser(
+        context, uid, (f) => f.scheduleLock,
+        featureLabel: 'Schedule Lock',
+      );
+      if (!allowed) return;
+    }
     setState(() => _saving = true);
     try {
       final updated = List<dynamic>.from(currentSchedules)
@@ -4033,6 +4042,28 @@ class _MobileSubscriptionViewState extends State<_MobileSubscriptionView> {
     final colorCtrl   = TextEditingController(text: existing?['color'] ?? '0xFF6366F1');
     final List<TextEditingController> featureCtrls = ((existing?['features'] as List?) ?? ['']).map((f) => TextEditingController(text: f.toString())).toList();
 
+    final Map<String, dynamic> existingFeats = (existing?['featuresMap'] is Map)
+        ? Map<String, dynamic>.from(existing!['featuresMap'] as Map)
+        : <String, dynamic>{};
+    final Map<String, bool> toggles = {
+      'appRestrictions':  (existingFeats['appRestrictions']  as bool?) ?? true,
+      'scheduleLock':     (existingFeats['scheduleLock']     as bool?) ?? true,
+      'appFilter':        (existingFeats['appFilter']        as bool?) ?? true,
+      'childMonitoring':  (existingFeats['childMonitoring']  as bool?) ?? true,
+      'liveLocation':     (existingFeats['liveLocation']     as bool?) ?? true,
+      'chat':             (existingFeats['chat']             as bool?) ?? true,
+      'masterPin':        (existingFeats['masterPin']        as bool?) ?? true,
+    };
+    const Map<String, String> toggleLabels = {
+      'appRestrictions':  'App Restrictions',
+      'scheduleLock':     'Schedule Lock',
+      'appFilter':        'App Filter',
+      'childMonitoring':  'Child Activity Monitoring',
+      'liveLocation':     'Live Location',
+      'chat':             'Parent ↔ Child Chat',
+      'masterPin':        'Master PIN',
+    };
+
     String durationUnit = existing?['durationUnit'] ?? 'months';
     int durationValue   = existing?['durationValue'] ?? 1;
     final durValueCtrl  = TextEditingController(text: durationValue.toString());
@@ -4119,8 +4150,23 @@ class _MobileSubscriptionViewState extends State<_MobileSubscriptionView> {
               else
                 field(durationUnit == 'months' ? 'Number of Months' : 'Number of Years', durValueCtrl, isNum: true),
               const SizedBox(height: 12),
+              Text('FEATURE ACCESS', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF94A3B8), letterSpacing: 1.5)),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(border: Border.all(color: borderColor.withOpacity(0.5)), borderRadius: BorderRadius.circular(12)),
+                child: Column(children: toggles.keys.map((k) => SwitchListTile(
+                  dense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                  title: Text(toggleLabels[k] ?? k, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: textColor)),
+                  value: toggles[k] ?? true,
+                  activeColor: const Color(0xFF6366F1),
+                  onChanged: (v) => setS(() => toggles[k] = v),
+                )).toList()),
+              ),
+              const SizedBox(height: 12),
               Row(children: [
-                Text('FEATURES', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF94A3B8), letterSpacing: 1.5)),
+                Text('MARKETING BULLETS', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF94A3B8), letterSpacing: 1.5)),
                 const Spacer(),
                 IconButton(onPressed: () => setS(() => featureCtrls.add(TextEditingController())), icon: const Icon(Icons.add_circle_outline_rounded, size: 20, color: Color(0xFF6366F1))),
               ]),
@@ -4147,6 +4193,7 @@ class _MobileSubscriptionViewState extends State<_MobileSubscriptionView> {
                   'blockedAppsLimit': int.tryParse(blockedCtrl.text) ?? 0,
                   'hiddenAppsLimit': int.tryParse(hiddenCtrl.text) ?? 0,
                   'features': featureCtrls.map((c) => c.text.trim()).where((s) => s.isNotEmpty).toList(),
+                  'featuresMap': Map<String, dynamic>.from(toggles),
                   'color': colorCtrl.text.trim(),
                   'durationUnit': durationUnit,
                   'durationValue': parsedDurValue,
@@ -6287,7 +6334,23 @@ class _AppActionButton extends StatelessWidget {
               child: Text('Cancel', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontWeight: FontWeight.bold))
             ),
             ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
+                final uid = FirebaseAuth.instance.currentUser?.uid;
+                if (uid != null) {
+                  final allowed = await PlanGate.requireForUser(
+                    context, uid, (f) => f.appRestrictions,
+                    featureLabel: 'App Restrictions',
+                  );
+                  if (!allowed) { Navigator.pop(context); return; }
+                  // Schedule-window restrictions also need scheduleLock
+                  if (!alwaysBlocked) {
+                    final canSchedule = await PlanGate.requireForUser(
+                      context, uid, (f) => f.scheduleLock,
+                      featureLabel: 'Scheduled App Restrictions',
+                    );
+                    if (!canSchedule) { Navigator.pop(context); return; }
+                  }
+                }
                 if (!blockedApps.contains(pkg) && blockedApps.length >= blockedLimit) {
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Purchase a higher plan to block more than $blockedLimit apps.'), backgroundColor: Colors.redAccent));
                   Navigator.pop(context);
@@ -8445,14 +8508,39 @@ class _SubscriptionView extends StatelessWidget {
 
   void _initializeDefaultPlans() async {
     final batch = FirebaseFirestore.instance.batch();
-    final free = FirebaseFirestore.instance.collection('plans').doc('free');
-    final starter = FirebaseFirestore.instance.collection('plans').doc('starter');
-    final pro = FirebaseFirestore.instance.collection('plans').doc('pro');
+    final col = FirebaseFirestore.instance.collection('plans');
 
-    batch.set(free, {'name': 'Free', 'price': 0, 'deviceLimit': 1, 'blockedAppsLimit': 5, 'hiddenAppsLimit': 2, 'features': ['Basic Monitoring', 'Manual Lock', 'Standard Reports'], 'color': '0xFF94A3B8'});
-    batch.set(starter, {'name': 'Starter', 'price': 10, 'deviceLimit': 3, 'blockedAppsLimit': 20, 'hiddenAppsLimit': 10, 'features': ['Real-time Tracking', 'App Blocking', 'Geofencing'], 'color': '0xFF10B981'});
-    batch.set(pro, {'name': 'Pro', 'price': 25, 'deviceLimit': 10, 'blockedAppsLimit': 999, 'hiddenAppsLimit': 999, 'features': ['Priority Support', 'Usage Timeline', 'Unlimited History'], 'color': '0xFF6366F1'});
-    
+    Map<String, dynamic> feats({bool restrictions = true, bool schedule = true, bool filter = true,
+      bool monitoring = true, bool location = true, bool chat = true, bool pin = true}) => {
+      'appRestrictions': restrictions, 'scheduleLock': schedule, 'appFilter': filter,
+      'childMonitoring': monitoring, 'liveLocation': location, 'chat': chat, 'masterPin': pin,
+    };
+
+    batch.set(col.doc('trial'), {
+      'name': 'Trial', 'price': 0, 'deviceLimit': 1, 'blockedAppsLimit': 1, 'hiddenAppsLimit': 0,
+      'featuresMap': feats(restrictions: true, schedule: false, filter: false, monitoring: false, location: true, chat: true, pin: false),
+      'features': ['1 App Restriction', '3-Day Free Trial', 'Live Location'],
+      'color': '0xFFFBBF24', 'durationUnit': 'days', 'durationValue': 3,
+    });
+    batch.set(col.doc('free'), {
+      'name': 'Free', 'price': 0, 'deviceLimit': 1, 'blockedAppsLimit': 5, 'hiddenAppsLimit': 0,
+      'featuresMap': feats(restrictions: true, schedule: false, filter: false, monitoring: false, location: false, chat: true, pin: false),
+      'features': ['5 App Restrictions', 'Manual Lock'],
+      'color': '0xFF94A3B8', 'durationUnit': 'lifetime', 'durationValue': 0,
+    });
+    batch.set(col.doc('starter'), {
+      'name': 'Starter', 'price': 10, 'deviceLimit': 3, 'blockedAppsLimit': 20, 'hiddenAppsLimit': 10,
+      'featuresMap': feats(restrictions: true, schedule: true, filter: true, monitoring: true, location: true, chat: true, pin: true),
+      'features': ['Real-time Tracking', 'App Blocking', 'Geofencing'],
+      'color': '0xFF10B981', 'durationUnit': 'months', 'durationValue': 1,
+    });
+    batch.set(col.doc('pro'), {
+      'name': 'Pro', 'price': 25, 'deviceLimit': 10, 'blockedAppsLimit': 999, 'hiddenAppsLimit': 999,
+      'featuresMap': feats(),
+      'features': ['Priority Support', 'Usage Timeline', 'Unlimited History'],
+      'color': '0xFF6366F1', 'durationUnit': 'months', 'durationValue': 1,
+    });
+
     await batch.commit();
   }
 
@@ -8534,6 +8622,29 @@ class _SubscriptionView extends StatelessWidget {
     final List<TextEditingController> featureCtrls = (existing?['features'] as List? ?? [''])
         .map((f) => TextEditingController(text: f.toString())).toList();
 
+    // Feature toggles (Map<String,bool>) — replaces the legacy free-text feature list
+    final Map<String, dynamic> existingFeats = (existing?['featuresMap'] is Map)
+        ? Map<String, dynamic>.from(existing!['featuresMap'] as Map)
+        : <String, dynamic>{};
+    final Map<String, bool> toggles = {
+      'appRestrictions':  (existingFeats['appRestrictions']  as bool?) ?? true,
+      'scheduleLock':     (existingFeats['scheduleLock']     as bool?) ?? true,
+      'appFilter':        (existingFeats['appFilter']        as bool?) ?? true,
+      'childMonitoring':  (existingFeats['childMonitoring']  as bool?) ?? true,
+      'liveLocation':     (existingFeats['liveLocation']     as bool?) ?? true,
+      'chat':             (existingFeats['chat']             as bool?) ?? true,
+      'masterPin':        (existingFeats['masterPin']        as bool?) ?? true,
+    };
+    const Map<String, String> toggleLabels = {
+      'appRestrictions':  'App Restrictions',
+      'scheduleLock':     'Schedule Lock',
+      'appFilter':        'App Filter',
+      'childMonitoring':  'Child Activity Monitoring',
+      'liveLocation':     'Live Location',
+      'chat':             'Parent ↔ Child Chat',
+      'masterPin':        'Master PIN',
+    };
+
     String durationUnit = existing?['durationUnit'] ?? 'months';
     int durationValue   = existing?['durationValue'] ?? 1;
     final durValueCtrl  = TextEditingController(text: durationValue.toString());
@@ -8609,10 +8720,28 @@ class _SubscriptionView extends StatelessWidget {
                 else
                   _buildField(durationUnit == 'months' ? 'Number of Months' : 'Number of Years', durValueCtrl, isNum: true),
 
-                const SizedBox(height: 4),
+                const SizedBox(height: 12),
+                Text('FEATURE ACCESS', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF94A3B8), letterSpacing: 1.5)),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(border: Border.all(color: borderColor.withOpacity(0.3)), borderRadius: BorderRadius.circular(12)),
+                  child: Column(
+                    children: toggles.keys.map((k) => SwitchListTile(
+                      dense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                      title: Text(toggleLabels[k] ?? k, style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600, color: textColor)),
+                      value: toggles[k] ?? true,
+                      activeColor: const Color(0xFF6366F1),
+                      onChanged: (v) => setDialogState(() => toggles[k] = v),
+                    )).toList(),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
                 Row(
                   children: [
-                    Text('FEATURES', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF94A3B8), letterSpacing: 1.5)),
+                    Text('MARKETING BULLETS', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF94A3B8), letterSpacing: 1.5)),
                     const Spacer(),
                     IconButton(
                       onPressed: () => setDialogState(() => featureCtrls.add(TextEditingController())),
@@ -8845,6 +8974,60 @@ class _SubscriptionView extends StatelessWidget {
 
 }
 
+// ─── Locked overlay shown for plans without childMonitoring access ───────────
+class _MonitoringLockedView extends StatelessWidget {
+  final Color textColor;
+  final bool expired;
+  const _MonitoringLockedView({required this.textColor, this.expired = false});
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 420),
+        padding: const EdgeInsets.all(32),
+        margin: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF1E1B4B), Color(0xFF0F172A)]),
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: const Color(0xFFFBBF24).withOpacity(0.4)),
+        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 72, height: 72,
+            decoration: const BoxDecoration(gradient: LinearGradient(colors: [Color(0xFFFBBF24), Color(0xFFF59E0B)]), shape: BoxShape.circle),
+            child: const Icon(Icons.workspace_premium_rounded, color: Colors.white, size: 38),
+          ),
+          const SizedBox(height: 18),
+          Text(expired ? 'Subscription Expired' : 'Premium Feature',
+              style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.white)),
+          const SizedBox(height: 10),
+          Text(
+            expired
+                ? 'Your subscription has expired. Renew to continue tracking your child\'s activity.'
+                : 'Upgrade your account to view child activity logs, app usage, and reports.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.outfit(fontSize: 13, color: Colors.white70, height: 1.5),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.arrow_forward_rounded),
+            onPressed: () {
+              html.window.localStorage['applocker_dashboard_menu'] = 'subscriptions';
+              html.window.location.reload();
+            },
+            label: Text('Upgrade Now', style: GoogleFonts.outfit(fontWeight: FontWeight.w800)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFBBF24), foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
 // ─── Helper: format duration milliseconds to human-readable ───────────────────
 String _formatDuration(int ms) {
   if (ms <= 0) return '0s';
@@ -8944,6 +9127,35 @@ class _MonitoringViewState extends State<_MonitoringView> with SingleTickerProvi
 
   @override
   Widget build(BuildContext context) {
+    return FutureBuilder<({String planId, bool expired})>(
+      future: () async {
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+        if (uid == null) return (planId: 'free', expired: false);
+        return PlanGate.currentPlan(uid);
+      }(),
+      builder: (context, curSnap) {
+        if (curSnap.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final cur = curSnap.data ?? (planId: 'free', expired: false);
+        return FutureBuilder<PlanFeatures>(
+          future: PlanGate.load(cur.planId),
+          builder: (context, planSnap) {
+            if (planSnap.connectionState != ConnectionState.done) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final feat = planSnap.data ?? const PlanFeatures();
+            if (cur.expired || !feat.childMonitoring) {
+              return _MonitoringLockedView(textColor: widget.textColor, expired: cur.expired);
+            }
+            return _buildMonitoringContent(context);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildMonitoringContent(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseService.instance.streamAdminDevices(),
       builder: (context, snapshot) {

@@ -1,5 +1,13 @@
 # AppLocker - Parental Control Dashboard
 
+## Trial + Plan Gating (2026-04 refactor)
+- `lib/shared/plan_gate.dart` is the single source of truth for feature gating. Plans store a `featuresMap` with 7 toggles: `appRestrictions`, `scheduleLock`, `appFilter`, `childMonitoring`, `liveLocation`, `chat`, `masterPin`, plus numeric limits (`deviceLimit`, `blockedAppsLimit`, `hiddenAppsLimit`).
+- `PlanGate.requireForUser(context, uid, (f)=>f.<feature>)` shows a styled "Upgrade Required" dialog and routes to the Subscription page when blocked. Schedule Lock, App Restrictions, scheduled-window App Restrictions, and the Activity Monitoring view are all gated.
+- **Trial plan = 3 days, 1 device, 1 app restriction**, no schedule lock / app filter / child monitoring. Anti-abuse: a SHA256 browser fingerprint stored in `/trial_fingerprints/` blocks repeat trials from the same browser (second account auto-falls back to Free), and a SHA256 of the device model stored in `/trial_devices/` blocks the same physical phone (e.g. RMX5078) from being paired again on a different parent's trial — enforced inside `FirebaseService.registerDevice`.
+- Expired trial users are auto-redirected to the Subscriptions page by `_DashboardScreenState` and all device settings are paused via `_syncSubscriptionToDevices`.
+- Super-admin Plan editor (`_showPlanDialog`, both desktop + mobile copies) now has 7 SwitchListTile feature toggles plus marketing-bullet text fields.
+- Deploy: `cd AppLocker && flutter build web --target lib/dashboard/main_web.dart --release && firebase deploy --only hosting --project applocker-c39cf --token "$FIREBASE_TOKEN"`. Live: https://applocker-c39cf.web.app.
+
 ## Overview
 A Flutter-based parental control platform consisting of:
 - **Parent Dashboard (PWA)**: Web app for managing child devices remotely
