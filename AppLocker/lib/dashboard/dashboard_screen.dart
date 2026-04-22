@@ -152,6 +152,79 @@ class _AnimatedAvatarPinState extends State<_AnimatedAvatarPin> with TickerProvi
   }
 }
 
+// ─── Heartbeat Avatar (for cards) ────────────────────────────────────────────
+class HeartbeatAvatar extends StatefulWidget {
+  final String avatar;
+  final double size;
+  final Color color;
+  final bool pulseRing;
+  final IconData fallbackIcon;
+  const HeartbeatAvatar({
+    super.key,
+    required this.avatar,
+    this.size = 52,
+    this.color = const Color(0xFF22C55E),
+    this.pulseRing = true,
+    this.fallbackIcon = Icons.smartphone_rounded,
+  });
+  @override
+  State<HeartbeatAvatar> createState() => _HeartbeatAvatarState();
+}
+
+class _HeartbeatAvatarState extends State<HeartbeatAvatar> with TickerProviderStateMixin {
+  late final AnimationController _beat;
+  late final Animation<double> _scale;
+  late final AnimationController _ring;
+  @override
+  void initState() {
+    super.initState();
+    _beat = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))..repeat(reverse: true);
+    _scale = Tween<double>(begin: 1.0, end: 1.10).animate(CurvedAnimation(parent: _beat, curve: Curves.easeInOut));
+    _ring = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800))..repeat();
+  }
+  @override
+  void dispose() { _beat.dispose(); _ring.dispose(); super.dispose(); }
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.size;
+    return SizedBox(
+      width: s * 1.6, height: s * 1.6,
+      child: Stack(alignment: Alignment.center, children: [
+        if (widget.pulseRing)
+          AnimatedBuilder(
+            animation: _ring,
+            builder: (_, __) {
+              final t = _ring.value;
+              return IgnorePointer(child: Container(
+                width: s + (s * 0.6) * t, height: s + (s * 0.6) * t,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: widget.color.withOpacity((1 - t).clamp(0.0, 1.0) * 0.55), width: 2),
+                ),
+              ));
+            },
+          ),
+        ScaleTransition(
+          scale: _scale,
+          child: Container(
+            width: s, height: s,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight,
+                colors: [widget.color, widget.color.withOpacity(0.75)]),
+              boxShadow: [BoxShadow(color: widget.color.withOpacity(0.45), blurRadius: 14, spreadRadius: 1, offset: const Offset(0, 4))],
+            ),
+            alignment: Alignment.center,
+            child: widget.avatar.isNotEmpty
+              ? Text(widget.avatar, style: TextStyle(fontSize: s * 0.5))
+              : Icon(widget.fallbackIcon, color: Colors.white, size: s * 0.46),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
 class _PinTailClipper extends CustomClipper<Path> {
   @override
   Path getClip(Size size) {
@@ -6453,16 +6526,14 @@ class _DevicesListState extends State<_DevicesList> {
                 final isOnlineDevice = (device['status'] ?? 'offline').toString().toLowerCase() == 'online';
                 final circleCol = isOnlineDevice ? const Color(0xFF22C55E) : const Color(0xFF94A3B8);
                 final avatar = (device['avatar'] ?? '').toString();
-                return Container(
-                  width: 52, height: 52,
-                  decoration: BoxDecoration(color: circleCol, shape: BoxShape.circle),
-                  alignment: Alignment.center,
-                  child: avatar.isNotEmpty
-                    ? Text(avatar, style: const TextStyle(fontSize: 26))
-                    : const Icon(Icons.smartphone_rounded, color: Colors.white, size: 24),
+                return HeartbeatAvatar(
+                  avatar: avatar,
+                  size: 52,
+                  color: circleCol,
+                  pulseRing: isOnlineDevice,
                 );
               }(),
-              const SizedBox(width: 16),
+              const SizedBox(width: 8),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text((device['name'] ?? device['model'] ?? deviceId).toString(), style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 18, color: widget.textColor), maxLines: 1, overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 4),
