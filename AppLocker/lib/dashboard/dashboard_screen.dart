@@ -763,7 +763,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
     switch (_selectedMenu) {
       case _DashboardMenu.dashboard: return _DashboardOverview(isDark: _isDark, isMobile: isMobile, userRole: userRole);
-      case _DashboardMenu.devices: return SingleChildScrollView(child: _DevicesList(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor, isMobile: isMobile, userRole: userRole));
+      case _DashboardMenu.devices: return SingleChildScrollView(child: _DevicesList(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor, isMobile: isMobile, userRole: userRole, onNavigate: _setSelectedMenu));
       case _DashboardMenu.apps: return SingleChildScrollView(child: _AppControls(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor));
       case _DashboardMenu.schedules: return SingleChildScrollView(child: _SchedulesView(isDark: _isDark, cardColor: cardColor, textColor: textColor, borderColor: borderColor));
       case _DashboardMenu.location: return _LocationView(isDark: _isDark, textColor: textColor, onBack: () => _setSelectedMenu(_DashboardMenu.dashboard));
@@ -6540,12 +6540,152 @@ class _AdminStatItem extends StatelessWidget {
 
 class _DevicesList extends StatefulWidget {
   final bool isDark; final Color cardColor; final Color textColor; final Color borderColor; final bool isMobile; final String userRole;
-  const _DevicesList({required this.isDark, required this.cardColor, required this.textColor, required this.borderColor, required this.isMobile, required this.userRole});
+  final Function(_DashboardMenu)? onNavigate;
+  const _DevicesList({required this.isDark, required this.cardColor, required this.textColor, required this.borderColor, required this.isMobile, required this.userRole, this.onNavigate});
   @override State<_DevicesList> createState() => _DevicesListState();
 }
 
 class _DevicesListState extends State<_DevicesList> {
   String? _expandedDeviceId;
+
+  Future<void> _openChat(BuildContext context, String deviceId) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null) {
+      final allowed = await PlanGate.requireForUser(
+        context, uid, (f) => f.chat,
+        featureLabel: 'Parent ↔ Child Chat',
+      );
+      if (!allowed) return;
+    }
+    if (!context.mounted) return;
+    showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent,
+      builder: (_) => _MobileChatSheet(deviceId: deviceId, isDark: widget.isDark));
+  }
+
+  Future<void> _toggleLock(String deviceId, bool current) async =>
+      FirebaseFirestore.instance.collection('devices').doc(deviceId).update({'locked': !current});
+
+  void _openScheduleDialog(BuildContext context, String deviceId, Map<String, dynamic> data) {
+    showModalBottomSheet(
+      context: context, isScrollControlled: true, backgroundColor: Colors.transparent,
+      builder: (_) => _ScheduleLockSheet(deviceId: deviceId, deviceData: data, isDark: widget.isDark),
+    );
+  }
+
+  Future<void> _removeMobileDevice(BuildContext context, String deviceId) async {
+    final bg = widget.isDark ? const Color(0xFF0F1A35) : Colors.white;
+    final textColor = widget.isDark ? Colors.white : const Color(0xFF1E293B);
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: bg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Remove Device?', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: textColor)),
+        content: Text('This will unlink the device and remove all its settings.', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8))),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Cancel', style: GoogleFonts.outfit(color: const Color(0xFF94A3B8)))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Remove', style: GoogleFonts.outfit(color: Colors.redAccent, fontWeight: FontWeight.bold))),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      await FirebaseFirestore.instance.collection('devices').doc(deviceId).delete();
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Device removed.'), backgroundColor: Colors.redAccent));
+    }
+  }
+
+  void _showDeviceLocationDialog(BuildContext context, String name, String avatar, bool isOnline, double? lat, double? lng) {
+    final bg = widget.isDark ? const Color(0xFF0F1A35) : Colors.white;
+    final textColor = widget.isDark ? Colors.white : const Color(0xFF1E293B);
+    if (lat == null || lng == null || (lat == 0.0 && lng == 0.0)) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('No GPS data yet for $name', style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+        backgroundColor: const Color(0xFFF59E0B),
+        behavior: SnackBarBehavior.floating,
+      ));
+      return;
+    }
+    showDialog(context: context, builder: (ctx) => Dialog(
+      backgroundColor: bg,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      insetPadding: const EdgeInsets.all(16),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 520),
+        padding: const EdgeInsets.all(12),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 6, 8, 10),
+            child: Row(children: [
+              Container(
+                width: 36, height: 36,
+                decoration: BoxDecoration(shape: BoxShape.circle, color: (isOnline ? const Color(0xFF22C55E) : const Color(0xFF94A3B8)).withOpacity(0.15)),
+                alignment: Alignment.center,
+                child: avatar.isNotEmpty ? Text(avatar, style: const TextStyle(fontSize: 20)) : const Icon(Icons.smartphone_rounded, color: Color(0xFF6366F1), size: 18),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(name, style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: textColor), maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text(isOnline ? 'Online · Live location' : 'Offline · Last known', style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF94A3B8))),
+              ])),
+              IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8))),
+            ]),
+          ),
+          SizedBox(
+            height: 420,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: FlutterMap(
+                options: MapOptions(initialCenter: LatLng(lat, lng), initialZoom: 15),
+                children: [
+                  TileLayer(
+                    urlTemplate: widget.isDark
+                      ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+                      : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+                    subdomains: const ['a', 'b', 'c', 'd'],
+                    userAgentPackageName: 'com.parentalcontrol.applocker',
+                  ),
+                  MarkerLayer(markers: [Marker(
+                    point: LatLng(lat, lng), width: 110, height: 100,
+                    alignment: Alignment.topCenter,
+                    child: _buildAvatarPinMarker(avatar: avatar, name: name, isOnline: isOnline, isDark: widget.isDark),
+                  )]),
+                ],
+              ),
+            ),
+          ),
+        ]),
+      ),
+    ));
+  }
+
+  Widget _mobileStyleCard(QueryDocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    final isOnline = (data['status'] ?? 'offline') == 'online';
+    final battery = ((data['battery'] ?? 0) as num).toInt();
+    final isLocked = data['locked'] == true;
+    final deviceName = (data['name'] ?? data['model'] ?? doc.id).toString();
+    final avatar = (data['avatar'] ?? '').toString();
+    final latRaw = data['lat'] ?? data['latitude'];
+    final lngRaw = data['lng'] ?? data['longitude'] ?? data['lon'];
+    final lat = latRaw != null ? (latRaw as num).toDouble() : null;
+    final lng = lngRaw != null ? (lngRaw as num).toDouble() : null;
+    return _MobileDeviceListCard(
+      name: deviceName, deviceId: doc.id, isOnline: isOnline, battery: battery,
+      avatar: avatar,
+      isDark: widget.isDark, isLocked: isLocked,
+      lat: lat, lng: lng,
+      onChat: () => _openChat(context, doc.id),
+      onLock: () => _toggleLock(doc.id, isLocked),
+      onLocation: () => _showDeviceLocationDialog(context, deviceName, avatar, isOnline, lat, lng),
+      onSchedule: () => _openScheduleDialog(context, doc.id, data),
+      onRemove: () => _removeMobileDevice(context, doc.id),
+      onApps: () => widget.onNavigate?.call(_DashboardMenu.apps),
+      onMonitoring: () => widget.onNavigate?.call(_DashboardMenu.monitoring),
+      onReports: () => widget.onNavigate?.call(_DashboardMenu.reports),
+      onSettings: () => widget.onNavigate?.call(_DashboardMenu.settings),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
@@ -6557,7 +6697,7 @@ class _DevicesListState extends State<_DevicesList> {
           Row(children: [Text(widget.userRole == 'super_admin' ? 'Global Devices' : 'My Devices', style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w900, color: widget.textColor)), const Spacer(), ElevatedButton.icon(onPressed: () => showAppLockerPairingDialog(context, widget.cardColor, widget.textColor), icon: const Icon(Icons.add_rounded), label: const Text('Add Device'), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6366F1), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)))]),
           const SizedBox(height: 24),
           widget.isMobile
-              ? ListView.builder(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), itemCount: devices.length, itemBuilder: (context, index) => _buildDeviceCard(context, devices[index].data() as Map<String, dynamic>, devices[index].id))
+              ? Column(children: devices.map(_mobileStyleCard).toList())
               : LayoutBuilder(
                   builder: (context, constraints) {
                     const spacing = 16.0;
@@ -6568,7 +6708,7 @@ class _DevicesListState extends State<_DevicesList> {
                       runSpacing: spacing,
                       children: devices.map((doc) => SizedBox(
                         width: cardWidth,
-                        child: _buildDeviceCard(context, doc.data() as Map<String, dynamic>, doc.id),
+                        child: _mobileStyleCard(doc),
                       )).toList(),
                     );
                   },
