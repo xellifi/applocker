@@ -119,18 +119,21 @@ class _PwaInstallManager {
       }
     } catch (_) {}
 
-    // In-app browsers will never have the prompt — show banner with guidance.
-    if (_BrowserInfo.isInAppBrowser) {
+    // In-app browsers and iOS Safari can never trigger native install — show
+    // a guidance banner only for them.
+    if (_BrowserInfo.isInAppBrowser || _BrowserInfo.isIOS) {
       onPromptAvailable();
       return;
     }
 
-    // If the event was captured by index.html JS before Flutter loaded, fire now.
+    // For Chrome/Edge: ONLY show the banner once the browser has actually
+    // given us the install prompt. This guarantees the Install button works
+    // on first click (no instructions, no fallbacks).
     if (js.context['_pwaPrompt'] != null) {
       onPromptAvailable();
     }
 
-    // Register callback so if it fires after Flutter loads (rare), we handle it.
+    // Register callback for when the prompt becomes available later.
     js.context['_pwaPromptCallback'] = js.allowInterop(() {
       if (!_sessionDismissed && !_installed) onPromptAvailable();
     });
@@ -138,13 +141,7 @@ class _PwaInstallManager {
     // Listen for install completion
     js.context['_pwaInstalledCallback'] = js.allowInterop(() {
       _installed = true;
-    });
-
-    // Fallback: always show the banner after 3s so users know they can install
-    Future.delayed(const Duration(seconds: 3), () {
-      if (!_sessionDismissed && !_installed) {
-        onPromptAvailable();
-      }
+      html.window.localStorage['pwa_installed'] = 'true';
     });
   }
 
@@ -357,7 +354,12 @@ class _PwaInstallBannerState extends State<_PwaInstallBanner>
   void _handleInstall() {
     _PwaInstallManager.prompt().then((result) {
       if (!mounted) return;
-      if (result == 'prompted') return;
+      if (result == 'prompted') {
+        widget.onInstall();
+        return;
+      }
+      // Defensive fallback (should rarely happen since the button is only
+      // shown when the prompt is actually available).
       final reason = result.startsWith('no_prompt:')
           ? result.substring('no_prompt:'.length)
           : _PwaInstallManager.installReason;
