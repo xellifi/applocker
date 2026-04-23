@@ -6558,13 +6558,20 @@ class _DevicesListState extends State<_DevicesList> {
           const SizedBox(height: 24),
           widget.isMobile
               ? ListView.builder(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), itemCount: devices.length, itemBuilder: (context, index) => _buildDeviceCard(context, devices[index].data() as Map<String, dynamic>, devices[index].id))
-              : Wrap(
-                  spacing: 16,
-                  runSpacing: 16,
-                  children: devices.map((doc) => SizedBox(
-                    width: (MediaQuery.of(context).size.width - (32 * 2) - (16 * 2)) / 3 - 1, // Approx 3 columns
-                    child: _buildDeviceCard(context, doc.data() as Map<String, dynamic>, doc.id)
-                  )).toList(),
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    const spacing = 16.0;
+                    const columns = 3;
+                    final cardWidth = (constraints.maxWidth - spacing * (columns - 1)) / columns;
+                    return Wrap(
+                      spacing: spacing,
+                      runSpacing: spacing,
+                      children: devices.map((doc) => SizedBox(
+                        width: cardWidth,
+                        child: _buildDeviceCard(context, doc.data() as Map<String, dynamic>, doc.id),
+                      )).toList(),
+                    );
+                  },
                 ),
         ]);
       },
